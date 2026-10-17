@@ -1,0 +1,160 @@
+// @vitest-environment jsdom
+import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
+import { CardTab } from "../ui/CardTab";
+import { ConnectSection } from "../ui/ConnectSection";
+import { OutreachPage } from "../ui/OutreachPage";
+
+const status = (over: Record<string, unknown> = {}) => ({
+  connected: true,
+  url: "https://m.example",
+  email: "op@example.com",
+  canView: true,
+  canManage: true,
+  problem: null,
+  message: "",
+  ...over,
+});
+
+const countries = ["DE", "FR", "IN", "MY", "SG", "KE", "ZA", "US", "BR", "AU", "JP", "CN", "TR"].map((c) => ({ value: c, count: 1 }));
+const item = (id: string, name: string, country = "DE") => ({
+  id, display_name: name, kind: "importer", region: "europe", country_code: country, countries: [country], status: "new",
+  priority: 1, priority_reason: "phone_and_email", priority_manual: false, do_not_contact: false, has_phone: true,
+  has_whatsapp: false, has_email: true, has_website: false, persons: 0, comments: 0, updated_at: "2026-10-16T10:00:00Z",
+});
+
+const card = (over: Record<string, unknown> = {}) => ({
+  company: {
+    id: "c1", display_name: "THK Powertools", legal_name: "", kind: "importer", brands: ["STIHL"], region: "asia",
+    country_code: "SG", address_raw: "48 Gul Crescent", city: "", map_url: "", status: "new", status_reason: "",
+    priority: 1, priority_auto: 1, priority_reason: "phone_and_email", priority_manual: null, tags: [],
+    do_not_contact: false, do_not_contact_reason: "", manual_fields: [], updated_at: "2026-10-16T10:00:00Z", ...over,
+  },
+  countries: [{ id: "x", country_code: "SG", country_title: "Singapore", section_label: "", is_primary: true }],
+  contacts: [{ id: "k1", person_id: null, type: "email", value_raw: "sales@thk.example", value_norm: "sales@thk.example", label: "", is_brand_domain: false, origin: "import" }],
+  persons: [],
+  comments: [],
+  changes: [{ id: 1, entity: "company", field: "created", old_value: "", new_value: "THK", actor: "import:stihl", at: "2026-10-16T10:00:00Z" }],
+  sources: [],
+});
+
+describe("registry (page root)", () => {
+  it("lists organisations, searches inside the country filter and opens a company", async () => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    const r = renderSlot({ component: OutreachPage }, { subPath: "" }, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status(),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          calls.push({ name, args });
+          if (name === "outreach_facets") return { result: { regions: [{ value: "europe", count: 2 }], countries } };
+          return { result: { items: [item("c1", "Woermann"), item("c2", "THK", "SG")], total: 2, limit: 50, offset: 0 } };
+        },
+      } as never,
+      experimental_openFixedTab: () => true,
+    });
+    expect(await screen.findByText("Woermann")).toBeTruthy();
+    expect(screen.getByText("Найдено: 2")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Фильтр: Страна" }));
+    const search = screen.getByLabelText("Поиск: Страна");
+    fireEvent.change(search, { target: { value: "герм" } });
+    const options = screen.getAllByRole("option").map((o) => o.textContent);
+    expect(options).toEqual(["Все страны", "Германия (1)"]);
+    fireEvent.keyDown(search, { key: "Enter" });
+    await waitFor(() => expect(calls.some((c) => c.name === "outreach_list_companies" && c.args.country === "DE")).toBe(true));
+
+    fireEvent.click(screen.getByText("THK"));
+    expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toPluginPanel" });
+    expect(JSON.stringify(r.inspection.navigateCalls.at(-1))).toContain("c2");
+    expect(r.inspection.experimental_fixedTabOpenCalls.length).toBeGreaterThan(0);
+  });
+
+  it("shows no data without outreach.view", async () => {
+    let listed = false;
+    renderSlot({ component: OutreachPage }, { subPath: "" }, {
+      rpc: {
+        status: () => status({ canView: false, canManage: false }),
+        tool: () => {
+          listed = true;
+          return { result: null };
+        },
+      } as never,
+    });
+    expect(await screen.findByText(/Нет доступа к реестру/)).toBeTruthy();
+    expect(listed).toBe(false);
+  });
+});
+
+describe("card tab", () => {
+  it("renders the card and changes status only with a reason when required", async () => {
+    const writes: Record<string, unknown>[] = [];
+    renderSlot({ component: CardTab }, { subPath: "c1" }, {
+      rpc: {
+        status: () => status(),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          if (name === "outreach_update_company") {
+            writes.push(args);
+            return { result: card({ status: args.status, status_reason: args.status_reason }) };
+          }
+          return { result: card() };
+        },
+      } as never,
+    });
+    expect(await screen.findByText("THK Powertools")).toBeTruthy();
+    expect(screen.getByText("sales@thk.example")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Статус"), { target: { value: "rejected" } });
+    const apply = screen.getByRole("button", { name: "Сменить статус" }) as HTMLButtonElement;
+    expect(apply.disabled).toBe(true);
+    fireEvent.change(screen.getByPlaceholderText("Причина (обязательно)"), { target: { value: "не продаёт ЗИП" } });
+    fireEvent.click(apply);
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect(writes[0]).toMatchObject({ id: "c1", status: "rejected", status_reason: "не продаёт ЗИП", expected_updated_at: "2026-10-16T10:00:00Z" });
+    expect(await screen.findByText("Причина: не продаёт ЗИП")).toBeTruthy();
+  });
+
+  it("is read-only without outreach.manage and refreshes on agent changes", async () => {
+    let reads = 0;
+    const r = renderSlot({ component: CardTab }, { subPath: "c1" }, {
+      rpc: {
+        status: () => status({ canManage: false }),
+        tool: () => {
+          reads++;
+          return { result: card() };
+        },
+      } as never,
+    });
+    expect(await screen.findByText("THK Powertools")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Изменить" })).toBeNull();
+    expect(screen.queryByLabelText("Новый комментарий")).toBeNull();
+    const before = reads;
+    await r.behavior.emitRealtime("manifest-company-changed", { companyId: "c1" });
+    await waitFor(() => expect(reads).toBeGreaterThan(before));
+  });
+});
+
+describe("connect section", () => {
+  it("signs in and never echoes the password", async () => {
+    let sent: Record<string, unknown> | null = null;
+    renderSlot({ component: ConnectSection }, {}, {
+      rpc: {
+        status: () => status({ connected: false, url: "", email: "", message: "Плагин не подключён" }),
+        login: (input: Record<string, unknown>) => {
+          sent = input;
+          return status();
+        },
+      } as never,
+    });
+    expect(await screen.findByText("Плагин не подключён")).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("https://manifest.example.com"), { target: { value: "m.example" } });
+    fireEvent.change(screen.getByPlaceholderText("name@company.com"), { target: { value: "op@example.com" } });
+    const pw = screen.getByLabelText("Пароль для плагина") as HTMLInputElement;
+    fireEvent.change(pw, { target: { value: "correct horse battery" } });
+    fireEvent.click(screen.getByRole("button", { name: "Войти" }));
+    expect(await screen.findByText("Подключено как op@example.com")).toBeTruthy();
+    expect(sent).toMatchObject({ url: "m.example", email: "op@example.com", password: "correct horse battery" });
+    expect(pw.value).toBe("");
+  });
+});

@@ -1,0 +1,90 @@
+/*
+ * Хозяин вкладок сайдбара — слой токенов --st-* и элементы по дизайн-системе bb-workbench
+ * (docs/plugins/document-review/design/design-system.md; вид вкладок — демошит «Документов», .hosttabs/.seg).
+ * Только var()/color-mix() от токенов темы bb, без литералов цвета: пользовательская тема bb проходит насквозь.
+ */
+@layer components {
+  [data-sidebar-tabs-host] {
+    /* поверхность полосы и сегменты */
+    --st-strip: var(--sidebar);
+    --st-seam: var(--border-seam);
+    --st-track: var(--muted);
+    --st-tab-text: var(--muted-foreground);
+    --st-tab-text-on: var(--foreground);
+    --st-tab-on: var(--background);
+    --st-tab-on-edge: var(--border);
+    --st-focus: var(--ring);
+    /* счётчик: всё, что считает поставщик, ждёт человека — общий фиолетовый «Ждёт вас» (D29) */
+    --st-waiting: var(--pr-merged);
+    --st-waiting-text: var(--background);
+    /* геометрия и движение */
+    --st-r-xs: 4px;
+    --st-r-sm: 6px;
+    --st-tab-h: 24px;
+    --st-dur: 80ms;
+  }
+  /* касание: цель вкладки ≥ 40 px */
+  @media (pointer: coarse) {
+    [data-sidebar-tabs-host] { --st-tab-h: 40px; }
+  }
+
+  /* ── полоса вкладок: липкая, шов снизу, сегменты на дорожке ── */
+  .st-strip {
+    position: sticky; top: 0; z-index: 10; display: flex; flex-shrink: 0; padding: 6px 8px;
+    background: var(--st-strip); border-bottom: 1px solid var(--st-seam);
+  }
+  .st-seg {
+    display: flex; min-width: 0; max-width: 100%; gap: 2px; padding: 2px;
+    border-radius: var(--st-r-sm); background: var(--st-track);
+  }
+  .st-tab {
+    display: inline-flex; align-items: center; gap: 6px; min-width: 0; height: var(--st-tab-h); padding: 0 8px;
+    border: 0; border-radius: var(--st-r-xs); background: transparent; color: var(--st-tab-text);
+    font: 500 12px/1 var(--font-sans); white-space: nowrap; cursor: pointer;
+    transition: color var(--st-dur), background-color var(--st-dur), box-shadow var(--st-dur);
+  }
+  .st-tab > svg { width: 14px; height: 14px; flex: none; }
+  /* тесно: длинная подпись обрезается (не длиннее 12em), выбранная вкладка не сжимается — видно, где вы */
+  .st-tab__label { min-width: 0; max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
+  @media (hover: hover) {
+    .st-tab:hover { color: var(--st-tab-text-on); }
+  }
+  .st-tab[aria-selected="true"] {
+    background: var(--st-tab-on); color: var(--st-tab-text-on);
+    box-shadow: var(--shadow-xs), 0 0 0 1px var(--st-tab-on-edge);
+    flex-shrink: 0;
+  }
+  .st-tab:focus { outline: none; }
+  .st-tab:focus-visible { outline: 2px solid var(--st-focus); outline-offset: 2px; }
+
+  /* ── счётчик: как .dr-count «Документов» — 16 px, 11/600, tabular-nums; «ждёт вас» — фиолетовая заливка ── */
+  .st-count {
+    display: inline-flex; align-items: center; justify-content: center; flex: none; min-width: 16px; height: 16px; padding: 0 4px;
+    border-radius: var(--st-r-xs); font: 600 11px/1 var(--font-sans); font-variant-numeric: tabular-nums;
+  }
+  .st-count--waiting { background: var(--st-waiting); color: var(--st-waiting-text); }
+
+  /* текст только для чтения экраном */
+  .st-sr {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+
+  /*
+   * Панель представления, в которую поставщик ещё не отрисовал содержимое (кадр между монтированием хозяина и слотом
+   * «Сессий»), показывает тот же скелет, что и ожидание поставщиков, а не пустое место (W-06b, EP-034).
+   */
+  [data-sidebar-tabs-view]:empty:not([hidden]) {
+    min-height: 56px;
+    background:
+      linear-gradient(var(--muted) 0 0) 12px 8px / 66% 12px no-repeat,
+      linear-gradient(var(--muted) 0 0) 12px 28px / 50% 12px no-repeat;
+    animation: st-pulse 1400ms ease-in-out infinite;
+  }
+  @keyframes st-pulse { 50% { opacity: .5; } }
+
+  /* без движения: только смена цвета, без переходов тени; пульс скелета — прозрачностью, он остаётся */
+  @media (prefers-reduced-motion: reduce) {
+    .st-tab { transition-property: color, background-color; }
+  }
+}

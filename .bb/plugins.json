@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "name": "manifest-bb-plugins",
+  "plugins": [
+    { "name": "manifest", "source": "./plugins/manifest" },
+    { "name": "sidebar-tabs", "source": "./plugins/sidebar-tabs" }
+  ]
+}
