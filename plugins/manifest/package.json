@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-manifest",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "engines": {
     "bb": ">=0.45",
@@ -8,7 +8,7 @@
   },
   "bb": {
     "name": "Manifest",
-    "description": "Аутрич в BB: реестр потенциальных поставщиков Manifest слева, карточка справа, чат с агентом по карточке. Данные и права — в Manifest (MCP).",
+    "description": "Аутрич в BB: реестр потенциальных поставщиков Manifest слева, карточка справа, чат с агентом по карточке и дашборд аутрича с темами-чатами. Данные и права — в Manifest (MCP).",
     "branding": {
       "icon": "Globe"
     },

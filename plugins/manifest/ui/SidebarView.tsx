@@ -3,6 +3,7 @@
 import { Component, useLayoutEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { registerView, revision, subscribe, viewSlot } from "@/lib/sidebar-tabs-contract";
+import { useAttentionCount } from "./dashboard/state";
 import { RegistryList } from "./RegistryList";
 
 export const PLUGIN_ID = "manifest";
@@ -10,6 +11,8 @@ const VIEW_ID = `${PLUGIN_ID}/outreach`;
 
 export function SidebarView() {
   const [generation, setGeneration] = useState<number | null>(null);
+  const [badge, setBadge] = useState<((n: number | null) => void) | null>(null);
+  const count = useAttentionCount();
   useLayoutEffect(() => {
     const result = registerView({
       contract: 1,
@@ -25,11 +28,17 @@ export function SidebarView() {
       return;
     }
     setGeneration(result.generation);
+    setBadge(() => result.setBadge);
     return () => {
       result.dispose();
       setGeneration(null);
+      setBadge(null);
     };
   }, []);
+  // Счётчик «ждут нашего ответа + просрочено» на вкладке (§6.5).
+  useLayoutEffect(() => {
+    badge?.(count ? count : null);
+  }, [badge, count]);
   useSyncExternalStore(subscribe, revision, revision);
   const slot = generation === null ? null : viewSlot(VIEW_ID, generation);
   if (!slot) return null;

@@ -69,11 +69,45 @@ agent chat bound to each company in the middle.
   change it makes appears in the card's history marked «агент BB» (“bb agent”) and
   refreshes the card at once.
 
+### Outreach dashboard (since 0.2.0)
+
+```
+┌─ Дашборд аутрича ─ [Весь реестр] [Напоминания] [Индия] [+ Тема] ───────┬───────────────────────┐
+│ Topic filter: status = contacted · country = IN · no touch ≥ 7 days [×]│ Topic chat            │
+│ ┌ Waiting for us ┐┌ Overdue ┐┌ No next step ┐┌ Due today ┐┌ Ready ┐    │ You: who needs a      │
+│ │       2        ││    5    ││      3       ││     1     ││  12   │    │ follow-up in India?   │
+│ └────────────────┘└─────────┘└──────────────┘└───────────┘└───────┘    │ Agent: 5 companies    │
+│ ┌ Today queue ──────────────────┐ ┌ What changed since last visit ┐    │ ┌ live list ─────────┐│
+│ │ Dealer X · follow-up #1,       │ │ THK · status → replied        │    │ │ Dealer X · IN · 9d ││
+│ │            3 days overdue      │ │ ZETA · touch ← email          │    │ └────────────────────┘│
+│ └────────────────────────────────┘ └──────────────────────────────┘    │ ┌ batch: next step ──┐│
+│ ┌ Funnel ─────┐ ┌ Regions ─────┐ ┌ Stagnation: status × days ┐        │ │ 5 companies  [Apply]││
+└─────────────────────────────────────────────────────────────────────────┴───────────────────────┘
+```
+
+- **Today queue.** Companies that replied and wait for us, overdue next steps, steps due
+  today, and companies ready but not yet contacted — each row with the reason it is
+  there. This is also what the agent answers to “who needs a reminder?”.
+- **Charts.** Process checks, the funnel with drop-off by reason, regions stacked by
+  stage, a stagnation matrix (status × days since the last touch), data quality and
+  activity. Numbers are per company; percentages appear only when the base is at
+  least 20. Every tile and bar filters the topic; every row opens the card.
+- **Topics.** Several agent chats on the dashboard, each with its own filter, kept as
+  bb threads in the «Аутрич» section. The agent changes the topic filter, inserts live
+  company lists into its replies, and prepares bulk edits as **batches**: a preview of
+  every field change that a person applies (and can revert) with a button. The agent
+  cannot apply a batch itself.
+- **Attention counter.** “Waiting for us + overdue” on the «Поставщики» tab and the
+  dashboard navigation item.
+
+The dashboard needs a Manifest server with the outreach work layer (touches, next steps,
+queue, metrics); the plugin detects it through `manifest_whoami.capabilities`.
+
 ## Plugins
 
 | Plugin | Version | What it does |
 |---|---|---|
-| [`manifest`](plugins/manifest) | 0.1.0 | The outreach workspace: registry, card, company chat, agent tools, connection settings. |
+| [`manifest`](plugins/manifest) | 0.2.0 | The outreach workspace: registry, card, company chat, outreach dashboard with topic chats, agent tools, connection settings. |
 | [`sidebar-tabs`](plugins/sidebar-tabs) | 0.2.1 | A generic host that turns bb's sidebar thread list into tabs filled by other plugins. `manifest` puts its registry there as the «Поставщики» (“Suppliers”) tab. |
 
 `sidebar-tabs` is optional. Without it the registry opens from the «Аутрич»
@@ -157,9 +191,11 @@ bb builds the plugins from source on install; no prebuilt artifacts are committe
 
 ## Agent tools
 
-Manifest's MCP server publishes these tools. The panels can call all of them; the agent
-gets the eight marked “agent”. The tools a session actually receives depend on the
-user's permissions.
+Manifest's MCP server publishes these tools. The panels can call all of them. The agent
+gets a set that depends on the kind of chat: in a **company chat** it reads and edits that
+one company; in a **dashboard topic** it reads the whole registry and changes data only
+through batch previews. The tools a session actually receives also depend on the user's
+permissions.
 
 | Tool | Agent | Permission | Purpose |
 |---|:---:|---|---|
@@ -175,10 +211,26 @@ user's permissions.
 | `outreach_add_comment` | ✓ | `outreach.manage` | Comment on a company as the user. |
 | `outreach_update_comment` | | `outreach.manage` | Edit or pin one's own comment. |
 | `outreach_delete_comment` | | `outreach.manage` | Delete one's own comment. |
+| `outreach_queue` | ✓ both | `outreach.view` | Today queue with a reason per row. |
+| `outreach_metrics` | ✓ both | `outreach.view` | Dashboard metrics for a filter, with `as_of`. |
+| `outreach_feed` | ✓ both | `outreach.view` | Changes since a moment. |
+| `outreach_segments` | ✓ both | `outreach.view` | Saved team segments with live counts. |
+| `outreach_cadence` | | `outreach.view` | Follow-up template. |
+| `outreach_batch_get`, `outreach_batches` | ✓ topic | `outreach.view` | A batch and the batch journal. |
+| `outreach_log_touch` | ✓ company | `outreach.manage` | Record an email, message, call, meeting, autoreply or bounce; the cadence proposes the next step. |
+| `outreach_update_touch`, `outreach_delete_touch` | | `outreach.manage` | Fix or remove a touch. |
+| `outreach_set_next_action`, `outreach_complete_next_action` | ✓ company | `outreach.manage` | Plan or close the next step. |
+| `outreach_save_segment`, `outreach_delete_segment` | ✓ topic (save) | `outreach.manage` | Team segments. |
+| `outreach_set_cadence` | | `outreach.manage` | Change the follow-up template. |
+| `outreach_batch_preview` | ✓ topic | `outreach.manage` | Prepare a bulk edit (≤ 200 companies); changes nothing. |
+| `outreach_batch_apply`, `outreach_batch_revert` | never | `outreach.manage` | Apply or revert a batch — refused when called by the agent. |
+| `manifest_dashboard_show` | ✓ topic | — | Plugin-local: set the topic filter shown on the dashboard. |
 
 The bundled agent skill [`manifest-outreach`](plugins/manifest/skills/manifest-outreach/SKILL.md)
 explains the registry rules to the agent: the status funnel, when a reason is required,
-and how priority is calculated.
+how priority is calculated, how to record touches, and the two message directives —
+`::manifest-companies{…}` (a live company list) and `::manifest-batch{id="…"}` (a batch
+card with Apply / Revert).
 
 ## Security
 
@@ -220,7 +272,7 @@ bb plugin update sidebar-tabs
 │   │   ├── server.ts           #   backend: settings, sign-in, RPC, agent tools
 │   │   ├── app.tsx             #   UI slots: sidebar view, page, card tab, settings
 │   │   ├── lib/                #   MCP client, tool definitions, sidebar-tabs contract copy
-│   │   ├── ui/                 #   React components
+│   │   ├── ui/                 #   React components (ui/dashboard — the outreach dashboard)
 │   │   ├── skills/             #   agent skill «manifest-outreach»
 │   │   └── tests/              #   vitest (server, UI) and node:test (MCP client)
 │   └── sidebar-tabs/           # the sidebar tab host

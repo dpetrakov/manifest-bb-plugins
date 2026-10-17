@@ -5,6 +5,8 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { CardTab } from "../ui/CardTab";
 import { ConnectSection } from "../ui/ConnectSection";
 import { OutreachPage } from "../ui/OutreachPage";
+import { DashboardPage } from "../ui/dashboard/DashboardPage";
+import { BatchDirective, filterFromAttributes } from "../ui/directives";
 
 const status = (over: Record<string, unknown> = {}) => ({
   connected: true,
@@ -156,5 +158,94 @@ describe("connect section", () => {
     expect(await screen.findByText("Подключено как op@example.com")).toBeTruthy();
     expect(sent).toMatchObject({ url: "m.example", email: "op@example.com", password: "correct horse battery" });
     expect(pw.value).toBe("");
+  });
+});
+
+const metrics = {
+  as_of: "2026-10-19T07:00:00Z", today: "2026-10-19", total: 41, active: 38,
+  checks: { waiting_reply: 2, overdue: 5, due_today: 1, no_next_action: 3, ready_untouched: 12 },
+  funnel: [{ status: "new", count: 20, median_days_in_status: 3 }, { status: "contacted", count: 9, median_days_in_status: 5 }],
+  dropoff: [{ status: "rejected", reason_code: "territory", count: 3 }],
+  regions: [{ region: "asia", total: 30, by_status: { new: 20, contacted: 9, rejected: 1 } }],
+  aging: [{ status: "contacted", buckets: { never: 0, d0_7: 2, d8_14: 4, d15_30: 2, d30p: 1 } }],
+  quality: { by_priority: { "1": 30, "2": 5, "3": 0, "4": 1, "5": 5 }, brand_only: 4, no_channels: 1, with_person: 7, invalid_contacts: 0, unassigned: 30 },
+  activity: { touches_out_7d: 6, touches_in_7d: 2, touched: 9, replied: 3, positive_30d: 1, median_days_to_first: 2, outbound_companies_7d: 5 },
+};
+
+describe("dashboard (W-15)", () => {
+  it("shows checks, the queue and opens the card; a tile filters the topic", async () => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    const filters: unknown[] = [];
+    const r = renderSlot({ component: DashboardPage }, { subPath: "th-1" }, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status({ canWork: true }),
+        seen_get: () => ({ at: null }),
+        seen_set: () => ({ ok: true }),
+        topic_filter_get: () => ({ filter: {} }),
+        topic_filter_set: ({ filter }: { filter: unknown }) => {
+          filters.push(filter);
+          return { filter };
+        },
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          calls.push({ name, args });
+          if (name === "outreach_metrics") return { result: metrics };
+          if (name === "outreach_queue") {
+            return { result: { as_of: metrics.as_of, today: metrics.today, groups: [
+              { key: "overdue", title: "Просрочено", total: 1, items: [{ ...item("c9", "Dealer X", "IN"), group: "overdue", reason: "Повторное письмо № 1 · просрочено на 3 дня" }] },
+            ] } };
+          }
+          if (name === "outreach_feed") return { result: { items: [], since: metrics.as_of } };
+          if (name === "outreach_segments") return { result: { items: [] } };
+          return { result: null };
+        },
+      } as never,
+      experimental_openFixedTab: () => true,
+    });
+    expect(await screen.findByText("Dealer X")).toBeTruthy();
+    expect(screen.getByText(/просрочено на 3 дня/)).toBeTruthy();
+    expect(screen.getByText("Ждут нашего ответа")).toBeTruthy();
+    expect(screen.getByText("3 из 9")).toBeTruthy(); // ответили: без процентов при базе < 20
+    fireEvent.click(screen.getByText("Dealer X"));
+    expect(JSON.stringify(r.inspection.experimental_fixedTabOpenCalls.at(-1))).toContain("c9");
+    fireEvent.click(screen.getByText("Просрочено", { selector: "span.text-xs" }));
+    await waitFor(() => expect(filters.at(-1)).toEqual({ attention: "overdue" }));
+  });
+
+  it("asks to update Manifest without the work layer", async () => {
+    renderSlot({ component: DashboardPage }, { subPath: "" }, { rpc: { status: () => status({ canWork: false }) } as never });
+    expect(await screen.findByText(/после обновления Manifest/)).toBeTruthy();
+  });
+});
+
+describe("directives", () => {
+  it("parses untrusted attributes into a filter", () => {
+    expect(filterFromAttributes({ attention: "overdue", statuses: "contacted, replied", priorities: "1,9", stale_days: "x", evil: "1", never_touched: "true" }))
+      .toEqual({ attention: "overdue", statuses: ["contacted", "replied"], priorities: [1], never_touched: true });
+  });
+
+  it("applies a batch only by the button", async () => {
+    const calls: string[] = [];
+    renderSlot({ component: BatchDirective }, {
+      attributes: { id: "b1" }, source: "::manifest-batch{id=\"b1\"}",
+      message: { id: "m", threadId: "th", turnId: null, projectId: null }, openWorkspaceFile: null,
+    }, {
+      rpc: {
+        status: () => status({ canWork: true }),
+        tool: ({ name }: { name: string }) => {
+          calls.push(name);
+          const base = { id: "b1", summary: "Статус → «Написали»", count: 2, skipped: 1, created_by: "op@example.com",
+            created_at: "", expires_at: "2026-10-19T08:00:00Z", applied_by: "", applied_at: null, reverted_at: null,
+            items: [{ company_id: "c1", name: "THK", changes: [{ field: "status", old: "new", new: "contacted" }] },
+              { company_id: "c2", name: "ZETA", changes: [], skip: "уже в этом статусе" }], result: [] };
+          return { result: name === "outreach_batch_apply" ? { ...base, state: "applied", applied_by: "op@example.com" } : { ...base, state: "preview" } };
+        },
+      } as never,
+    });
+    expect(await screen.findByText(/Новый → Написали/)).toBeTruthy();
+    expect(calls).toEqual(["outreach_batch_get"]);
+    fireEvent.click(screen.getByRole("button", { name: "Применить к 2" }));
+    await waitFor(() => expect(calls).toContain("outreach_batch_apply"));
+    expect(await screen.findByText("применена")).toBeTruthy();
   });
 });

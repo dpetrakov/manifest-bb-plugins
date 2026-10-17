@@ -101,11 +101,145 @@ export interface Change {
 }
 
 export interface Card {
-  company: Company;
+  company: Company & {
+    owner?: string;
+    status_reason_code?: string;
+    last_touch_at?: string | null;
+    touches_count?: number;
+  };
+  next_action?: NextAction | null;
+  interactions?: Interaction[];
   countries: { id: string; country_code: string; country_title: string; section_label: string; is_primary: boolean }[];
   contacts: Contact[];
   persons: Person[];
   comments: Comment[];
   changes: Change[];
   sources: { id: string; country_title: string; raw_text: string; source_url: string }[];
+}
+
+// ---- W-15: work layer ----
+
+export interface NextActionBrief {
+  action: string;
+  note: string;
+  due_on: string;
+  auto: boolean;
+}
+
+export interface WorkListItem extends ListItem {
+  status_reason_code?: string;
+  tags?: string[];
+  owner?: string;
+  last_touch_at?: string | null;
+  last_inbound_at?: string | null;
+  last_outbound_at?: string | null;
+  touches_count?: number;
+  next_action?: NextActionBrief | null;
+}
+
+export interface QueueItem extends WorkListItem {
+  group: string;
+  reason: string;
+}
+
+export interface QueueGroup {
+  key: string;
+  title: string;
+  total: number;
+  items: QueueItem[];
+}
+
+export interface Queue {
+  as_of: string;
+  today: string;
+  groups: QueueGroup[];
+}
+
+export interface Metrics {
+  as_of: string;
+  today: string;
+  total: number;
+  active: number;
+  checks: { waiting_reply: number; overdue: number; due_today: number; no_next_action: number; ready_untouched: number };
+  funnel: { status: string; count: number; median_days_in_status: number }[];
+  dropoff: { status: string; reason_code: string; count: number }[];
+  regions: { region: string; total: number; by_status: Record<string, number> }[];
+  aging: { status: string; buckets: Record<string, number> }[];
+  quality: {
+    by_priority: Record<string, number>;
+    brand_only: number;
+    no_channels: number;
+    with_person: number;
+    invalid_contacts: number;
+    unassigned: number;
+  };
+  activity: {
+    touches_out_7d: number;
+    touches_in_7d: number;
+    touched: number;
+    replied: number;
+    positive_30d: number;
+    median_days_to_first: number;
+    outbound_companies_7d: number;
+  };
+}
+
+export interface FeedItem {
+  id: number;
+  entity: string;
+  field: string;
+  old_value: string;
+  new_value: string;
+  actor: string;
+  at: string;
+  company_id: string;
+  company_name: string;
+  batch_id: string | null;
+}
+
+export interface Segment {
+  id: string;
+  name: string;
+  filter: Record<string, unknown>;
+  count?: number;
+}
+
+export interface BatchItem {
+  company_id: string;
+  name: string;
+  changes: { field: string; old: string; new: string }[];
+  skip?: string;
+}
+
+export interface Batch {
+  id: string;
+  state: "preview" | "applying" | "applied" | "reverted" | "expired";
+  summary: string;
+  count: number;
+  skipped: number;
+  items: BatchItem[];
+  result: { company_id: string; name: string; ok: boolean; error?: string }[];
+  created_by: string;
+  created_at: string;
+  expires_at: string;
+  applied_by: string;
+  applied_at: string | null;
+  reverted_at: string | null;
+}
+
+export interface Interaction {
+  id: string;
+  channel: string;
+  direction: "out" | "in";
+  kind: string;
+  outcome: string;
+  occurred_at: string;
+  summary: string;
+  ingest: string;
+  created_by: string;
+}
+
+export interface NextAction extends NextActionBrief {
+  id: string;
+  owner: string;
 }

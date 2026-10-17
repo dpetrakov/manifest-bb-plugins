@@ -7,6 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { errorText, useCompanyChanged, useStatus, useTool } from "./hooks";
 import {
+  ACTION_LABEL,
+  CHANNEL_LABEL,
+  OUTCOME_LABEL,
+  daysUntil,
+  formatDate,
   CONTACT_TYPES,
   CONTACT_TYPE_LABEL,
   KIND_LABEL,
@@ -23,7 +28,11 @@ import { Note, PriorityBadge } from "./RegistryList";
 import type { Card } from "./types";
 
 export function CardTab({ subPath }: PluginNavPanelProps) {
-  const companyId = subPath.split("/")[0] ?? "";
+  return <CardView companyId={subPath.split("/")[0] ?? ""} />;
+}
+
+/** The card of one organisation (the «Карточка» tab of the outreach page and of the dashboard). */
+export function CardView({ companyId, header }: { companyId: string; header?: ReactNode }) {
   const { status } = useStatus();
   const tool = useTool();
   const [card, setCard] = useState<Card | null>(null);
@@ -76,6 +85,7 @@ export function CardTab({ subPath }: PluginNavPanelProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto px-3 py-3 text-sm">
+      {header}
       <h2 className="text-base font-semibold">{c.display_name}</h2>
       <p className="text-xs text-muted-foreground">
         {KIND_LABEL[c.kind] ?? c.kind} · {countryName(c.country_code)} · {regionLabel(c.region)}
@@ -124,6 +134,12 @@ export function CardTab({ subPath }: PluginNavPanelProps) {
         {c.status_reason && <p className="text-xs text-muted-foreground">Причина: {c.status_reason}</p>}
         {c.do_not_contact && <p className="text-xs text-destructive">Не связываться{c.do_not_contact_reason ? `: ${c.do_not_contact_reason}` : ""}</p>}
       </Section>
+
+      {card.interactions !== undefined ? (
+        <Section title="Шаг и касания">
+          <WorkBlock card={card} canEdit={canEdit} busy={busy} run={run} />
+        </Section>
+      ) : null}
 
       <Section title="Реквизиты">
         <Requisites card={card} canEdit={canEdit} busy={busy} run={run} />
@@ -211,6 +227,116 @@ export function CardTab({ subPath }: PluginNavPanelProps) {
 }
 
 const selectCls = "h-8 rounded-md border border-input bg-background px-2 text-xs";
+
+/** Следующий шаг, ответственный и касания (W-15). Правка — при outreach.manage. */
+function WorkBlock({
+  card,
+  canEdit,
+  busy,
+  run,
+}: {
+  card: Card;
+  canEdit: boolean;
+  busy: boolean;
+  run: (name: string, args: Record<string, unknown>) => Promise<boolean>;
+}) {
+  const c = card.company;
+  const na = card.next_action ?? null;
+  const [touch, setTouch] = useState<{ channel: string; direction: string; outcome: string; summary: string } | null>(null);
+  const days = na ? daysUntil(na.due_on) : 0;
+  return (
+    <div className="flex flex-col gap-1.5 text-xs">
+      <div>
+        <span className="text-muted-foreground">Следующий шаг: </span>
+        {na ? (
+          <span className={days < 0 ? "text-destructive" : undefined}>
+            {ACTION_LABEL[na.action] ?? na.action}
+            {na.note ? ` · ${na.note}` : ""} · до {formatDate(na.due_on)}
+            {days < 0 ? ` (просрочено на ${-days} дн)` : ""}
+            {na.auto ? <span className="text-muted-foreground"> · по шаблону</span> : null}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">нет</span>
+        )}
+        {na && canEdit ? (
+          <button type="button" disabled={busy} className="ml-2 underline-offset-2 hover:underline"
+            onClick={() => void run("outreach_complete_next_action", { company_id: c.id, note: "выполнено" })}>
+            выполнено
+          </button>
+        ) : null}
+      </div>
+      <div>
+        <span className="text-muted-foreground">Ответственный: </span>
+        {c.owner || <span className="text-muted-foreground">не назначен</span>}
+        {canEdit ? (
+          <button type="button" disabled={busy} className="ml-2 underline-offset-2 hover:underline"
+            onClick={() => void run("outreach_update_company", { id: c.id, owner: "me", expected_updated_at: c.updated_at })}>
+            назначить на меня
+          </button>
+        ) : null}
+      </div>
+      {canEdit && touch === null ? (
+        <Button size="sm" variant="outline" className="mt-1 h-7 self-start"
+          onClick={() => setTouch({ channel: "email", direction: "out", outcome: "", summary: "" })}>
+          Записать касание
+        </Button>
+      ) : null}
+      {touch ? (
+        <div className="mt-1 grid gap-1.5 rounded-md border border-border p-2">
+          <div className="flex gap-1.5">
+            <select className={selectCls} value={touch.direction} onChange={(e) => setTouch({ ...touch, direction: e.target.value })}>
+              <option value="out">Мы → им</option>
+              <option value="in">Они → нам</option>
+            </select>
+            <select className={selectCls} value={touch.channel} onChange={(e) => setTouch({ ...touch, channel: e.target.value })}>
+              {Object.entries(CHANNEL_LABEL).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+            <select className={selectCls} value={touch.outcome} onChange={(e) => setTouch({ ...touch, outcome: e.target.value })}>
+              <option value="">Исход…</option>
+              {Object.entries(OUTCOME_LABEL).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </div>
+          <Input className="h-7 text-xs" placeholder="Кратко о чём" value={touch.summary}
+            onChange={(e) => setTouch({ ...touch, summary: e.target.value })} />
+          <div className="flex gap-1.5">
+            <Button size="sm" className="h-7" disabled={busy}
+              onClick={async () => {
+                const ok = await run("outreach_log_touch", { company_id: c.id, ...touch, outcome: touch.outcome || undefined, summary: touch.summary || undefined });
+                if (ok) setTouch(null);
+              }}>
+              Записать
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7" onClick={() => setTouch(null)}>Отмена</Button>
+          </div>
+          <p className="text-muted-foreground">Следующий шаг предложит шаблон каденса; ручной шаг не заменяется.</p>
+        </div>
+      ) : null}
+      {(card.interactions ?? []).length > 0 ? (
+        <ul className="mt-1 flex flex-col gap-1">
+          {(card.interactions ?? []).slice(0, 10).map((x) => (
+            <li key={x.id} className="rounded-md bg-muted/40 px-2 py-1">
+              <div className="flex justify-between gap-2">
+                <span>
+                  {x.direction === "out" ? "→" : "←"} {CHANNEL_LABEL[x.channel] ?? x.channel}
+                  {x.outcome ? ` · ${OUTCOME_LABEL[x.outcome] ?? x.outcome}` : ""}
+                </span>
+                <span className="text-muted-foreground">{formatDateTime(x.occurred_at)}</span>
+              </div>
+              {x.summary ? <div className="text-muted-foreground">{x.summary}</div> : null}
+              <div className="text-[11px] text-muted-foreground">{actorLabel(x.created_by)}</div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-muted-foreground">Касаний ещё не было.</p>
+      )}
+    </div>
+  );
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (

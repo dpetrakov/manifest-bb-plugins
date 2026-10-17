@@ -15,6 +15,11 @@ plugin interface and the agent skill are in Russian.
   with Manifest tools within the user's permissions; each change is recorded in the
   history as «агент BB» (“bb agent”).
 
+- **Dashboard (0.2.0).** The «Дашборд аутрича» page: today queue, funnel, regions,
+  stagnation matrix, data quality and recent changes, with several topic chats. The
+  topic agent filters the dashboard, shows live company lists and prepares bulk edits
+  that a person applies or reverts.
+
 Manifest is the MCP server and the only source of data and permissions. The plugin
 keeps just an access token (a secret setting on the bb backend); the password is used
 once to sign in.
@@ -41,6 +46,8 @@ or by yourself (click your name at the bottom of the Manifest menu).
 | `lib/tools.ts` | Agent tool schemas and the list of tools available to panels. |
 | `lib/sidebar-tabs-contract.ts` | Verbatim copy of the sidebar tabs contract v1. |
 | `ui/` | React components: registry list, filters, card, connection settings. |
+| `ui/dashboard/` | The outreach dashboard: page, widgets, topic filter, attention counter. |
+| `ui/directives.tsx` | Message directives `::manifest-companies` and `::manifest-batch`. |
 | `skills/manifest-outreach/` | Agent skill: registry rules and tool usage. |
 | `PLUGIN_OVERVIEW.md` | Description shown inside bb (in Russian). |
 | `tests/` | vitest (backend on a fake plugin host, UI with `renderSlot`) and `node:test` (MCP client). |

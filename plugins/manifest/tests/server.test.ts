@@ -16,11 +16,13 @@ interface Seen {
 let srv: Server;
 let base = "";
 let seen: Seen[] = [];
+let withWork = false;
 let revoked: string[] = [];
 
 beforeEach(async () => {
   seen = [];
   revoked = [];
+  withWork = false;
   srv = createServer(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
@@ -44,7 +46,11 @@ beforeEach(async () => {
       seen.push({ auth: req.headers.authorization, actor: String(req.headers["x-manifest-actor-kind"]), tool: m.params.name, args: m.params.arguments });
       const result =
         m.params.name === "manifest_whoami"
-          ? { email: "op@example.com", contract: 1, can_view_outreach: true, can_manage_outreach: true }
+          ? { email: "op@example.com", contract: 1, can_view_outreach: true, can_manage_outreach: true, capabilities: withWork ? ["outreach.work"] : [] }
+          : m.params.name === "outreach_list_companies"
+            ? { items: [], total: 7, limit: 1, offset: 0 }
+            : m.params.name === "outreach_batch_apply"
+              ? { id: "b1", state: "applied", items: [{ company_id: "c1" }, { company_id: "c2" }] }
           : m.params.name === "outreach_delete_contact"
             ? null
             : { company: { id: "c1", display_name: "THK" }, ok: true };
@@ -133,6 +139,12 @@ describe("panels and agent", () => {
     expect(chat.instructions).toContain('"c1"');
     expect(chat.instructions).toContain('\\"Powertools\\"');
 
+    // Metadata alone is not enough: the plugin must have linked the thread to the company.
+    const unlinked = (await h.behavior.callAgentTool("outreach_update_company", { id: "c1", status: "ready" }, { threadId: "thread-c1" })) as {
+      isError: boolean;
+    };
+    expect(unlinked.isError).toBe(true);
+    await h.behavior.callRpc("chat_link", { companyId: "c1", threadId: "thread-c1" });
     const out = await h.behavior.callAgentTool("outreach_update_company", { id: "c1", status: "ready" }, { threadId: "thread-c1" });
     expect(String(out)).toContain("THK");
     expect(seen.at(-1)).toMatchObject({ tool: "outreach_update_company", actor: "agent" });
@@ -168,5 +180,115 @@ describe("panels and agent", () => {
     expect(await h.behavior.callRpc("chat_get", { companyId: "c1" })).toEqual({ threadId: null });
     await h.behavior.callRpc("chat_link", { companyId: "c1", threadId: "th_1" });
     expect(await h.behavior.callRpc("chat_get", { companyId: "c1" })).toEqual({ threadId: "th_1" });
+  });
+});
+
+describe("dashboard topics (W-15)", () => {
+  const metaStore: Record<string, Record<string, unknown>> = {};
+  const loadDash = async () => {
+    withWork = true;
+    for (const k of Object.keys(metaStore)) delete metaStore[k];
+    metaStore["thread-dash"] = { kind: "dashboard", filter: {} };
+    metaStore["thread-c1"] = { companyId: "c1" };
+    const sections: { id: string; name: string }[] = [];
+    const { bb, harness } = createFakePluginHost({
+      pluginId: "manifest",
+      agentSkillIds: ["manifest-outreach"],
+      sdk: {
+        threads: {
+          get: async ({ threadId }: { threadId: string }) => {
+            if (threadId === "gone") throw new Error("not found");
+            return { id: threadId, title: "Тема" } as never;
+          },
+          getPluginMetadata: async ({ threadId }: { threadId: string }) => (metaStore[threadId] ?? {}) as never,
+          updatePluginMetadata: async ({ threadId, set }: { threadId: string; set?: Record<string, unknown> }) => {
+            metaStore[threadId] = { ...(metaStore[threadId] ?? {}), ...(set ?? {}) };
+            return metaStore[threadId] as never;
+          },
+        },
+        threadSections: {
+          list: async () => sections as never,
+          create: async ({ name }: { name: string }) => {
+            const x = { id: `sec-${sections.length + 1}`, name };
+            sections.push(x);
+            return x as never;
+          },
+        },
+      },
+    });
+    await plugin(bb);
+    await harness.behavior.callRpc("login", { url: base, email: "op@example.com", password: "correct horse battery" });
+    return harness;
+  };
+
+  it("reports the work capability and configures dashboard topics", async () => {
+    const h = await loadDash();
+    const s = (await h.behavior.callRpc("status", null)) as { canWork: boolean };
+    expect(s.canWork).toBe(true);
+    const dash = await h.behavior.resolveAgentConfiguration(
+      makePluginAgentConfigurationContext({ pluginMetadata: { kind: "dashboard" } }),
+    );
+    const names = dash.tools.map((t) => (typeof t === "string" ? t : t.name));
+    expect(names).toEqual(expect.arrayContaining(["manifest_dashboard_show", "outreach_batch_preview", "outreach_queue", "outreach_metrics"]));
+    expect(names).not.toContain("outreach_update_company");
+    expect(names).not.toContain("outreach_log_touch");
+    expect(names.some((n) => n.includes("batch_apply") || n.includes("batch_revert"))).toBe(false);
+    expect(dash.instructions).toContain("::manifest-batch");
+    const company = await h.behavior.resolveAgentConfiguration(
+      makePluginAgentConfigurationContext({ pluginMetadata: { companyId: "c1", companyName: "THK" } }),
+    );
+    const cnames = company.tools.map((t) => (typeof t === "string" ? t : t.name));
+    expect(cnames).toEqual(expect.arrayContaining(["outreach_log_touch", "outreach_set_next_action", "outreach_queue"]));
+    expect(cnames).not.toContain("outreach_batch_preview");
+  });
+
+  it("refuses direct writes in a topic and tools of another kind", async () => {
+    const h = await loadDash();
+    const write = (await h.behavior.callAgentTool("outreach_update_company", { id: "c1", status: "ready" }, { threadId: "thread-dash" })) as {
+      isError: boolean;
+    };
+    expect(write.isError).toBe(true);
+    const touch = (await h.behavior.callAgentTool("outreach_log_touch", { company_id: "c1", channel: "email", direction: "out" }, { threadId: "thread-dash" })) as {
+      isError: boolean;
+    };
+    expect(touch.isError).toBe(true);
+    const preview = (await h.behavior.callAgentTool("outreach_batch_preview", { op: { kind: "set_owner", owner: "me" }, filter: { attention: "overdue" } }, { threadId: "thread-c1" })) as {
+      isError: boolean;
+    };
+    expect(preview.isError).toBe(true);
+    expect(seen.filter((x) => x.tool !== "manifest_whoami")).toHaveLength(0);
+    const ok = await h.behavior.callAgentTool("outreach_batch_preview", { op: { kind: "set_owner", owner: "me" }, filter: { attention: "overdue" } }, { threadId: "thread-dash" });
+    expect(String(JSON.stringify(ok))).not.toContain("isError\":true");
+    expect(seen.at(-1)).toMatchObject({ tool: "outreach_batch_preview", actor: "agent" });
+  });
+
+  it("lets the agent set the topic filter and reports the count", async () => {
+    const h = await loadDash();
+    const out = await h.behavior.callAgentTool("manifest_dashboard_show", { filter: { country: "IN", attention: "overdue" } }, { threadId: "thread-dash" });
+    expect(JSON.stringify(out)).toContain("7 организаций");
+    expect(metaStore["thread-dash"].filter).toEqual({ country: "IN", attention: "overdue" });
+    expect(h.inspection.realtimeSignals.some((x) => x.channel === "manifest-topic-filter")).toBe(true);
+    const refused = (await h.behavior.callAgentTool("manifest_dashboard_show", { filter: {} }, { threadId: "thread-c1" })) as { isError: boolean };
+    expect(refused.isError).toBe(true);
+    expect(await h.behavior.callRpc("topic_filter_get", { threadId: "thread-dash" })).toEqual({ filter: { country: "IN", attention: "overdue" } });
+  });
+
+  it("keeps the topic index and the section", async () => {
+    const h = await loadDash();
+    expect(await h.behavior.callRpc("section_ensure", null)).toEqual({ sectionId: "sec-1" });
+    expect(await h.behavior.callRpc("section_ensure", null)).toEqual({ sectionId: "sec-1" });
+    await h.behavior.callRpc("topic_add", { threadId: "thread-dash", title: "Напоминания" });
+    await expect(h.behavior.callRpc("topic_add", { threadId: "thread-c1", title: "x" })).rejects.toThrow(/не тема/);
+    const list = (await h.behavior.callRpc("topics_list", null)) as { topics: { threadId: string }[] };
+    expect(list.topics.map((t) => t.threadId)).toEqual(["thread-dash"]);
+  });
+
+  it("signals every company of an applied batch", async () => {
+    const h = await loadDash();
+    await h.behavior.callRpc("tool", { name: "outreach_batch_apply", args: { id: "b1" } });
+    expect(seen.at(-1)).toMatchObject({ tool: "outreach_batch_apply", actor: "panel" });
+    const companies = h.inspection.realtimeSignals.filter((x) => x.channel === "manifest-company-changed");
+    expect(companies.length).toBe(2);
+    expect(h.inspection.realtimeSignals.some((x) => x.channel === "manifest-registry-changed")).toBe(true);
   });
 });
