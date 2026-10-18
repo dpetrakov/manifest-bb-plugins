@@ -17,6 +17,8 @@ import { AttentionAccessory } from "./ui/dashboard/Accessory";
 import { DASHBOARD_ID, DASHBOARD_PATH, DASH_CARD_TAB } from "./ui/dashboard/state";
 import { BatchDirective, CompaniesDirective } from "./ui/directives";
 import { MailPage } from "./ui/mail/MailPage";
+import { LetterDirective } from "./ui/mail/LetterView";
+import { MailingDirective } from "./ui/mail/MailingView";
 import { MAIL_ID, MAIL_PATH } from "./ui/mail/common";
 
 export default definePluginApp((app) => {
@@ -43,6 +45,10 @@ export default definePluginApp((app) => {
   app.slots.navPanel({ id: MAIL_ID, title: "Почта аутрича", icon: "Mail", path: MAIL_PATH, component: MailPage });
   app.slots.messageDirective({ id: "manifest-companies", component: CompaniesDirective });
   app.slots.messageDirective({ id: "manifest-batch", component: BatchDirective });
+  // W-17: письмо организации «как уйдёт» — черновик из Manifest, обновляется после правки агента.
+  app.slots.messageDirective({ id: "manifest-letter", component: LetterDirective });
+  // W-17: рассылка — одно письмо, много получателей, письмо каждого «как уйдёт».
+  app.slots.messageDirective({ id: "manifest-mailing", component: MailingDirective });
   app.slots.experimental_appOverlay({ id: "sidebar-view", component: SidebarView });
   app.slots.settingsSection({
     id: "connect",

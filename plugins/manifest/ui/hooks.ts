@@ -10,6 +10,8 @@ export const PANEL_PATH = "outreach";
 export const PANEL_ID = "outreach";
 export const CARD_TAB = { panelId: PANEL_ID, id: "card" } as const;
 export const COMPANY_CHANGED = "manifest-company-changed";
+/** A mailing changed (W-17); same name as in server.ts. */
+export const MAILING_CHANGED = "manifest-mailing-changed";
 export const STATUS_CHANGED = "manifest-status-changed";
 
 type Rpc = ReturnType<typeof useRpc<typeof rpcContract>>;

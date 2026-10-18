@@ -4,12 +4,35 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.4.0
+
+The letter to an organisation, as it will go out. Needs a Manifest server with the
+letter drafts (MCP tools `mail_draft_*`). Sending arrives in a later release.
+
+- A letter draft per organisation, kept in Manifest: «Подготовить письмо» in the card
+  takes a template; the agent in the company chat edits the draft on request.
+- The letter is shown exactly as it will be sent — sender, recipient, subject, HTML with
+  signature and footer, the template and whether it was edited, and what blocks sending —
+  in the card and in the chat through the `::manifest-letter{company="…"}` directive,
+  which refreshes after every edit.
+- The agent skill: start from a template instead of writing a letter, keep placeholders
+  (`{{company.name}}`, `{{signature}}`) as variables, change only what was asked, never
+  paste the letter as text.
+- Mailings: one letter for many organisations. «Разослать и другим» in the card (or the
+  agent, from a company chat or a dashboard topic) turns the agreed draft into a mailing;
+  recipients are added by id or by a registry filter (up to 300). The `::manifest-mailing`
+  directive and the «Рассылки» tab show what will go and what will not (with reasons),
+  and let you page through every recipient's letter as it will be sent.
+- Text that adapts to the recipient: optional segments `[[ in {{company.city}}]]` and
+  variants `[[ a || b || c ]]` — the first variant whose placeholders are all known.
+- Fixed in Manifest: placeholders inside the signature are expanded.
+
 ## manifest 0.3.0
 
 Outreach mail, part one: templates, senders and inbound, and readiness for bb 0.46.
 Works on bb 0.45 and 0.46 with Manifest MCP contract 1; the mail page needs the
 capability `outreach.mail`, without it the plugin works as 0.2.0. Sending mail arrives
-in 0.4.0.
+in a later release.
 
 bb 0.46:
 

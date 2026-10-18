@@ -125,7 +125,16 @@ plugin never sees gateway credentials.
   as plain text.
 - The company card shows who writes to the organisation and what blocks sending.
 
-Sending letters (one by one and in bulk, always by a person) arrives in 0.4.0. The page
+- **Letter to an organisation (since 0.4.0).** «Подготовить письмо» in the card starts
+  a draft from a template; the agent in the company chat edits it on request. The letter
+  is shown as it will go out — in the card and in the chat by the
+  `::manifest-letter{company="…"}` directive.
+- **Mailings (since 0.4.0).** One agreed letter for many organisations: the
+  `::manifest-mailing` directive and the «Рассылки» tab show what will go and what will
+  not, and let you page through every recipient's letter. Text adapts to what is known
+  about each recipient: `[[ in {{company.city}}]]`, `[[ a || b ]]`.
+
+Sending letters (one by one and in bulk, always by a person) arrives in a later release. The page
 needs a Manifest server with the capability `outreach.mail`.
 
 ## Plugins
@@ -270,6 +279,11 @@ permissions.
 | `mail_inbound_list`, `mail_inbound_get` | | `outreach.view` | Inbound mail (untrusted content). |
 | `mail_inbound_link`, `mail_inbound_mark` | | `outreach.manage` | Link unmatched mail to an organisation, or mark it spam or ignored. |
 | `mail_entity_save`, `mail_entity_health`, `mail_sender_save`, `mail_defaults_set` | | `mail.settings` | Legal entities, sender addresses and defaults. |
+| `mail_draft_get` | ✓ company | `outreach.view` | The organisation's letter draft and how it will go out; shown by the `::manifest-letter` directive. |
+| `mail_draft_create`, `mail_draft_update`, `mail_draft_discard` | ✓ company | `outreach.manage` | Start a letter from a template, edit subject/body (placeholders kept), drop it. |
+| `mail_mailings`, `mail_mailing_get`, `mail_mailing_letter` | ✓ company, topic | `outreach.view` | Mailings, their recipients with what will not go and why, one recipient's letter; shown by `::manifest-mailing`. |
+| `mail_mailing_create`, `mail_mailing_update`, `mail_mailing_add`, `mail_mailing_remove` | ✓ company, topic | `outreach.manage` | Prepare a mailing: from a draft or a template, recipients by id or filter, edit the text. Changes no organisation. |
+| `mail_mailing_discard` | | `outreach.manage` | Drop a mailing. |
 | `manifest_template_draft` | ✓ template | — | Plugin-local: change the draft shown in the template editor. |
 
 The bundled agent skill [`manifest-outreach`](plugins/manifest/skills/manifest-outreach/SKILL.md)

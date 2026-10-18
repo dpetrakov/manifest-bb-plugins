@@ -252,7 +252,7 @@ export function TemplateEditor({ templateId }: { templateId: string | null }) {
         <Field label="Тема">
           <Input className="h-8 text-xs" value={draft.subject ?? ""} onChange={(e) => edit({ subject: e.target.value })} />
         </Field>
-        <Field label="Текст" hint="Абзацы — пустой строкой, списки «- », **жирный**, [текст](https://…). Подвал с реквизитами добавится сам.">
+        <Field label="Текст" hint="Абзацы — пустой строкой, списки «- », **жирный**, [текст](https://…). Подвал с реквизитами добавится сам. Чего может не быть у получателя — во фрагмент: [[ in {{company.city}}]] исчезнет без города; варианты: [[Dear {{person.name}}, || Dear Sir or Madam,]]; запасное: {{person.name | &quot;Sir or Madam&quot;}}.">
           <textarea ref={bodyRef} className={cn(areaCls, "min-h-56")} value={draft.body ?? ""} onChange={(e) => edit({ body: e.target.value })} />
         </Field>
         <div className="flex flex-wrap gap-1">

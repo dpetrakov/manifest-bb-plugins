@@ -266,13 +266,116 @@ export const AGENT_TOOLS = {
     description: "Задать организации юрлицо и адрес отправителя (из mail_entities); пустые — снять.",
     parameters: z.object({ company_id: id, legal_entity_id: opt(z.string(), "юрлицо"), sender_id: opt(z.string(), "адрес") }),
   },
+  // W-17 (EP-087): the letter draft of the organisation of the chat.
+  mail_draft_get: {
+    write: false,
+    scopes: ["company"],
+    description:
+      "Черновик письма организации и как оно уйдёт: от кого, кому, тема, текст с подписью и подвалом, шаблон, что мешает отправке. Пользователю показывай директивой ::manifest-letter{company=\"<id>\"} отдельной строкой, не текстом.",
+    parameters: z.object({ company_id: id }),
+  },
+  mail_draft_create: {
+    write: true,
+    scopes: ["company"],
+    description:
+      "Начать письмо организации по шаблону (mail_templates): берутся тема и текст шаблона с подстановками, отправитель организации записывается. Один открытый черновик; replace=true — заменить текущий.",
+    parameters: z.object({
+      company_id: id,
+      template_id: z.string().describe("шаблон"),
+      person_id: opt(z.string(), "контактное лицо — для обращения и адреса"),
+      contact_id: opt(z.string(), "email получателя; пусто — основной"),
+      replace: opt(z.boolean(), "заменить открытый черновик"),
+    }),
+  },
+  mail_draft_update: {
+    write: true,
+    scopes: ["company"],
+    description:
+      "Изменить черновик письма: тема и/или текст ЦЕЛИКОМ с подстановками — {{company.name}}, {{person.name | \"Sir or Madam\"}}, {{signature}} не заменяй значениями; меняй только то, что попросили. Подвал добавляется сам. Можно сменить контактное лицо или email получателя.",
+    parameters: z.object({
+      company_id: id,
+      subject: opt(z.string(), "тема целиком"),
+      body: opt(z.string(), "текст целиком"),
+      person_id: opt(z.string(), "контактное лицо; пустая строка — без лица"),
+      contact_id: opt(z.string(), "email получателя; пустая строка — основной"),
+    }),
+  },
+  mail_draft_discard: {
+    write: true,
+    scopes: ["company"],
+    description: "Удалить черновик письма организации (только по просьбе пользователя).",
+    parameters: z.object({ company_id: id }),
+  },
+  // W-17 (EP-089): mailings — one letter, many recipients. Preparation only: they
+  // change no organisation, so the agent may edit them from company chats and
+  // dashboard topics (prep); sending is done by a person.
+  mail_mailings: {
+    write: false,
+    scopes: ["company", "dashboard"],
+    description: "Открытые рассылки (черновики): название, шаблон, число получателей.",
+    parameters: z.object({}),
+  },
+  mail_mailing_get: {
+    write: false,
+    scopes: ["company", "dashboard"],
+    description:
+      "Рассылка: тема, текст, получатели, у кого письмо не уйдёт и почему. Пользователю показывай директивой ::manifest-mailing{id=\"<id>\"} отдельной строкой, не списком.",
+    parameters: z.object({ id }),
+  },
+  mail_mailing_letter: {
+    write: false,
+    scopes: ["company", "dashboard"],
+    description: "Письмо рассылки для одного получателя — как оно уйдёт (company_id или номер index с 0).",
+    parameters: z.object({ id, company_id: opt(z.string(), "получатель"), index: opt(z.number().int().min(0), "номер получателя") }),
+  },
+  mail_mailing_create: {
+    write: true,
+    prep: true,
+    scopes: ["company", "dashboard"],
+    description:
+      "Создать рассылку: из согласованного черновика письма организации (from_company — она станет первым получателем) или из шаблона (template_id), с получателями company_ids и/или filter реестра. До 300 получателей.",
+    parameters: z.object({
+      name: opt(z.string(), "название"),
+      template_id: opt(z.string(), "шаблон"),
+      from_company: opt(z.string(), "организация с черновиком письма"),
+      company_ids: opt(z.array(z.string()).max(300), "получатели"),
+      filter: opt(filterSchema, "получатели по фильтру реестра"),
+    }),
+  },
+  mail_mailing_update: {
+    write: true,
+    prep: true,
+    scopes: ["company", "dashboard"],
+    description:
+      "Изменить письмо рассылки: тема и/или текст ЦЕЛИКОМ, с подстановками и необязательными фрагментами [[вариант с {{company.city}} || вариант без]], чтобы письмо подходило каждому получателю. Меняй только то, о чём просили.",
+    parameters: z.object({ id, name: opt(z.string(), "название"), subject: opt(z.string(), "тема целиком"), body: opt(z.string(), "текст целиком") }),
+  },
+  mail_mailing_add: {
+    write: true,
+    prep: true,
+    scopes: ["company", "dashboard"],
+    description: "Добавить получателей в рассылку: company_ids и/или filter реестра.",
+    parameters: z.object({ id, company_ids: opt(z.array(z.string()).max(300), "организации"), filter: opt(filterSchema, "фильтр реестра") }),
+  },
+  mail_mailing_remove: {
+    write: true,
+    prep: true,
+    scopes: ["company", "dashboard"],
+    description: "Убрать получателей из рассылки.",
+    parameters: z.object({ id, company_ids: z.array(z.string()).max(300) }),
+  },
   mail_entities: {
     write: false,
     scopes: ["company", "template"],
     description: "Юрлица-отправители с адресами, готовностью и состоянием канала (без токенов).",
     parameters: z.object({}),
   },
-} as const satisfies Record<string, { write: boolean; scopes: readonly ToolScope[]; description: string; parameters: z.ZodTypeAny }>;
+} as const satisfies Record<string, { write: boolean; prep?: boolean; scopes: readonly ToolScope[]; description: string; parameters: z.ZodTypeAny }>;
+
+/** Writes that prepare mail and change no organisation (mailings): allowed outside a company chat. */
+export function isPrep(name: AgentToolName): boolean {
+  return "prep" in AGENT_TOOLS[name] && (AGENT_TOOLS[name] as { prep?: boolean }).prep === true;
+}
 
 export type AgentToolName = keyof typeof AGENT_TOOLS;
 export const AGENT_TOOL_NAMES = Object.keys(AGENT_TOOLS) as AgentToolName[];
@@ -287,7 +390,9 @@ export const WORK_TOOLS = new Set<string>([
 /** Tools that need Manifest's mail layer (capability "outreach.mail"). */
 export const MAIL_TOOLS = new Set<string>([
   "mail_fields", "mail_templates", "mail_template_get", "mail_preview", "mail_company_sender", "mail_company_sender_set",
-  "mail_entities",
+  "mail_entities", "mail_draft_get", "mail_draft_create", "mail_draft_update", "mail_draft_discard",
+  "mail_mailings", "mail_mailing_get", "mail_mailing_letter", "mail_mailing_create", "mail_mailing_update",
+  "mail_mailing_add", "mail_mailing_remove",
 ]);
 
 /** Agent tools of a thread kind; work and mail tools only when Manifest has them. */
@@ -306,7 +411,8 @@ export const READ_TOOLS = new Set([
   "outreach_metrics", "outreach_feed", "outreach_segments", "outreach_cadence", "outreach_batch_get",
   "outreach_batches", "outreach_batch_preview",
   "mail_fields", "mail_entities", "mail_defaults", "mail_templates", "mail_template_get", "mail_preview",
-  "mail_company_sender", "mail_inbound_list", "mail_inbound_get", "mail_entity_health",
+  "mail_company_sender", "mail_inbound_list", "mail_inbound_get", "mail_entity_health", "mail_draft_get",
+  "mail_mailings", "mail_mailing_get", "mail_mailing_letter",
 ]);
 
 /** Tools the panels may call through the plugin backend (contract v1). */
@@ -359,6 +465,18 @@ export const PANEL_TOOLS = new Set([
   "mail_entity_health",
   "mail_sender_save",
   "mail_defaults_set",
+  "mail_draft_get",
+  "mail_draft_create",
+  "mail_draft_update",
+  "mail_draft_discard",
+  "mail_mailings",
+  "mail_mailing_get",
+  "mail_mailing_letter",
+  "mail_mailing_create",
+  "mail_mailing_update",
+  "mail_mailing_add",
+  "mail_mailing_remove",
+  "mail_mailing_discard",
 ]);
 
 /** Company id touched by a tool call, for the «card changed» signal. */

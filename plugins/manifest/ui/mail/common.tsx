@@ -116,6 +116,65 @@ export interface Inbound {
   triage: string;
 }
 
+/** Letter draft of an organisation and how it will go out (W-17). */
+export interface Letter {
+  draft: {
+    id: string;
+    company_id: string;
+    template_id: string | null;
+    template_version: number | null;
+    template_name: string;
+    person_id: string | null;
+    contact_id: string | null;
+    subject: string;
+    body: string;
+    edited: boolean;
+    updated_at: string;
+    updated_by: string;
+  };
+  preview: Preview;
+}
+
+export interface MailingRecipient {
+  company_id: string;
+  company_name: string;
+  country_code: string;
+  person_id: string | null;
+  contact_id: string | null;
+  to: string;
+  from: string;
+  ready: boolean;
+  problems: string[];
+}
+
+/** One letter for many recipients (W-17). */
+export interface Mailing {
+  id: string;
+  name: string;
+  template_id: string | null;
+  template_version: number | null;
+  template_name: string;
+  audience: string;
+  subject: string;
+  body: string;
+  edited: boolean;
+  state: string;
+  total: number;
+  ready: number;
+  skipped: number;
+  reasons: Record<string, number>;
+  recipients: MailingRecipient[];
+  updated_at: string;
+  updated_by: string;
+}
+
+export interface MailingLetter {
+  recipient: MailingRecipient;
+  index: number;
+  total: number;
+  preview: Preview;
+}
+
 export interface CompanySender {
   legal_entity: LegalEntity | null;
   sender: Sender | null;
@@ -137,8 +196,10 @@ export const selectCls = "h-8 rounded-md border border-input bg-transparent px-2
 export const areaCls = "min-h-24 rounded-md border border-input bg-transparent px-2 py-1.5 text-xs font-mono";
 
 /** HTML письма — только в изолированном iframe (никаких скриптов и ссылок наружу из окна bb). */
-export function HtmlFrame({ html, className }: { html: string; className?: string }) {
-  return <iframe title="Предпросмотр письма" sandbox="" srcDoc={html} className={cn("w-full rounded-md border border-border bg-white", className)} />;
+export function HtmlFrame({ html, className, style }: { html: string; className?: string; style?: React.CSSProperties }) {
+  return (
+    <iframe title="Предпросмотр письма" sandbox="" srcDoc={html} style={style} className={cn("w-full rounded-md border border-border bg-white", className)} />
+  );
 }
 
 /** Выбор организации поиском по реестру. */

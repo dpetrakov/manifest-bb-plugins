@@ -9,6 +9,8 @@ import { DashboardPage } from "../ui/dashboard/DashboardPage";
 import { BatchDirective, filterFromAttributes } from "../ui/directives";
 import { MailPage } from "../ui/mail/MailPage";
 import { CompanyMail } from "../ui/mail/CompanyMail";
+import { LetterDirective } from "../ui/mail/LetterView";
+import { MailingDirective } from "../ui/mail/MailingView";
 
 const status = (over: Record<string, unknown> = {}) => ({
   connected: true,
@@ -319,5 +321,115 @@ describe("mail (W-16)", () => {
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "s1" } });
     await waitFor(() => expect(sets).toEqual([{ company_id: "c1", legal_entity_id: "e1", sender_id: "s1" }]));
     expect(await screen.findByText(/задан для организации/)).toBeTruthy();
+  });
+
+  const letter = (problems: string[] = []) => ({
+    draft: { id: "d1", company_id: CID, template_id: "t1", template_version: 2, template_name: "STIHL — first letter", person_id: null,
+      contact_id: null, subject: "STIHL parts for {{company.name}}", body: "x", edited: true, updated_at: "2026-10-18T10:00:00Z", updated_by: "op@example.com · агент BB" },
+    preview: { ...preview, subject: "STIHL parts for Agro Store", to: "sales@agro.example", from: "evgenii@msg.manifestmail.fyi",
+      from_name: "Evgenii | MSG", problems, sample: false },
+  });
+  const CID = "11111111-2222-3333-4444-555555555555";
+
+  it("shows the letter as it will go out and its problems", async () => {
+    renderSlot({ component: LetterDirective }, {
+      attributes: { company: CID }, source: `::manifest-letter{company="${CID}"}`,
+      message: { id: "m", threadId: "th", turnId: null, projectId: null }, openWorkspaceFile: null,
+    }, {
+      rpc: {
+        status: () => status({ canMail: true }),
+        tool: ({ name }: { name: string }) => ({ result: name === "mail_draft_get" ? letter(["не заполнено: person.position"]) : null }),
+      } as never,
+    });
+    expect(await screen.findByText("STIHL parts for Agro Store")).toBeTruthy();
+    expect(screen.getByText("Evgenii | MSG <evgenii@msg.manifestmail.fyi>")).toBeTruthy();
+    expect(screen.getByText("sales@agro.example")).toBeTruthy();
+    expect(screen.getByText(/По шаблону «STIHL — first letter» v2 · изменён/)).toBeTruthy();
+    expect(screen.getByText("Не уйдёт: не заполнено: person.position")).toBeTruthy();
+    expect(document.querySelector("iframe")?.getAttribute("sandbox")).toBe("");
+  });
+
+  it("refuses a directive without a valid organisation", async () => {
+    renderSlot({ component: LetterDirective }, {
+      attributes: { company: "x\"><script>" }, source: "", message: { id: "m", threadId: "th", turnId: null, projectId: null }, openWorkspaceFile: null,
+    }, { rpc: { status: () => status({ canMail: true }), tool: () => ({ result: null }) } as never });
+    expect(await screen.findByText(/не указана организация/)).toBeTruthy();
+  });
+
+  it("prepares a letter from a template in the card", async () => {
+    const calls: string[] = [];
+    let created = false;
+    renderSlot({ component: () => <CompanyMail companyId={CID} /> }, {}, {
+      rpc: {
+        status: () => status({ canMail: true }),
+        tool: ({ name }: { name: string }) => {
+          calls.push(name);
+          if (name === "mail_company_sender") return { result: { legal_entity: null, sender: null, source: "default_audience", problem: "" } };
+          if (name === "mail_entities") return { result: { items: [] } };
+          if (name === "mail_templates") return { result: { items: [tpl] } };
+          if (name === "mail_draft_get") {
+            if (!created) throw new Error("Manifest: у организации нет черновика письма: создайте его mail_draft_create по шаблону");
+            return { result: letter() };
+          }
+          if (name === "mail_draft_create") {
+            created = true;
+            return { result: letter() };
+          }
+          return { result: null };
+        },
+      } as never,
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Подготовить письмо" }));
+    expect(await screen.findByText("STIHL parts for Agro Store")).toBeTruthy();
+    expect(calls).toContain("mail_draft_create");
+    expect(screen.getByText("Готово к отправке: так письмо и уйдёт.")).toBeTruthy();
+  });
+
+  it("shows a mailing: counts, reasons, and each recipient's letter", async () => {
+    const MID = "99999999-8888-7777-6666-555555555555";
+    const rec = (id: string, name: string, ready: boolean, problems: string[] = []) => ({
+      company_id: id, company_name: name, country_code: "IN", person_id: null, contact_id: null, to: `${name.toLowerCase()}@x.example`,
+      from: "evgenii@msg.manifestmail.fyi", ready, problems,
+    });
+    let recipients = [rec("a1", "Alpha", true), rec("b2", "Beta", true), rec("g3", "Gamma", false, ["у организации нет рабочего email"])];
+    const mailing = () => ({
+      id: MID, name: "STIHL — first letter · 18.10", template_id: "t1", template_version: 2, template_name: "STIHL — first letter",
+      audience: "potential_supplier", subject: "s", body: "b", edited: false, state: "draft", total: recipients.length,
+      ready: recipients.filter((r) => r.ready).length, skipped: recipients.filter((r) => !r.ready).length,
+      reasons: recipients.some((r) => !r.ready) ? { "у организации нет рабочего email": 1 } : {}, recipients,
+      updated_at: "2026-10-18T10:00:00Z", updated_by: "op@example.com",
+    });
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    renderSlot({ component: MailingDirective }, {
+      attributes: { id: MID }, source: "", message: { id: "m", threadId: "th", turnId: null, projectId: null }, openWorkspaceFile: null,
+    }, {
+      rpc: {
+        status: () => status({ canMail: true }),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          calls.push({ name, args });
+          if (name === "mail_mailing_get") return { result: mailing() };
+          if (name === "mail_mailing_letter") {
+            const r = recipients.find((x) => x.company_id === args.company_id) ?? recipients[0];
+            return { result: { recipient: r, index: 0, total: recipients.length, preview: { ...preview, subject: `STIHL parts for ${r.company_name}`, to: r.to, problems: r.problems } } };
+          }
+          if (name === "mail_mailing_remove") {
+            recipients = recipients.filter((x) => !(args.company_ids as string[]).includes(x.company_id));
+            return { result: mailing() };
+          }
+          return { result: null };
+        },
+      } as never,
+    });
+    expect(await screen.findByText("Уйдёт: 2")).toBeTruthy();
+    expect(screen.getByText("Не уйдёт: 1")).toBeTruthy();
+    expect(screen.getByText("у организации нет рабочего email — 1")).toBeTruthy();
+    expect(await screen.findByText("STIHL parts for Alpha")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "→" }));
+    expect(await screen.findByText("STIHL parts for Beta")).toBeTruthy();
+    fireEvent.click(screen.getByText("Gamma"));
+    expect(await screen.findByText("Не уйдёт: у организации нет рабочего email")).toBeTruthy();
+    fireEvent.click(screen.getAllByTitle("Убрать из рассылки")[2]);
+    await waitFor(() => expect(calls.some((c) => c.name === "mail_mailing_remove")).toBe(true));
+    expect(await screen.findByText("Не уйдёт: 0")).toBeTruthy();
   });
 });

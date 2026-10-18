@@ -144,7 +144,7 @@ export function CardView({ companyId, header }: { companyId: string; header?: Re
 
       {status?.canMail ? (
         <Section title="Почта">
-          <CompanyMail companyId={c.id} />
+          <CompanyMail key={c.id} companyId={c.id} />
         </Section>
       ) : null}
 

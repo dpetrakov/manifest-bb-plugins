@@ -1,13 +1,14 @@
 // Страница «Почта» плагина (W-16, EP-085, docs/outreach/mail.md): шаблоны,
-// юрлица и отправители, неразобранные входящие. subPath: "" | "templates" |
-// "entities" | "inbound" | "tpl/<id>" | "tpl/new". Токены шлюза задаются только в
+// рассылки (W-17), юрлица и отправители, неразобранные входящие. subPath: "" |
+// "templates" | "mailings" | "entities" | "inbound" | "tpl/<id>" | "tpl/new" |
+// "mailing/<id>". Токены шлюза задаются только в
 // вебе Manifest. Отправка писем — следующая волна.
 import { useCallback, useEffect, useState } from "react";
 import { useBbNavigate, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { errorText, useStatus, useTool } from "../hooks";
+import { PANEL_PATH, errorText, useStatus, useTool } from "../hooks";
 import { formatDateTime } from "../labels";
 import { Note } from "../RegistryList";
 import {
@@ -22,9 +23,12 @@ import {
   type Template,
 } from "./common";
 import { TemplateEditor } from "./TemplateEditor";
+import { MailingView } from "./MailingView";
+import type { Mailing } from "./common";
 
 const TABS: [string, string][] = [
   ["templates", "Шаблоны"],
+  ["mailings", "Рассылки"],
   ["entities", "Юрлица и отправители"],
   ["inbound", "Неразобранные входящие"],
 ];
@@ -37,6 +41,16 @@ export function MailPage({ subPath }: PluginNavPanelProps) {
   if (!status.connected) return <Note>{status.message}</Note>;
   if (!status.canMail) return <Note>Почта появится после обновления Manifest: на сервере ещё нет почтового слоя.</Note>;
   if (head === "tpl") return <TemplateEditor key={rest} templateId={rest && rest !== "new" ? rest : null} />;
+  if (head === "mailing" && rest) {
+    return (
+      <div className="h-full overflow-y-auto p-3">
+        <button type="button" className="mb-2 text-xs text-muted-foreground hover:underline" onClick={() => navigate.toPluginPanel(MAIL_PATH, { subPath: "mailings" })}>
+          ← Рассылки
+        </button>
+        <MailingView key={rest} id={rest} onOpenCompany={(id) => navigate.toPluginPanel(PANEL_PATH, { subPath: id })} />
+      </div>
+    );
+  }
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex gap-1 border-b border-border px-3">
@@ -52,7 +66,7 @@ export function MailPage({ subPath }: PluginNavPanelProps) {
         ))}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {head === "entities" ? <Entities /> : head === "inbound" ? <InboundList /> : <Templates />}
+        {head === "entities" ? <Entities /> : head === "inbound" ? <InboundList /> : head === "mailings" ? <Mailings /> : <Templates />}
       </div>
     </div>
   );
@@ -116,6 +130,48 @@ function Templates() {
         </ul>
       )}
     </div>
+  );
+}
+
+// ---- mailings ----
+
+function Mailings() {
+  const tool = useTool();
+  const navigate = useBbNavigate();
+  const [items, setItems] = useState<Mailing[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    tool<{ items: Mailing[] }>("mail_mailings", {}).then(
+      (r) => setItems(r.items),
+      (e: unknown) => setError(errorText(e)),
+    );
+  }, [tool]);
+  if (!items) return <Note>{error ?? "Загружаем…"}</Note>;
+  if (items.length === 0) {
+    return (
+      <Note>
+        Рассылок нет. Согласуйте письмо организации в её чате и попросите агента «разослать это письмо ещё» — или нажмите «Разослать и другим» в
+        карточке.
+      </Note>
+    );
+  }
+  return (
+    <ul className="flex flex-col divide-y divide-border rounded-lg border border-border text-sm">
+      {items.map((m) => (
+        <li key={m.id}>
+          <button
+            type="button"
+            onClick={() => navigate.toPluginPanel(MAIL_PATH, { subPath: `mailing/${m.id}` })}
+            className="flex w-full items-baseline justify-between gap-2 px-3 py-2 text-left hover:bg-state-hover"
+          >
+            <span className="font-medium">{m.name}</span>
+            <span className="text-[11px] text-muted-foreground">
+              {m.total} получ. · {m.template_name || "без шаблона"} · {formatDateTime(m.updated_at)}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 

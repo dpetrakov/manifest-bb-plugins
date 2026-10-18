@@ -49,6 +49,8 @@ beforeEach(async () => {
       const result =
         m.params.name === "manifest_whoami"
           ? { email: "op@example.com", contract: 1, can_view_outreach: true, can_manage_outreach: true, capabilities: [...(withWork ? ["outreach.work"] : []), ...(withMail ? ["outreach.mail"] : [])] }
+          : m.params.name === "mail_mailing_create"
+            ? { id: String(m.params.arguments.from_company ?? "") === "c1" ? "22222222-2222-2222-2222-222222222222" : "11111111-1111-1111-1111-111111111111", total: 1 }
           : m.params.name === "mail_preview"
             ? { subject: "Hi", text: "x", html: "<p>x</p>", missing: [], unknown: String(m.params.arguments.body).includes("{{bad}}") ? ["bad"] : [], problems: [] }
           : m.params.name === "outreach_list_companies"
@@ -346,6 +348,57 @@ describe("mail (W-16)", () => {
     expect(cnames).toEqual(expect.arrayContaining(["mail_company_sender", "mail_company_sender_set", "mail_preview"]));
     expect(cnames).not.toContain("manifest_template_draft");
     expect(company.instructions).toContain("недоверенные");
+    // W-17: the letter draft belongs to company chats only; the agent is told to show it by directive.
+    expect(cnames).toEqual(expect.arrayContaining(["mail_draft_get", "mail_draft_create", "mail_draft_update", "mail_draft_discard"]));
+    expect(names.some((n) => n.startsWith("mail_draft_"))).toBe(false);
+    expect(company.instructions).toContain("::manifest-letter");
+  });
+
+  it("lets the agent prepare mailings in company chats and dashboard topics, not change companies there", async () => {
+    const h = await loadMail();
+    metaStore["thread-dash"] = { kind: "dashboard", filter: {} };
+    await h.behavior.callRpc("chat_link", { companyId: "c1", threadId: "thread-c1" });
+    const dash = await h.behavior.resolveAgentConfiguration(makePluginAgentConfigurationContext({ pluginMetadata: { kind: "dashboard" } }));
+    const dnames = dash.tools.map((t) => (typeof t === "string" ? t : t.name));
+    expect(dnames).toEqual(expect.arrayContaining(["mail_mailing_create", "mail_mailing_add", "mail_mailing_update", "mail_mailing_get"]));
+    expect(dnames).not.toContain("mail_mailing_discard");
+    expect(dash.instructions).toContain("::manifest-mailing");
+    const tpl = await h.behavior.resolveAgentConfiguration(makePluginAgentConfigurationContext({ pluginMetadata: { kind: "template", templateId: "t1" } }));
+    expect(tpl.tools.map((t) => (typeof t === "string" ? t : t.name)).some((n) => n.startsWith("mail_mailing"))).toBe(false);
+
+    // A mailing made in the topic is editable there.
+    const DASH = "11111111-1111-1111-1111-111111111111";
+    await h.behavior.callAgentTool("mail_mailing_create", { template_id: "t1", filter: { country: "IN" } }, { threadId: "thread-dash" });
+    expect(seen.at(-1)).toMatchObject({ tool: "mail_mailing_create", actor: "agent" });
+    await h.behavior.callAgentTool("mail_mailing_add", { id: DASH, company_ids: ["c7", "c8"] }, { threadId: "thread-dash" });
+    expect(seen.at(-1)).toMatchObject({ tool: "mail_mailing_add", actor: "agent" });
+    expect(h.inspection.realtimeSignals.some((x) => x.channel === "manifest-mailing-changed")).toBe(true);
+    // Someone else's mailing — refused, nothing sent to Manifest.
+    const before = seen.length;
+    const foreign = (await h.behavior.callAgentTool("mail_mailing_update", { id: DASH, body: "x" }, { threadId: "thread-c1" })) as { isError: boolean };
+    expect(foreign.isError).toBe(true);
+    const unknown = (await h.behavior.callAgentTool("mail_mailing_add", { id: "33333333-3333-3333-3333-333333333333", company_ids: ["c9"] }, { threadId: "thread-dash" })) as { isError: boolean };
+    expect(unknown.isError).toBe(true);
+    expect(seen.length).toBe(before);
+    // Made by a person from c1's draft («Разослать и другим»): editable in c1's chat.
+    await h.behavior.callRpc("tool", { name: "mail_mailing_create", args: { from_company: "c1" } });
+    await h.behavior.callAgentTool("mail_mailing_update", { id: "22222222-2222-2222-2222-222222222222", body: "Hi" }, { threadId: "thread-c1" });
+    expect(seen.at(-1)).toMatchObject({ tool: "mail_mailing_update", actor: "agent" });
+    // Company writes in a dashboard topic stay refused.
+    const write = (await h.behavior.callAgentTool("mail_company_sender_set", { company_id: "c1", sender_id: "s1" }, { threadId: "thread-dash" })) as { isError: boolean };
+    expect(write.isError).toBe(true);
+  });
+
+  it("binds letter drafts to the organisation of the chat", async () => {
+    const h = await loadMail();
+    await h.behavior.callRpc("chat_link", { companyId: "c1", threadId: "thread-c1" });
+    const other = (await h.behavior.callAgentTool("mail_draft_update", { company_id: "c2", body: "x" }, { threadId: "thread-c1" })) as { isError: boolean };
+    expect(other.isError).toBe(true);
+    const tpl = (await h.behavior.callAgentTool("mail_draft_create", { company_id: "c1", template_id: "t1" }, { threadId: "thread-tpl" })) as { isError: boolean };
+    expect(tpl.isError).toBe(true);
+    await h.behavior.callAgentTool("mail_draft_update", { company_id: "c1", body: "Dear {{person.name}}" }, { threadId: "thread-c1" });
+    expect(seen.at(-1)).toMatchObject({ tool: "mail_draft_update", actor: "agent" });
+    expect(h.inspection.realtimeSignals.some((x) => x.channel === "manifest-company-changed")).toBe(true);
   });
 
   it("lets the agent edit the draft only in a template topic", async () => {

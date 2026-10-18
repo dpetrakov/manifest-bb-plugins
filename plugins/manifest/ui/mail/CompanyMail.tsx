@@ -1,8 +1,11 @@
 // Блок «Почта» карточки организации (W-16, EP-085): кто ей пишет — юрлицо и адрес
 // (свой или по умолчанию) и что мешает отправке. Смена — при outreach.manage.
 import { useCallback, useEffect, useState } from "react";
+import { useBbNavigate } from "@get-bb/plugin-sdk/app";
+import { Button } from "@/components/ui/button";
 import { errorText, useCompanyChanged, useStatus, useTool } from "../hooks";
-import { selectCls, type CompanySender, type LegalEntity } from "./common";
+import { MAIL_PATH, selectCls, type CompanySender, type LegalEntity, type Mailing, type Template } from "./common";
+import { LetterView, useLetter } from "./LetterView";
 
 const SOURCE_LABEL: Record<string, string> = {
   company: "задан для организации",
@@ -86,6 +89,106 @@ export function CompanyMail({ companyId }: { companyId: string }) {
         </select>
       ) : null}
       {error ? <p className="text-destructive">{error}</p> : null}
+      <DraftBlock companyId={companyId} canEdit={canEdit} />
+    </div>
+  );
+}
+
+/** Черновик письма организации (W-17): «Подготовить письмо» по шаблону и письмо «как уйдёт». */
+function DraftBlock({ companyId, canEdit }: { companyId: string; canEdit: boolean }) {
+  const tool = useTool();
+  const navigate = useBbNavigate();
+  const { letter, none, error, setLetter, reload } = useLetter(companyId);
+  const [templates, setTemplates] = useState<Template[] | null>(null);
+  const [templateId, setTemplateId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => {
+    if (!none || !canEdit) return;
+    tool<{ items: Template[] }>("mail_templates", {}).then(
+      (r) => {
+        setTemplates(r.items);
+        setTemplateId((cur) => cur || r.items[0]?.id || "");
+      },
+      () => setTemplates([]),
+    );
+  }, [canEdit, none, tool]);
+
+  const run = async (name: string, args: Record<string, unknown>) => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const out = await tool<unknown>(name, args);
+      if (name === "mail_draft_discard") reload();
+      else setLetter(out as Parameters<typeof setLetter>[0]);
+    } catch (e) {
+      setProblem(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 flex flex-col gap-2 border-t border-border pt-2">
+      <p className="font-medium">Письмо</p>
+      {error ? <p className="text-destructive">{error}</p> : null}
+      {problem ? <p className="text-destructive">{problem}</p> : null}
+      {letter ? (
+        <>
+          <LetterView letter={letter} compact />
+          <p className="text-[11px] text-muted-foreground">Правьте через чат с агентом: «сделай короче», «спроси про цепи» — письмо обновится здесь и в чате.</p>
+          {canEdit ? (
+            <div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setProblem(null);
+                  try {
+                    const m = await tool<Mailing>("mail_mailing_create", { from_company: companyId });
+                    navigate.toPluginPanel(MAIL_PATH, { subPath: `mailing/${m.id}` });
+                  } catch (e) {
+                    setProblem(errorText(e));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Разослать и другим
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 text-destructive" disabled={busy} onClick={() => void run("mail_draft_discard", { company_id: companyId })}>
+                Удалить черновик
+              </Button>
+            </div>
+          ) : null}
+        </>
+      ) : none ? (
+        canEdit ? (
+          templates && templates.length === 0 ? (
+            <p className="text-muted-foreground">Шаблонов нет — создайте на странице «Почта аутрича».</p>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <select className={selectCls} value={templateId} disabled={busy || !templates} onChange={(e) => setTemplateId(e.target.value)}>
+                {(templates ?? []).map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} · {t.language}
+                  </option>
+                ))}
+              </select>
+              <Button size="sm" className="h-7" disabled={busy || !templateId} onClick={() => void run("mail_draft_create", { company_id: companyId, template_id: templateId })}>
+                Подготовить письмо
+              </Button>
+            </div>
+          )
+        ) : (
+          <p className="text-muted-foreground">Черновика нет.</p>
+        )
+      ) : (
+        <p className="text-muted-foreground">Загружаем…</p>
+      )}
     </div>
   );
 }
