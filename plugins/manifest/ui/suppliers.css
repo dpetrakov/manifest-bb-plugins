@@ -1,7 +1,7 @@
 /*
  * Кнопка «Потенциальные поставщики» в подвале сайдбара — в тоне Manifest, как кнопки
  * его разделов на рейле bb (bb-workbench, sidebar-tabs tabs.css: manifest = --diff-added,
- * «нежный фисташковый»): подложка 12% в покое, 20% при наведении, 28% и рамка, пока
+ * «нежный фисташковый»): подложка 12% в покое, 20% при наведении, 28% и рамка в тон, пока
  * список поставщиков показан. Кнопку рисует bb; опора — её подпись (aria-label/title,
  * FOOTER_LABEL в SuppliersList.tsx). Вне @layer: кнопки оформлены утилитами хоста в слое.
  */
@@ -18,5 +18,6 @@ html[data-manifest-suppliers="on"] :is(button[aria-label="Потенциальн
   background-color: color-mix(in oklab, var(--mf-tone) 28%, transparent);
 }
 html[data-manifest-suppliers="on"] :is(button[aria-label="Потенциальные поставщики"], button[title="Потенциальные поставщики"]):not(:focus-visible) {
-  box-shadow: inset 0 0 0 1px var(--foreground);
+  /* рамка — тот же тон, насыщеннее (как у включённой кнопки bb-workbench), не чёрная */
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--mf-tone) 80%, var(--foreground));
 }

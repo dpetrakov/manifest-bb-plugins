@@ -4,6 +4,11 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.5.1
+
+- The border of the switched-on suppliers button is a deeper shade of its own soft
+  green instead of black, like the other switched-on footer buttons.
+
 ## manifest 0.5.0
 
 The suppliers list is the plugin's own. Requires bb 0.46.

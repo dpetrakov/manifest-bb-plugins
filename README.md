@@ -141,7 +141,7 @@ needs a Manifest server with the capability `outreach.mail`.
 
 | Plugin | Version | What it does |
 |---|---|---|
-| [`manifest`](plugins/manifest) | 0.5.0 | The outreach workspace: registry, card, company chat, outreach dashboard with topic chats, mail templates and senders, agent tools, connection settings. |
+| [`manifest`](plugins/manifest) | 0.5.1 | The outreach workspace: registry, card, company chat, outreach dashboard with topic chats, mail templates and senders, agent tools, connection settings. |
 ### The suppliers list in the sidebar (since 0.5.0)
 
 The plugin brings its own sidebar list, «Потенциальные поставщики» (“Potential
