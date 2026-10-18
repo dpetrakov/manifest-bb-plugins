@@ -45,7 +45,7 @@ agent chat bound to each company in the middle.
 ```
 ┌──────────────────────┬─────────────────────────────────┬──────────────────────────┐
 │ Sidebar              │ Main area                       │ Right panel              │
-│ «Поставщики» tab     │ Chat with the bb agent,         │ «Карточка» tab           │
+│ Suppliers list       │ Chat with the bb agent,         │ «Карточка» tab           │
 │                      │ bound to the selected company   │                          │
 │ search               │                                 │ name, legal entity, kind │
 │ region ▾ country ▾   │ "Find a phone number for the    │ countries covered        │
@@ -97,8 +97,8 @@ agent chat bound to each company in the middle.
   company lists into its replies, and prepares bulk edits as **batches**: a preview of
   every field change that a person applies (and can revert) with a button. The agent
   cannot apply a batch itself.
-- **Attention counter.** “Waiting for us + overdue” as a badge on the «Поставщики»
-  tab and next to the topic switcher in the dashboard header.
+- **Attention counter.** “Waiting for us + overdue” next to the topic switcher in the
+  dashboard header.
 
 The dashboard needs a Manifest server with the outreach work layer (touches, next steps,
 queue, metrics); the plugin detects it through `manifest_whoami.capabilities`.
@@ -141,11 +141,17 @@ needs a Manifest server with the capability `outreach.mail`.
 
 | Plugin | Version | What it does |
 |---|---|---|
-| [`manifest`](plugins/manifest) | 0.3.0 | The outreach workspace: registry, card, company chat, outreach dashboard with topic chats, mail templates and senders, agent tools, connection settings. |
-| [`sidebar-tabs`](plugins/sidebar-tabs) | 0.3.2 | A generic host that turns bb's sidebar thread list into tabs filled by other plugins. `manifest` puts its registry there as the «Поставщики» (“Suppliers”) tab. |
+| [`manifest`](plugins/manifest) | 0.5.0 | The outreach workspace: registry, card, company chat, outreach dashboard with topic chats, mail templates and senders, agent tools, connection settings. |
+### The suppliers list in the sidebar (since 0.5.0)
 
-`sidebar-tabs` is optional. Without it the registry opens from the «Аутрич»
-(“Outreach”) section, and bb's own thread list stays untouched.
+The plugin brings its own sidebar list, «Потенциальные поставщики» (“Potential
+suppliers”), and a button for it in the sidebar footer, tinted in Manifest's soft
+green like its rail sections. The button switches the sidebar between the suppliers
+and whatever list was there before — bb's thread list or another plugin's. Opening the
+«Аутрич» section switches the suppliers on by itself. The plugin never leaves the
+sidebar on «automatic» when it switches back, so it does not take the sidebar over
+when you did not ask for it. Until 0.4.0 the list was a tab of the separate
+`sidebar-tabs` host; that host is no longer part of this repository.
 
 ### Navigation in bb 0.46
 
@@ -193,9 +199,7 @@ flowchart LR
 
 ## Requirements
 
-- bb **0.45** or **0.46** (built against plugin SDK 0.6.49). On bb 0.46 use
-  `sidebar-tabs` **0.3.2** or newer: older hosts call navigation hooks that bb 0.46
-  removed and fail on the first render.
+- bb **0.46** or newer (built against plugin SDK 0.6.49).
 - A Manifest account with the `outreach.view` permission; `outreach.manage` to edit.
 - A **plugin password** set for that account in Manifest. It is separate from the web
   sign-in (Manifest's web interface uses Yandex sign-in).
@@ -205,21 +209,15 @@ flowchart LR
 ## Installation
 
 ```sh
-# optional: the sidebar tab host
-bb plugin install https://github.com/dpetrakov/manifest-bb-plugins --plugin sidebar-tabs
-
-# the Manifest plugin
 bb plugin install https://github.com/dpetrakov/manifest-bb-plugins --plugin manifest
 ```
 
 bb builds the plugins from source on install; no prebuilt artifacts are committed.
 
-> [!IMPORTANT]
-> While `sidebar-tabs` owns the sidebar, it shows only the views that installed
-> plugins register; with just this set that is the «Поставщики» tab. To get bb's own
-> thread list back, use the sidebar footer action «Список: мои ↔ штатные»
-> (“List: mine ↔ standard”) or run `bb sidebar-tabs mode standard`.
-> `bb sidebar-tabs mode mine` switches back.
+> [!NOTE]
+> If you installed `sidebar-tabs` from this repository before 0.5.0, remove it
+> (`bb plugin remove sidebar-tabs`) unless another plugin uses it: the suppliers list
+> now lives in the `manifest` plugin itself.
 
 ## Connecting to Manifest
 
@@ -314,16 +312,7 @@ Data flow, threat model and how to report a vulnerability: [SECURITY.md](SECURIT
 ```sh
 bb plugin outdated
 bb plugin update manifest
-bb plugin update sidebar-tabs
 ```
-
-> [!IMPORTANT]
-> **Upgrading bb to 0.46:** update both plugins first, then bb. `sidebar-tabs` 0.3.2
-> is the first host that works on 0.46. On bb 0.45 it also brings «Плитки разделов»
-> (section tiles, a replacement for the 0.45 navigation) and turns them on by itself;
-> if you don't want them, run
-> `bb settings ui set sidebar.navigationProvider '"navigation/navigation"'`.
-> On 0.46 the tiles are not registered at all.
 
 - Releases of the `manifest` plugin are git tags `manifest/vX.Y.Z` (semantic
   versioning). See [CHANGELOG.md](CHANGELOG.md).
@@ -334,16 +323,15 @@ bb plugin update sidebar-tabs
 
 ```
 .
-├── .bb/plugins.json            # bb plugin set manifest: lists both plugins
+├── .bb/plugins.json            # bb plugin set manifest
 ├── plugins/
 │   ├── manifest/               # the Manifest plugin
 │   │   ├── server.ts           #   backend: settings, sign-in, RPC, agent tools
-│   │   ├── app.tsx             #   UI slots: sidebar view, page, card tab, settings
-│   │   ├── lib/                #   MCP client, tool definitions, sidebar-tabs contract copy
+│   │   ├── app.tsx             #   UI slots: sidebar list and footer button, pages, card tab, settings
+│   │   ├── lib/                #   MCP client, tool definitions
 │   │   ├── ui/                 #   React components (ui/dashboard — the outreach dashboard, ui/mail — mail)
 │   │   ├── skills/             #   agent skill «manifest-outreach»
 │   │   └── tests/              #   vitest (server, UI) and node:test (MCP client)
-│   └── sidebar-tabs/           # the sidebar tab host
 ├── CHANGELOG.md
 ├── LICENSE                     # proprietary license
 └── SECURITY.md
@@ -362,10 +350,6 @@ Run the checks locally (Node.js 22.6 or newer):
 cd plugins/manifest
 npm ci
 npm run check        # tsc --noEmit, vitest, node:test
-
-cd ../sidebar-tabs
-npm ci
-npm run check        # tab model tests and contract copy comparison
 ```
 
 Against a running Manifest you can also check the contract live:

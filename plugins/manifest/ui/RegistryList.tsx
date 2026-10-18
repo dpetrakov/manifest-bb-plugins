@@ -1,5 +1,5 @@
 // Реестр потенциальных поставщиков — компактный список для левого сайдбара
-// (вкладка хоста sidebar-tabs) и для корня страницы плагина без хоста.
+// (список «Потенциальные поставщики» в сайдбаре) и для корня страницы «Аутрич».
 import { useEffect, useMemo, useState } from "react";
 import { experimental_useAppPanel, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { Icon } from "@/components/ui/icon";

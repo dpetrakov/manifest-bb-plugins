@@ -11,6 +11,7 @@ import { MailPage } from "../ui/mail/MailPage";
 import { CompanyMail } from "../ui/mail/CompanyMail";
 import { LetterDirective } from "../ui/mail/LetterView";
 import { MailingDirective } from "../ui/mail/MailingView";
+import { SUPPLIERS_LIST, switchSuppliersList } from "../ui/SuppliersList";
 
 const status = (over: Record<string, unknown> = {}) => ({
   connected: true,
@@ -431,5 +432,51 @@ describe("mail (W-16)", () => {
     fireEvent.click(screen.getAllByTitle("Убрать из рассылки")[2]);
     await waitFor(() => expect(calls.some((c) => c.name === "mail_mailing_remove")).toBe(true));
     expect(await screen.findByText("Не уйдёт: 0")).toBeTruthy();
+  });
+});
+
+describe("suppliers list switch (0.5.0)", () => {
+  const fakeSdk = (value: string, plugins: { id: string; enabled: boolean }[] = []) => {
+    const state = { value, revision: 1, writes: [] as string[] };
+    const sdk = {
+      system: {
+        uiPreferences: {
+          list: async () => ({ preferences: { "sidebar.threadListProvider": { value: state.value, revision: state.revision } } }),
+          set: async ({ value: v, expectedRevision }: { value: string; expectedRevision: number }) => {
+            if (expectedRevision !== state.revision) throw new Error("stale");
+            state.value = v;
+            state.revision++;
+            state.writes.push(v);
+            return {};
+          },
+        },
+      },
+      plugins: { list: async () => ({ plugins }) },
+    };
+    return { sdk: sdk as never, state };
+  };
+
+  it("turns the suppliers list on and back to the previous list", async () => {
+    window.localStorage.clear();
+    const { sdk, state } = fakeSdk("sidebar-tabs/tabs");
+    await switchSuppliersList(sdk, "toggle");
+    expect(state.value).toBe(SUPPLIERS_LIST);
+    await switchSuppliersList(sdk, "on");
+    expect(state.writes).toHaveLength(1);
+    await switchSuppliersList(sdk, "toggle");
+    expect(state.value).toBe("sidebar-tabs/tabs");
+  });
+
+  it("never returns to «automatic», which could pick the suppliers again", async () => {
+    window.localStorage.clear();
+    const withTabs = fakeSdk("__automatic__", [{ id: "sidebar-tabs", enabled: true }]);
+    await switchSuppliersList(withTabs.sdk, "on");
+    await switchSuppliersList(withTabs.sdk, "off");
+    expect(withTabs.state.value).toBe("sidebar-tabs/tabs");
+    window.localStorage.clear();
+    const bare = fakeSdk("__automatic__");
+    await switchSuppliersList(bare.sdk, "on");
+    await switchSuppliersList(bare.sdk, "off");
+    expect(bare.state.value).toBe("thread-list/thread-list");
   });
 });

@@ -4,10 +4,11 @@ A [bb](https://github.com/get-bb/bb) plugin that connects bb to **Manifest**, a 
 operations service, and gives the team its supplier outreach workspace inside bb. The
 plugin interface and the agent skill are in Russian.
 
-- **Left: registry.** The «Поставщики» (“Suppliers”) tab of the
-  [`sidebar-tabs`](../sidebar-tabs) host: potential suppliers with search and filters
-  by region, country (with search inside the list), priority and status. Without the
-  host the registry opens from the «Аутрич» (“Outreach”) navigation item.
+- **Left: registry.** The plugin's own sidebar list «Потенциальные поставщики»
+  (“Potential suppliers”): search and filters by region, country (with search inside
+  the list), priority and status. A button in the sidebar footer, tinted in Manifest's
+  soft green, switches the sidebar between the suppliers and the previous list;
+  opening «Аутрич» (“Outreach”) switches it on by itself.
 - **Right: card.** The «Карточка» (“Card”) tab: company details, countries, contact
   channels, contact persons, status, priority, comments and change history. Editing
   requires the `outreach.manage` permission in Manifest.
@@ -27,7 +28,6 @@ once to sign in.
 ## Install
 
 ```sh
-bb plugin install https://github.com/dpetrakov/manifest-bb-plugins --plugin sidebar-tabs   # optional
 bb plugin install https://github.com/dpetrakov/manifest-bb-plugins --plugin manifest
 ```
 
@@ -41,11 +41,10 @@ or by yourself (click your name at the bottom of the Manifest menu).
 | Path | What it is |
 |---|---|
 | `server.ts` | Backend: settings, sign-in and sign-out, RPC for the panels, agent tools, agent configuration per company thread. |
-| `app.tsx` | UI slots: sidebar view, navigation page, «Карточка» tab, settings section. |
+| `app.tsx` | UI slots: sidebar list and its footer button, navigation pages, «Карточка» tab, directives, settings section. |
 | `lib/mcp-client.ts` | Minimal MCP client over HTTPS (`tools/call`, Bearer token, actor kind header). |
 | `lib/tools.ts` | Agent tool schemas and the list of tools available to panels. |
-| `lib/sidebar-tabs-contract.ts` | Verbatim copy of the sidebar tabs contract v1. |
-| `ui/` | React components: registry list, filters, card, connection settings. |
+| `ui/` | React components: registry list, filters, card, connection settings; `SuppliersList.tsx` and `suppliers.css` — the sidebar list, its switch and the footer button tone. |
 | `ui/dashboard/` | The outreach dashboard: page, widgets, topic filter, attention counter. |
 | `ui/directives.tsx` | Message directives `::manifest-companies` and `::manifest-batch`. |
 | `skills/manifest-outreach/` | Agent skill: registry rules and tool usage. |

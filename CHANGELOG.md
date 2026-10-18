@@ -4,6 +4,20 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.5.0
+
+The suppliers list is the plugin's own. Requires bb 0.46.
+
+- «Потенциальные поставщики» is now a sidebar list of the `manifest` plugin with a
+  button in the sidebar footer, tinted in Manifest's soft green like its rail
+  sections. The button switches the sidebar between the suppliers and the previous
+  list; opening «Аутрич» switches the suppliers on by itself.
+- The `sidebar-tabs` host is no longer published here and the plugin no longer
+  registers a tab in it. Remove `sidebar-tabs` installed from this repository unless
+  another plugin needs it.
+- The attention counter stays in the dashboard header (the tab badge is gone with the
+  tab).
+
 ## manifest 0.4.0
 
 The letter to an organisation, as it will go out. Needs a Manifest server with the

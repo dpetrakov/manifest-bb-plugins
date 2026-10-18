@@ -1,6 +1,6 @@
-// Страница плагина «Аутрич» (navPanel). Корень — реестр (если хоста сайдбара
-// нет); /outreach/<companyId> — чат организации в центре, карточка — во
-// вкладке «Карточка» правой панели (она получает тот же subPath).
+// Страница плагина «Аутрич» (navPanel). Корень — реестр; /outreach/<companyId> —
+// чат организации в центре, карточка — во вкладке «Карточка» правой панели (она
+// получает тот же subPath). Открытие раздела включает список поставщиков в сайдбаре.
 import { useCallback, useEffect, useState } from "react";
 import {
   ThreadChat,
@@ -14,6 +14,7 @@ import type { rpcContract } from "../server";
 import { CARD_TAB, errorText, useRegistry, useStatus, useTool } from "./hooks";
 import { countryName } from "./labels";
 import { Note, RegistryList } from "./RegistryList";
+import { requestSuppliersShow } from "./SuppliersList";
 import type { Card } from "./types";
 
 // Хост-компонент нового треда; JSX нужен заглавный идентификатор.
@@ -21,6 +22,10 @@ const NewThreadComposer = experimental_NewThreadComposer;
 
 export function OutreachPage({ subPath }: PluginNavPanelProps) {
   const companyId = subPath.split("/")[0] ?? "";
+  // Раздел «Аутрич» работает со списком поставщиков слева — плагин включает его сам.
+  useEffect(() => {
+    requestSuppliersShow();
+  }, []);
   if (!companyId) {
     return (
       <div className="flex h-full min-h-0 flex-col">
