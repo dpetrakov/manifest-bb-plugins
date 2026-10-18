@@ -7,6 +7,8 @@ import { ConnectSection } from "../ui/ConnectSection";
 import { OutreachPage } from "../ui/OutreachPage";
 import { DashboardPage } from "../ui/dashboard/DashboardPage";
 import { BatchDirective, filterFromAttributes } from "../ui/directives";
+import { MailPage } from "../ui/mail/MailPage";
+import { CompanyMail } from "../ui/mail/CompanyMail";
 
 const status = (over: Record<string, unknown> = {}) => ({
   connected: true,
@@ -247,5 +249,75 @@ describe("directives", () => {
     fireEvent.click(screen.getByRole("button", { name: "Применить к 2" }));
     await waitFor(() => expect(calls).toContain("outreach_batch_apply"));
     expect(await screen.findByText("применена")).toBeTruthy();
+  });
+});
+
+describe("mail (W-16)", () => {
+  const tpl = {
+    id: "t1", name: "First letter", audience: "potential_supplier", language: "en", kind: "first", current_version: 2,
+    subject: "Cooperation with {{company.name}}", body: "Dear {{person.name | \"Sir or Madam\"}}", placeholders: ["company.name"],
+    updated_at: "2026-10-18T10:00:00Z", updated_by: "op@example.com", versions: [],
+  };
+  const preview = { subject: "Cooperation with Example Ltd", text: "Dear Sir or Madam", html: "<p>Dear Sir or Madam</p>", missing: [], unknown: [], to: "", from: "", from_name: "", problems: [], sample: true };
+
+  it("lists templates and opens the editor", async () => {
+    const r = renderSlot({ component: MailPage }, { subPath: "templates" }, {
+      rpc: {
+        status: () => status({ canMail: true }),
+        tool: ({ name }: { name: string }) => ({ result: name === "mail_templates" ? { items: [tpl] } : null }),
+      } as never,
+    });
+    expect(await screen.findByText("First letter")).toBeTruthy();
+    fireEvent.click(screen.getByText("First letter"));
+    expect(JSON.stringify(r.inspection)).toContain("tpl/t1");
+  });
+
+  it("saves a template as a new one", async () => {
+    const saves: Record<string, unknown>[] = [];
+    renderSlot({ component: MailPage }, { subPath: "tpl/t1" }, {
+      rpc: {
+        status: () => status({ canMail: true }),
+        template_thread_get: () => ({ threadId: null }),
+        section_ensure: () => ({ sectionId: null }),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          if (name === "mail_template_get") return { result: tpl };
+          if (name === "mail_fields") return { result: { fields: [{ path: "company.name", title: "Название организации" }], audiences: [], kinds: [] } };
+          if (name === "mail_preview") return { result: preview };
+          if (name === "mail_template_save") {
+            saves.push(args);
+            return { result: { ...tpl, id: "t2", name: String(args.name), current_version: 1 } };
+          }
+          return { result: null };
+        },
+      } as never,
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Сохранить как новый" }));
+    await waitFor(() => expect(saves).toHaveLength(1));
+    expect(saves[0].id).toBeUndefined();
+    expect(saves[0].name).toBe("First letter (копия)");
+  });
+
+  it("shows who writes to an organisation and changes the sender", async () => {
+    const sets: Record<string, unknown>[] = [];
+    const sender = { id: "s1", legal_entity_id: "e1", address: "evgenii@msg.manifestmail.fyi", display_name: "Evgenii | MSG", registered_at: "2026-10-18T10:00:00Z", register_error: "" };
+    renderSlot({ component: () => <CompanyMail companyId="c1" /> }, {}, {
+      rpc: {
+        status: () => status({ canMail: true }),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          if (name === "mail_company_sender") return { result: { legal_entity: null, sender: null, source: "none", problem: "не задан отправитель" } };
+          if (name === "mail_entities") return { result: { items: [{ id: "e1", name: "MSG", senders: [sender] }] } };
+          if (name === "mail_company_sender_set") {
+            sets.push(args);
+            return { result: { legal_entity: { id: "e1", name: "MSG" }, sender, source: "company", problem: "" } };
+          }
+          return { result: null };
+        },
+      } as never,
+    });
+    expect(await screen.findByText(/Отправка невозможна: не задан отправитель/)).toBeTruthy();
+    await screen.findByText(/Evgenii \| MSG <evgenii/);
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "s1" } });
+    await waitFor(() => expect(sets).toEqual([{ company_id: "c1", legal_entity_id: "e1", sender_id: "s1" }]));
+    expect(await screen.findByText(/задан для организации/)).toBeTruthy();
   });
 });

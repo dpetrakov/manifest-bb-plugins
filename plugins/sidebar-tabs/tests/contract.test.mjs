@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { attachHost, listViews, openRegistry, REGISTRY_KEY, registerView, revision, subscribe, viewSlot } from "../sidebar-tabs-contract.ts";
 import { tabIcon } from "../tabs-model.ts";
@@ -138,10 +138,22 @@ test("one failing listener does not keep the others from hearing the change", ()
   } finally { console.error = original; }
 });
 
+/**
+ * Copies of the contract in the plugins next to the host: ours in bb-workbench, the manifest plugin in the published
+ * manifest-bb-plugins repository (which ships this host as is). Every copy present must equal the host's; this file is
+ * the same in both repositories, so the published host needs no local edits (2026-10-18).
+ */
+const CONTRACT_COPIES = [
+  "../../sessions/sidebar-tabs-contract.ts",
+  "../../sidebar-tabs-probe/sidebar-tabs-contract.ts",
+  "../../document-review/sidebar-tabs-contract.ts",
+  "../../manifest/lib/sidebar-tabs-contract.ts",
+];
+
 test("every bundled copy of the contract is identical", () => {
-  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
-  const host = read("../sidebar-tabs-contract.ts");
-  for (const copy of ["../../manifest/lib/sidebar-tabs-contract.ts"]) {
-    assert.equal(read(copy), host, `${copy} differs from the host's contract`);
-  }
+  const url = (path) => new URL(path, import.meta.url);
+  const host = readFileSync(url("../sidebar-tabs-contract.ts"), "utf8");
+  const present = CONTRACT_COPIES.filter((copy) => existsSync(url(copy)));
+  assert.ok(present.length > 0, "no plugin next to the host carries a copy of the contract");
+  for (const copy of present) assert.equal(readFileSync(url(copy), "utf8"), host, `${copy} differs from the host's contract`);
 });

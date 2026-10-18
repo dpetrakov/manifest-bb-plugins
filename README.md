@@ -1,7 +1,7 @@
 # Manifest plugins for bb
 
-![bb](https://img.shields.io/badge/bb-%E2%89%A5%200.45-1f2937)
-![plugin SDK](https://img.shields.io/badge/plugin%20SDK-0.6.15-1f2937)
+![bb](https://img.shields.io/badge/bb-0.45%20%7C%200.46-1f2937)
+![plugin SDK](https://img.shields.io/badge/plugin%20SDK-0.6.49-1f2937)
 ![MCP contract](https://img.shields.io/badge/Manifest%20MCP%20contract-v1-2563eb)
 ![UI language](https://img.shields.io/badge/UI-Russian-6b7280)
 ![License](https://img.shields.io/badge/license-proprietary-b91c1c)
@@ -97,21 +97,55 @@ agent chat bound to each company in the middle.
   company lists into its replies, and prepares bulk edits as **batches**: a preview of
   every field change that a person applies (and can revert) with a button. The agent
   cannot apply a batch itself.
-- **Attention counter.** “Waiting for us + overdue” on the «Поставщики» tab and the
-  dashboard navigation item.
+- **Attention counter.** “Waiting for us + overdue” as a badge on the «Поставщики»
+  tab and next to the topic switcher in the dashboard header.
 
 The dashboard needs a Manifest server with the outreach work layer (touches, next steps,
 queue, metrics); the plugin detects it through `manifest_whoami.capabilities`.
+
+### Outreach mail (since 0.3.0)
+
+The «Почта аутрича» (“Outreach mail”) page prepares everything needed before the first
+letter goes out. Mail is delivered by a separate gateway that Manifest talks to; the
+plugin never sees gateway credentials.
+
+- **Templates** by audience (potential suppliers, suppliers, potential clients,
+  clients), language and kind, with versions. Text with light markup and placeholders
+  from a closed list: `{{company.name}}`, `{{person.name | "Sir or Madam"}}`,
+  `{{sender.name}}`, `{{signature}}`, … The legal footer is added automatically.
+- **Template editor** with a placeholder palette, a template view and a view of the
+  letter for a chosen organisation (empty and unknown placeholders are highlighted),
+  “save” and “save as new”.
+- **Template topics.** An agent chat next to the editor rewrites the draft; the user
+  sees every change at once and saves the template with a button.
+- **Legal entities and senders** with channel health, daily quota and queue, and the
+  default sender per audience. Gateway tokens are set only in the Manifest web app.
+- **Unmatched inbound mail**: replies that could not be matched to an organisation can
+  be linked to one, or marked as spam or ignored. Inbound mail is untrusted and shown
+  as plain text.
+- The company card shows who writes to the organisation and what blocks sending.
+
+Sending letters (one by one and in bulk, always by a person) arrives in 0.4.0. The page
+needs a Manifest server with the capability `outreach.mail`.
 
 ## Plugins
 
 | Plugin | Version | What it does |
 |---|---|---|
-| [`manifest`](plugins/manifest) | 0.2.0 | The outreach workspace: registry, card, company chat, outreach dashboard with topic chats, agent tools, connection settings. |
-| [`sidebar-tabs`](plugins/sidebar-tabs) | 0.2.1 | A generic host that turns bb's sidebar thread list into tabs filled by other plugins. `manifest` puts its registry there as the «Поставщики» (“Suppliers”) tab. |
+| [`manifest`](plugins/manifest) | 0.3.0 | The outreach workspace: registry, card, company chat, outreach dashboard with topic chats, mail templates and senders, agent tools, connection settings. |
+| [`sidebar-tabs`](plugins/sidebar-tabs) | 0.3.2 | A generic host that turns bb's sidebar thread list into tabs filled by other plugins. `manifest` puts its registry there as the «Поставщики» (“Suppliers”) tab. |
 
 `sidebar-tabs` is optional. Without it the registry opens from the «Аутрич»
-(“Outreach”) item in the bb navigation, and bb's own thread list stays untouched.
+(“Outreach”) section, and bb's own thread list stays untouched.
+
+### Navigation in bb 0.46
+
+bb 0.46 replaced the sidebar navigation with the **rail**: a vertical strip of section
+icons on the left, without labels or counters. The plugin adds three sections there,
+each with its own icon: «Аутрич» (globe), «Дашборд аутрича» (dashboard) and «Почта
+аутрича» (mail). Order and visibility are set in the rail's More → Customize rail.
+The dashboard and card icons are declared in the plugin manifest, so they show even
+while the plugin is stopped.
 
 ## How it works
 
@@ -150,7 +184,9 @@ flowchart LR
 
 ## Requirements
 
-- bb **0.45** or newer (plugin SDK 0.6.15).
+- bb **0.45** or **0.46** (built against plugin SDK 0.6.49). On bb 0.46 use
+  `sidebar-tabs` **0.3.2** or newer: older hosts call navigation hooks that bb 0.46
+  removed and fail on the first render.
 - A Manifest account with the `outreach.view` permission; `outreach.manage` to edit.
 - A **plugin password** set for that account in Manifest. It is separate from the web
   sign-in (Manifest's web interface uses Yandex sign-in).
@@ -194,7 +230,7 @@ bb builds the plugins from source on install; no prebuilt artifacts are committe
 Manifest's MCP server publishes these tools. The panels can call all of them. The agent
 gets a set that depends on the kind of chat: in a **company chat** it reads and edits that
 one company; in a **dashboard topic** it reads the whole registry and changes data only
-through batch previews. The tools a session actually receives also depend on the user's
+through batch previews; in a **template topic** it edits only the template draft. The tools a session actually receives also depend on the user's
 permissions.
 
 | Tool | Agent | Permission | Purpose |
@@ -225,6 +261,16 @@ permissions.
 | `outreach_batch_preview` | ✓ topic | `outreach.manage` | Prepare a bulk edit (≤ 200 companies); changes nothing. |
 | `outreach_batch_apply`, `outreach_batch_revert` | never | `outreach.manage` | Apply or revert a batch — refused when called by the agent. |
 | `manifest_dashboard_show` | ✓ topic | — | Plugin-local: set the topic filter shown on the dashboard. |
+| `mail_fields`, `mail_templates`, `mail_template_get`, `mail_preview` | ✓ all | `outreach.view` | Placeholders, templates with versions, and the rendered letter for an organisation or a sample. |
+| `mail_entities` | ✓ company, template | `outreach.view` | Legal entities, senders, channel health and quota; no tokens. |
+| `mail_defaults` | | `outreach.view` | Default senders, overall and per audience. |
+| `mail_company_sender` | ✓ company | `outreach.view` | Who writes to the organisation and what blocks sending. |
+| `mail_company_sender_set` | ✓ company | `outreach.manage` | Change the organisation's legal entity and sender. |
+| `mail_template_save` | | `outreach.manage` | Save a template or a new version — a person does it with a button. |
+| `mail_inbound_list`, `mail_inbound_get` | | `outreach.view` | Inbound mail (untrusted content). |
+| `mail_inbound_link`, `mail_inbound_mark` | | `outreach.manage` | Link unmatched mail to an organisation, or mark it spam or ignored. |
+| `mail_entity_save`, `mail_entity_health`, `mail_sender_save`, `mail_defaults_set` | | `mail.settings` | Legal entities, sender addresses and defaults. |
+| `manifest_template_draft` | ✓ template | — | Plugin-local: change the draft shown in the template editor. |
 
 The bundled agent skill [`manifest-outreach`](plugins/manifest/skills/manifest-outreach/SKILL.md)
 explains the registry rules to the agent: the status funnel, when a reason is required,
@@ -257,6 +303,14 @@ bb plugin update manifest
 bb plugin update sidebar-tabs
 ```
 
+> [!IMPORTANT]
+> **Upgrading bb to 0.46:** update both plugins first, then bb. `sidebar-tabs` 0.3.2
+> is the first host that works on 0.46. On bb 0.45 it also brings «Плитки разделов»
+> (section tiles, a replacement for the 0.45 navigation) and turns them on by itself;
+> if you don't want them, run
+> `bb settings ui set sidebar.navigationProvider '"navigation/navigation"'`.
+> On 0.46 the tiles are not registered at all.
+
 - Releases of the `manifest` plugin are git tags `manifest/vX.Y.Z` (semantic
   versioning). See [CHANGELOG.md](CHANGELOG.md).
 - The Manifest MCP contract has its own version (currently **1**). A plugin release
@@ -272,7 +326,7 @@ bb plugin update sidebar-tabs
 │   │   ├── server.ts           #   backend: settings, sign-in, RPC, agent tools
 │   │   ├── app.tsx             #   UI slots: sidebar view, page, card tab, settings
 │   │   ├── lib/                #   MCP client, tool definitions, sidebar-tabs contract copy
-│   │   ├── ui/                 #   React components (ui/dashboard — the outreach dashboard)
+│   │   ├── ui/                 #   React components (ui/dashboard — the outreach dashboard, ui/mail — mail)
 │   │   ├── skills/             #   agent skill «manifest-outreach»
 │   │   └── tests/              #   vitest (server, UI) and node:test (MCP client)
 │   └── sidebar-tabs/           # the sidebar tab host

@@ -4,7 +4,8 @@
  * Только var()/color-mix() от токенов темы bb, без литералов цвета: пользовательская тема bb проходит насквозь.
  */
 @layer components {
-  [data-sidebar-tabs-host] {
+  [data-sidebar-tabs-host],
+  [data-sidebar-tiles] {
     /* поверхность полосы и сегменты */
     --st-strip: var(--sidebar);
     --st-seam: var(--border-seam);
@@ -23,9 +24,70 @@
     --st-tab-h: 24px;
     --st-dur: 80ms;
   }
-  /* касание: цель вкладки ≥ 40 px */
+  [data-sidebar-tiles] {
+    /* плитки разделов: тон плитки — лёгкий сдвиг поверхности сайдбара к тексту; выбранная — поднятый сегмент, как вкладка */
+    --st-tile: 36px;
+    --st-tile-gap: 4px;
+    --st-tile-bg: color-mix(in oklab, var(--foreground) 5%, var(--st-strip));
+    --st-tile-hover: color-mix(in oklab, var(--foreground) 10%, var(--st-strip));
+    --st-tile-pressed: color-mix(in oklab, var(--foreground) 15%, var(--st-strip));
+    --st-tile-text: var(--muted-foreground);
+    --st-tile-dashed: var(--border);
+    --st-r-md: 8px;
+  }
+  /* касание: цель вкладки и плитки ≥ 40 px */
   @media (pointer: coarse) {
     [data-sidebar-tabs-host] { --st-tab-h: 40px; }
+    [data-sidebar-tiles] { --st-tile: 44px; }
+  }
+
+  /* ── плитки разделов (навигация сайдбара): ряд иконок, переносится в несколько рядов ── */
+  .st-tiles { flex-shrink: 0; padding: 6px 8px 8px; border-bottom: 1px solid var(--st-seam); }
+  .st-tiles[data-reordering] { cursor: grabbing; }
+  .st-tiles__grid { display: flex; flex-wrap: wrap; gap: var(--st-tile-gap); margin: 0; padding: 0; list-style: none; }
+  .st-tile-cell { position: relative; display: flex; }
+  .st-tile {
+    position: relative; display: inline-flex; align-items: center; justify-content: center; width: var(--st-tile); height: var(--st-tile);
+    border: 0; border-radius: var(--st-r-md); background: var(--st-tile-bg); color: var(--st-tile-text); cursor: pointer;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    transition: color var(--st-dur), background-color var(--st-dur), box-shadow var(--st-dur), opacity var(--st-dur);
+  }
+  .st-tile__icon, .st-tile > svg.lucide { width: 20px; height: 20px; flex: none; pointer-events: none; }
+  .st-tile--settings > svg.lucide { width: 16px; height: 16px; }
+  @media (hover: hover) {
+    .st-tile:hover { background: var(--st-tile-hover); color: var(--st-tab-text-on); }
+  }
+  .st-tile:active { background: var(--st-tile-pressed); }
+  /* где я: поднятая плитка (как выбранная вкладка) и рельс 2 px под иконкой */
+  .st-tile[aria-current="page"] {
+    background: var(--st-tab-on); color: var(--st-tab-text-on);
+    box-shadow: var(--shadow-xs), 0 0 0 1px var(--st-tab-on-edge);
+  }
+  .st-tile[aria-current="page"]::after {
+    content: ""; position: absolute; left: 50%; bottom: 3px; width: 12px; height: 2px; margin-left: -6px;
+    border-radius: 1px; background: var(--foreground);
+  }
+  .st-tile[aria-disabled="true"] { opacity: .5; cursor: default; }
+  .st-tile[data-loading] { cursor: progress; }
+  /* перетаскиваемая плитка — пустое место, куда она встанет */
+  .st-tile[data-dragging] { opacity: .35; box-shadow: inset 0 0 0 1px var(--st-tile-dashed); }
+  .st-tiles[data-reordering] .st-tile { cursor: grabbing; }
+  .st-tile:focus { outline: none; }
+  .st-tile:focus-visible { outline: 2px solid var(--st-focus); outline-offset: 2px; }
+  /* «Настроить панель»: не раздел — без заливки, пунктир */
+  .st-tile--settings { border: 1px dashed var(--st-tile-dashed); background: transparent; }
+  /* счётчик раздела (experimental_Accessory, например «Документы») — в правом верхнем углу плитки */
+  .st-tile__badge {
+    position: absolute; top: -5px; right: -5px; display: flex; max-width: calc(var(--st-tile) + 6px); overflow: hidden;
+    pointer-events: none; border-radius: var(--st-r-xs); box-shadow: 0 0 0 2px var(--st-strip);
+  }
+  .st-tile__badge:empty { display: none; }
+  /* клавиша раздела, пока зажат модификатор bb */
+  .st-tile__key {
+    position: absolute; right: -4px; bottom: -4px; display: inline-flex; align-items: center; justify-content: center;
+    min-width: 16px; height: 16px; padding: 0 3px; border: 1px solid var(--st-tab-on-edge); border-radius: var(--st-r-xs);
+    background: var(--st-tab-on); color: var(--st-tab-text-on); font: 600 10px/1 var(--font-sans); font-variant-numeric: tabular-nums;
+    pointer-events: none;
   }
 
   /* ── полоса вкладок: липкая, шов снизу, сегменты на дорожке ── */
@@ -86,5 +148,6 @@
   /* без движения: только смена цвета, без переходов тени; пульс скелета — прозрачностью, он остаётся */
   @media (prefers-reduced-motion: reduce) {
     .st-tab { transition-property: color, background-color; }
+    .st-tile { transition-property: color, background-color; }
   }
 }

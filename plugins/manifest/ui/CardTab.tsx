@@ -26,6 +26,7 @@ import {
 } from "./labels";
 import { Note, PriorityBadge } from "./RegistryList";
 import type { Card } from "./types";
+import { CompanyMail } from "./mail/CompanyMail";
 
 export function CardTab({ subPath }: PluginNavPanelProps) {
   return <CardView companyId={subPath.split("/")[0] ?? ""} />;
@@ -138,6 +139,12 @@ export function CardView({ companyId, header }: { companyId: string; header?: Re
       {card.interactions !== undefined ? (
         <Section title="Шаг и касания">
           <WorkBlock card={card} canEdit={canEdit} busy={busy} run={run} />
+        </Section>
+      ) : null}
+
+      {status?.canMail ? (
+        <Section title="Почта">
+          <CompanyMail companyId={c.id} />
         </Section>
       ) : null}
 

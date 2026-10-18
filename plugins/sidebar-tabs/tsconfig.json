@@ -11,5 +11,5 @@
     "skipLibCheck": false,
     "allowImportingTsExtensions": true
   },
-  "include": ["server.ts", "app.tsx", "host.tsx", "icons.tsx", "tabs-model.ts", "sidebar-tabs-contract.ts"]
+  "include": ["server.ts", "app.tsx", "host.tsx", "icons.tsx", "tabs-model.ts", "nav-tiles.tsx", "tiles-model.ts", "nav-runtime.ts", "sidebar-tabs-contract.ts"]
 }

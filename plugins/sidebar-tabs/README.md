@@ -55,6 +55,21 @@ disabled, bb falls back to its own list instead of showing an empty sidebar. Thi
 requires the host to be the only installed third-party thread-list provider. If the
 host does not appear within 4 s after switching, a toast says so.
 
+## bb versions
+
+The host works on bb 0.45 and 0.46. Versions before 0.3.1 fail on bb 0.46, which
+removed the sidebar navigation slots and hooks: update the host before upgrading bb.
+
+On bb **0.45** the host also registers «Плитки разделов» (“section tiles”), a row of
+section icons that replaces bb's navigation; bb turns it on by itself when
+`sidebar.navigationProvider` is `__automatic__`. To keep bb's navigation:
+
+```sh
+bb settings ui set sidebar.navigationProvider '"navigation/navigation"'
+```
+
+On bb **0.46** navigation is bb's own icon rail and the tiles are not registered.
+
 ## Writing a view
 
 The contract is [`sidebar-tabs-contract.ts`](sidebar-tabs-contract.ts) (version 1).
@@ -82,6 +97,8 @@ Every participating plugin bundles a verbatim copy; the test
 - **“Нет подключённых представлений” (“No views connected”).** No view plugin is
   installed or enabled. Check `bb plugin list` and `bb plugin logs <plugin>`; the
   button in the message switches to bb's list meanwhile.
+- **The sidebar list disappeared after upgrading to bb 0.46.** The host is older than
+  0.3.1. Run `bb plugin update sidebar-tabs`.
 - **A tab is missing after a crash.** bb keeps a crashed overlay hidden until its
   plugin reloads with new code, is disabled and enabled again, or the window reloads.
 

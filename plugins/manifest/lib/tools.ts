@@ -47,12 +47,12 @@ const touchSchema = z.object({
   contact_id: opt(z.string(), "канал связи"),
 });
 
-export type ToolScope = "company" | "dashboard";
+export type ToolScope = "company" | "dashboard" | "template";
 
 export const AGENT_TOOLS = {
   outreach_list_companies: {
     write: false,
-    scopes: ["company", "dashboard"],
+    scopes: ["company", "dashboard", "template"],
     description:
       "Список потенциальных поставщиков Manifest с фильтрами (страна, регион, приоритет, статусы, метки, ответственный, внимание, давность касания, поиск).",
     parameters: filterSchema.extend({
@@ -65,7 +65,7 @@ export const AGENT_TOOLS = {
   },
   outreach_get_company: {
     write: false,
-    scopes: ["company", "dashboard"],
+    scopes: ["company", "dashboard", "template"],
     description: "Карточка организации: реквизиты, страны, каналы связи, контактные лица, комментарии, история правок.",
     parameters: z.object({ id }),
   },
@@ -221,6 +221,57 @@ export const AGENT_TOOLS = {
     description: "Сохранить фильтр как новый общий сегмент команды (по просьбе пользователя). Чужие сегменты агент не меняет.",
     parameters: z.object({ name: z.string(), filter: filterSchema }),
   },
+  // ---- W-16: mail (Manifest capability "outreach.mail") ----
+  mail_fields: {
+    write: false,
+    scopes: ["template", "company", "dashboard"],
+    description: "Подстановки шаблонов писем ({{company.name}}, {{person.name | \"Sir or Madam\"}}, …), аудитории и виды шаблонов.",
+    parameters: z.object({}),
+  },
+  mail_templates: {
+    write: false,
+    scopes: ["template", "company", "dashboard"],
+    description: "Шаблоны писем (текущие версии) с фильтром по аудитории, языку и виду.",
+    parameters: z.object({ audience: opt(z.string(), "аудитория"), language: opt(z.string(), "язык"), kind: opt(z.string(), "first, follow_up, reply, other") }),
+  },
+  mail_template_get: {
+    write: false,
+    scopes: ["template", "company", "dashboard"],
+    description: "Шаблон со всеми версиями.",
+    parameters: z.object({ id }),
+  },
+  mail_preview: {
+    write: false,
+    scopes: ["template", "company", "dashboard"],
+    description:
+      "Как будет выглядеть письмо: шаблон (template_id, version) или произвольные subject/body — для организации (company_id) или на образце. Возвращает тему, текст, пустые и неизвестные подстановки и что мешает отправке.",
+    parameters: z.object({
+      template_id: opt(z.string(), "шаблон"),
+      version: opt(z.number().int().min(1), "версия"),
+      subject: opt(z.string(), "тема"),
+      body: opt(z.string(), "текст"),
+      company_id: opt(z.string(), "организация"),
+      person_id: opt(z.string(), "контактное лицо"),
+    }),
+  },
+  mail_company_sender: {
+    write: false,
+    scopes: ["company"],
+    description: "Кто пишет организации: юрлицо и адрес отправителя (свой или по умолчанию) и что мешает отправке.",
+    parameters: z.object({ company_id: id }),
+  },
+  mail_company_sender_set: {
+    write: true,
+    scopes: ["company"],
+    description: "Задать организации юрлицо и адрес отправителя (из mail_entities); пустые — снять.",
+    parameters: z.object({ company_id: id, legal_entity_id: opt(z.string(), "юрлицо"), sender_id: opt(z.string(), "адрес") }),
+  },
+  mail_entities: {
+    write: false,
+    scopes: ["company", "template"],
+    description: "Юрлица-отправители с адресами, готовностью и состоянием канала (без токенов).",
+    parameters: z.object({}),
+  },
 } as const satisfies Record<string, { write: boolean; scopes: readonly ToolScope[]; description: string; parameters: z.ZodTypeAny }>;
 
 export type AgentToolName = keyof typeof AGENT_TOOLS;
@@ -233,10 +284,19 @@ export const WORK_TOOLS = new Set<string>([
   "outreach_batch_preview", "outreach_save_segment",
 ]);
 
-/** Agent tools of a thread kind; work tools only when Manifest has them. */
-export function toolsFor(scope: ToolScope, work: boolean): AgentToolName[] {
+/** Tools that need Manifest's mail layer (capability "outreach.mail"). */
+export const MAIL_TOOLS = new Set<string>([
+  "mail_fields", "mail_templates", "mail_template_get", "mail_preview", "mail_company_sender", "mail_company_sender_set",
+  "mail_entities",
+]);
+
+/** Agent tools of a thread kind; work and mail tools only when Manifest has them. */
+export function toolsFor(scope: ToolScope, work: boolean, mail = false): AgentToolName[] {
   return AGENT_TOOL_NAMES.filter(
-    (n) => (AGENT_TOOLS[n].scopes as readonly ToolScope[]).includes(scope) && (work || !WORK_TOOLS.has(n)),
+    (n) =>
+      (AGENT_TOOLS[n].scopes as readonly ToolScope[]).includes(scope) &&
+      (work || !WORK_TOOLS.has(n)) &&
+      (mail || !MAIL_TOOLS.has(n)),
   );
 }
 
@@ -245,6 +305,8 @@ export const READ_TOOLS = new Set([
   "manifest_whoami", "outreach_facets", "outreach_list_companies", "outreach_get_company", "outreach_queue",
   "outreach_metrics", "outreach_feed", "outreach_segments", "outreach_cadence", "outreach_batch_get",
   "outreach_batches", "outreach_batch_preview",
+  "mail_fields", "mail_entities", "mail_defaults", "mail_templates", "mail_template_get", "mail_preview",
+  "mail_company_sender", "mail_inbound_list", "mail_inbound_get", "mail_entity_health",
 ]);
 
 /** Tools the panels may call through the plugin backend (contract v1). */
@@ -279,6 +341,24 @@ export const PANEL_TOOLS = new Set([
   "outreach_batch_preview",
   "outreach_batch_apply",
   "outreach_batch_revert",
+  // W-16 mail
+  "mail_fields",
+  "mail_entities",
+  "mail_defaults",
+  "mail_templates",
+  "mail_template_get",
+  "mail_preview",
+  "mail_company_sender",
+  "mail_company_sender_set",
+  "mail_inbound_list",
+  "mail_inbound_get",
+  "mail_inbound_link",
+  "mail_inbound_mark",
+  "mail_template_save",
+  "mail_entity_save",
+  "mail_entity_health",
+  "mail_sender_save",
+  "mail_defaults_set",
 ]);
 
 /** Company id touched by a tool call, for the «card changed» signal. */

@@ -1,4 +1,5 @@
-import { experimental_useSidebarNavigation as useSidebarNavigation, useSdk, type PluginThreadListProps } from "@get-bb/plugin-sdk/app";
+import { useSdk, type PluginThreadListProps } from "@get-bb/plugin-sdk/app";
+import { useSidebarNavigation } from "./nav-runtime.ts";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { toast } from "sonner";
 import { attachHost, listViews, openRegistry, revision, subscribe, type HostHandle, type ViewSlot } from "./sidebar-tabs-contract.ts";
@@ -8,6 +9,13 @@ import { idleCommand, type CommandState } from "./feedback.ts";
 import { busyProps, BusyOverlay } from "./feedback-ui.tsx";
 
 type Sdk = ReturnType<typeof useSdk>;
+
+/**
+ * bb 0.46 removed the sidebar navigation hooks (navigation rail): there the active item is unknown and the page path
+ * (`routePrefixes`) decides alone. The choice is fixed per runtime, so the hook order never changes between renders.
+ */
+const navigation = useSidebarNavigation;
+const useActiveNavItem: () => string | null = navigation ? () => navigation().activeItemId : () => null;
 
 /** Tabs and the manual pick belong to this window: module state survives the host's remounts, sessionStorage a reload. */
 const SELECTION_KEY = "sidebar-tabs:selection";
@@ -69,7 +77,7 @@ export function TabsHost({ activeThreadId, activeProjectId, isCompactViewport, o
   const compatible = openRegistry().ok;
   const views = listViews();
   const following = useMemo(() => views.map((entry) => ({ id: entry.registration.id, follows: entry.registration.follows ?? {} })), [views.map((entry) => `${entry.registration.id}:${entry.generation}`).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
-  const { activeItemId } = useSidebarNavigation();
+  const activeItemId = useActiveNavItem();
   const pathname = usePathname(following.some((view) => view.follows.routePrefixes?.length));
   const route = { activeThreadId, navItemId: activeItemId, pathname };
 

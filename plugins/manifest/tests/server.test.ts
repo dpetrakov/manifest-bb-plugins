@@ -17,12 +17,14 @@ let srv: Server;
 let base = "";
 let seen: Seen[] = [];
 let withWork = false;
+let withMail = false;
 let revoked: string[] = [];
 
 beforeEach(async () => {
   seen = [];
   revoked = [];
   withWork = false;
+  withMail = false;
   srv = createServer(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
@@ -46,7 +48,9 @@ beforeEach(async () => {
       seen.push({ auth: req.headers.authorization, actor: String(req.headers["x-manifest-actor-kind"]), tool: m.params.name, args: m.params.arguments });
       const result =
         m.params.name === "manifest_whoami"
-          ? { email: "op@example.com", contract: 1, can_view_outreach: true, can_manage_outreach: true, capabilities: withWork ? ["outreach.work"] : [] }
+          ? { email: "op@example.com", contract: 1, can_view_outreach: true, can_manage_outreach: true, capabilities: [...(withWork ? ["outreach.work"] : []), ...(withMail ? ["outreach.mail"] : [])] }
+          : m.params.name === "mail_preview"
+            ? { subject: "Hi", text: "x", html: "<p>x</p>", missing: [], unknown: String(m.params.arguments.body).includes("{{bad}}") ? ["bad"] : [], problems: [] }
           : m.params.name === "outreach_list_companies"
             ? { items: [], total: 7, limit: 1, offset: 0 }
             : m.params.name === "outreach_batch_apply"
@@ -67,6 +71,7 @@ afterEach(() => new Promise<void>((r) => srv.close(() => r())));
 async function load(settings: Record<string, string> = {}) {
   const { bb, harness } = createFakePluginHost({
     pluginId: "manifest",
+    experimental_declaredIconNames: ["dashboard", "id-card"],
     settings,
     agentSkillIds: ["manifest-outreach"],
     sdk: {
@@ -193,6 +198,7 @@ describe("dashboard topics (W-15)", () => {
     const sections: { id: string; name: string }[] = [];
     const { bb, harness } = createFakePluginHost({
       pluginId: "manifest",
+    experimental_declaredIconNames: ["dashboard", "id-card"],
       agentSkillIds: ["manifest-outreach"],
       sdk: {
         threads: {
@@ -290,5 +296,77 @@ describe("dashboard topics (W-15)", () => {
     const companies = h.inspection.realtimeSignals.filter((x) => x.channel === "manifest-company-changed");
     expect(companies.length).toBe(2);
     expect(h.inspection.realtimeSignals.some((x) => x.channel === "manifest-registry-changed")).toBe(true);
+  });
+});
+
+describe("mail (W-16)", () => {
+  const metaStore: Record<string, Record<string, unknown>> = {};
+  const loadMail = async () => {
+    withWork = true;
+    withMail = true;
+    for (const k of Object.keys(metaStore)) delete metaStore[k];
+    metaStore["thread-tpl"] = { kind: "template", templateId: "t1", draft: { subject: "Hi", body: "Hello" } };
+    metaStore["thread-c1"] = { companyId: "c1" };
+    const { bb, harness } = createFakePluginHost({
+      pluginId: "manifest",
+    experimental_declaredIconNames: ["dashboard", "id-card"],
+      agentSkillIds: ["manifest-outreach"],
+      sdk: {
+        threads: {
+          get: async ({ threadId }: { threadId: string }) => ({ id: threadId, title: "Шаблон" }) as never,
+          getPluginMetadata: async ({ threadId }: { threadId: string }) => (metaStore[threadId] ?? {}) as never,
+          updatePluginMetadata: async ({ threadId, set }: { threadId: string; set?: Record<string, unknown> }) => {
+            metaStore[threadId] = { ...(metaStore[threadId] ?? {}), ...(set ?? {}) };
+            return metaStore[threadId] as never;
+          },
+        },
+      },
+    });
+    await plugin(bb);
+    await harness.behavior.callRpc("login", { url: base, email: "op@example.com", password: "correct horse battery" });
+    return harness;
+  };
+
+  it("reports the mail capability and configures template topics", async () => {
+    const h = await loadMail();
+    const s = (await h.behavior.callRpc("status", null)) as { canMail: boolean };
+    expect(s.canMail).toBe(true);
+    const tpl = await h.behavior.resolveAgentConfiguration(
+      makePluginAgentConfigurationContext({ pluginMetadata: { kind: "template", templateId: "t1" } }),
+    );
+    const names = tpl.tools.map((t) => (typeof t === "string" ? t : t.name));
+    expect(names).toEqual(expect.arrayContaining(["manifest_template_draft", "mail_preview", "mail_fields", "mail_template_get"]));
+    expect(names).not.toContain("outreach_update_company");
+    expect(names).not.toContain("mail_template_save");
+    expect(names.some((n) => n.includes("send"))).toBe(false);
+    const company = await h.behavior.resolveAgentConfiguration(
+      makePluginAgentConfigurationContext({ pluginMetadata: { companyId: "c1", companyName: "THK" } }),
+    );
+    const cnames = company.tools.map((t) => (typeof t === "string" ? t : t.name));
+    expect(cnames).toEqual(expect.arrayContaining(["mail_company_sender", "mail_company_sender_set", "mail_preview"]));
+    expect(cnames).not.toContain("manifest_template_draft");
+    expect(company.instructions).toContain("недоверенные");
+  });
+
+  it("lets the agent edit the draft only in a template topic", async () => {
+    const h = await loadMail();
+    const out = await h.behavior.callAgentTool("manifest_template_draft", { subject: "Hello {{company.name}}", body: "Dear {{bad}}" }, { threadId: "thread-tpl" });
+    expect(JSON.stringify(out)).toContain("неизвестная подстановка bad");
+    expect((metaStore["thread-tpl"].draft as { subject: string }).subject).toBe("Hello {{company.name}}");
+    expect(seen.at(-1)).toMatchObject({ tool: "mail_preview", actor: "agent" });
+    expect(await h.behavior.callRpc("draft_get", { threadId: "thread-tpl" })).toMatchObject({ draft: { subject: "Hello {{company.name}}" } });
+    const refused = (await h.behavior.callAgentTool("manifest_template_draft", { body: "x" }, { threadId: "thread-c1" })) as { isError: boolean };
+    expect(refused.isError).toBe(true);
+  });
+
+  it("refuses company mail writes from another company's chat", async () => {
+    const h = await loadMail();
+    await h.behavior.callRpc("chat_link", { companyId: "c1", threadId: "thread-c1" });
+    const other = (await h.behavior.callAgentTool("mail_company_sender_set", { company_id: "c2", sender_id: "s1" }, { threadId: "thread-c1" })) as {
+      isError: boolean;
+    };
+    expect(other.isError).toBe(true);
+    await h.behavior.callAgentTool("mail_company_sender_set", { company_id: "c1", sender_id: "s1" }, { threadId: "thread-c1" });
+    expect(seen.at(-1)).toMatchObject({ tool: "mail_company_sender_set", actor: "agent" });
   });
 });

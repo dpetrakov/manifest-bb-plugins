@@ -16,6 +16,8 @@ import { DashCardTab, DashboardPage, TopicBar } from "./ui/dashboard/DashboardPa
 import { AttentionAccessory } from "./ui/dashboard/Accessory";
 import { DASHBOARD_ID, DASHBOARD_PATH, DASH_CARD_TAB } from "./ui/dashboard/state";
 import { BatchDirective, CompaniesDirective } from "./ui/directives";
+import { MailPage } from "./ui/mail/MailPage";
+import { MAIL_ID, MAIL_PATH } from "./ui/mail/common";
 
 export default definePluginApp((app) => {
   app.slots.navPanel({
@@ -24,19 +26,21 @@ export default definePluginApp((app) => {
     icon: "Globe",
     path: PANEL_PATH,
     component: OutreachPage,
-    fixedTabs: [{ panelId: PANEL_ID, id: "card", title: "Карточка", icon: "IdCard", layout: "flush", component: CardTab }],
+    fixedTabs: [{ panelId: PANEL_ID, id: "card", title: "Карточка", icon: "manifest/id-card", layout: "flush", component: CardTab }],
   });
   // W-15: дашборд аутрича с темами-чатами; карточка — по цели вкладки.
   app.slots.navPanel({
     id: DASHBOARD_ID,
     title: "Дашборд аутрича",
-    icon: "LayoutDashboard",
+    icon: "manifest/dashboard",
     path: DASHBOARD_PATH,
     component: DashboardPage,
     headerContent: TopicBar,
     experimental_sidebarAccessory: AttentionAccessory,
-    fixedTabs: [{ ...DASH_CARD_TAB, title: "Карточка", icon: "IdCard", layout: "flush", component: DashCardTab }],
+    fixedTabs: [{ ...DASH_CARD_TAB, title: "Карточка", icon: "manifest/id-card", layout: "flush", component: DashCardTab }],
   });
+  // W-16: почта — шаблоны (с чатом по шаблону), юрлица и отправители, неразобранные входящие.
+  app.slots.navPanel({ id: MAIL_ID, title: "Почта аутрича", icon: "Mail", path: MAIL_PATH, component: MailPage });
   app.slots.messageDirective({ id: "manifest-companies", component: CompaniesDirective });
   app.slots.messageDirective({ id: "manifest-batch", component: BatchDirective });
   app.slots.experimental_appOverlay({ id: "sidebar-view", component: SidebarView });

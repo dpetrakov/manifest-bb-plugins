@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-manifest",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "engines": {
     "bb": ">=0.45",
@@ -10,7 +10,11 @@
     "name": "Manifest",
     "description": "Аутрич в BB: реестр потенциальных поставщиков Manifest слева, карточка справа, чат с агентом по карточке и дашборд аутрича с темами-чатами. Данные и права — в Manifest (MCP).",
     "branding": {
-      "icon": "Globe"
+      "icon": "Globe",
+      "experimental_icons": {
+        "dashboard": "./icons/dashboard.svg",
+        "id-card": "./icons/id-card.svg"
+      }
     },
     "server": "./server.ts",
     "app": "./app.tsx",
@@ -24,7 +28,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@get-bb/plugin-sdk": "0.6.15",
+    "@get-bb/plugin-sdk": "0.6.49",
     "@pierre/diffs": "^1.2.9",
     "@radix-ui/react-alert-dialog": "^1.1.19",
     "@radix-ui/react-context-menu": "^2.3.3",

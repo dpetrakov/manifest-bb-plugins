@@ -23,6 +23,7 @@ import { CardView } from "../CardTab";
 import { PANEL_PATH, errorText, useStatus } from "../hooks";
 import { formatDateTime } from "../labels";
 import { Note } from "../RegistryList";
+import { AttentionAccessory } from "./Accessory";
 import { FilterBar } from "./FilterBar";
 import { DASHBOARD_PATH, DASH_CARD_TAB, useDashboardData, useSegments, useTopicFilter, useTopics, type Filter } from "./state";
 import { Aging, Feed, Funnel, Panel, Quality, QueueView, Regions, Tiles, agingFilter } from "./Widgets";
@@ -213,6 +214,8 @@ export function TopicBar({ subPath }: PluginNavPanelProps) {
   const active = subPath.split("/")[0] || "";
   return (
     <div className="flex max-w-[60vw] items-center gap-1 overflow-x-auto">
+      {/* На bb 0.46 рейл без подписей и счётчиков: «ждут + просрочено» — здесь и бейджем вкладки «Поставщики». */}
+      <AttentionAccessory />
       <button
         type="button"
         onClick={() => navigate.toPluginPanel(DASHBOARD_PATH, { subPath: "" })}
