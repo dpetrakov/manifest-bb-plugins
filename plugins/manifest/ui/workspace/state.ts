@@ -12,6 +12,13 @@ import { MAIL_PATH } from "../mail/common";
 export const FOCUS_CHANGED = "manifest-focus-changed";
 /** The threadPanelAction that shows the object of a thread. */
 export const OBJECT_PANEL = "object";
+/**
+ * A second object beside the thread's own (Cmd/Ctrl-click, «Рядом»): its own panel action —
+ * BB reuses an action's tab, so with the same action the card replaced the dashboard (по
+ * приёмке W-20). One «beside» tab per screen; the next organisation replaces it there.
+ */
+export const BESIDE_PANEL = "object-beside";
+export const BESIDE_NEW_PANEL = "company-beside";
 
 export type FocusKind = "company" | "mailing" | "template" | "topic" | "inbound" | "mail";
 export interface FocusRef {
@@ -211,7 +218,7 @@ export function useOpenPinned() {
       const params = { v: 1, pin: { kind: ref.kind, id: ref.id, title: ref.title.slice(0, 200) } };
       const title = (ref.title || KIND_LABEL[ref.kind]).slice(0, 60);
       // In a thread — its panel; on the New thread screen — that screen's panel.
-      const order = inThread === false ? ["company-new", OBJECT_PANEL] : [OBJECT_PANEL, "company-new"];
+      const order = inThread === false ? [BESIDE_NEW_PANEL, BESIDE_PANEL] : [BESIDE_PANEL, BESIDE_NEW_PANEL];
       for (const actionId of order) if (navigate.openThreadPanel({ actionId, title, params })) return true;
       return false;
     },

@@ -917,7 +917,7 @@ describe("organisation on hover", () => {
     try {
       const due = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10);
       const row = {
-        ...item("c7", "Agro Tools", "IN"), status: "contacted", owner: "op@example.com", touches_count: 2,
+        ...item("c7", "Agro Tools", "IN"), status: "contacted", owner: "op@example.com", touches_count: 4,
         last_touch_at: "2026-10-14T09:00:00Z", last_outbound_at: "2026-10-12T09:00:00Z", last_inbound_at: "2026-10-14T09:00:00Z",
         next_action: { action: "follow_up", note: "", due_on: due, auto: true }, updated_at: "2026-10-18T10:00:00Z",
       };
@@ -931,12 +931,14 @@ describe("organisation on hover", () => {
             if (name === "outreach_facets") return { result: { regions: [], countries } };
             if (name === "outreach_list_companies") return { result: { items: [row], total: 1, limit: 50, offset: 0 } };
             if (name === "outreach_get_company") {
+              const t = (id: string, direction: string, outcome: string, at: string, summary: string) =>
+                ({ id, channel: "email", direction, kind: "email", outcome, occurred_at: at, summary, ingest: "mail", created_by: "x" });
               return { result: { ...card(), interactions: [
-                { id: "i1", channel: "email", direction: "in", kind: "reply", outcome: "interested", occurred_at: "2026-10-14T09:00:00Z", summary: "Готовы обсудить", ingest: "mail", created_by: "x" },
+                t("i4", "in", "interested", "2026-10-14T09:00:00Z", "Готовы обсудить"),
+                t("i3", "out", "sent", "2026-10-12T09:00:00Z", "Письмо: STIHL parts"),
+                t("i2", "out", "sent", "2026-10-08T09:00:00Z", "Письмо: первое"),
+                t("i1", "out", "sent", "2026-10-01T09:00:00Z", "Письмо: самое первое"),
               ] } };
-            }
-            if (name === "mail_messages") {
-              return { result: { items: [{ id: "m1", status_text: "доставлено", tone: "ok", subject: "STIHL parts", sent_at: "2026-10-12T09:00:00Z", created_at: "2026-10-12T09:00:00Z", replies: [{}], sandbox: false }] } };
             }
             return { result: null };
           },
@@ -948,10 +950,14 @@ describe("organisation on hover", () => {
       expect(within(peek).getByText(/просрочено на 3 дн/)).toBeTruthy();
       expect(within(peek).getByText(/ответ 14\.10/)).toBeTruthy();
       expect(await within(peek).findByText("Готовы обсудить")).toBeTruthy();
-      expect(await within(peek).findByText("доставлено")).toBeTruthy();
+      // Three last touches, the rest in the card; no separate «Письмо» block.
+      expect(within(peek).getByText("Письмо: STIHL parts")).toBeTruthy();
+      expect(within(peek).queryByText("Письмо: самое первое")).toBeNull();
+      expect(within(peek).getByText("и ещё 1 — в карточке")).toBeTruthy();
       expect(within(peek).getByText(/интерес/)).toBeTruthy();
       fireEvent.click(within(peek).getByRole("button", { name: /Рядом/ }));
-      await waitFor(() => expect(JSON.stringify(r.inspection.navigateCalls.find((c) => c.method === "openThreadPanel"))).toContain('"pin"'));
+      // Its own panel action: BB reuses an action's tab, the dashboard's tab stays.
+      await waitFor(() => expect(r.inspection.navigateCalls.find((c) => c.method === "openThreadPanel")).toMatchObject({ options: { actionId: "object-beside" } }));
       fireEvent.mouseEnter(screen.getByText("Agro Tools"));
       fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: /Чат/ }));
       await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toThread", threadId: "th-agro" }));

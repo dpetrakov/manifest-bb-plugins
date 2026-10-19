@@ -23,7 +23,7 @@ import { MailPage } from "./ui/mail/MailPage";
 import { LetterChip, MailingChip } from "./ui/workspace/Chips";
 import { MAIL_ID, MAIL_PATH } from "./ui/mail/common";
 import { FocusHeader, ObjectPanel } from "./ui/workspace/ObjectPanel";
-import { OBJECT_PANEL } from "./ui/workspace/state";
+import { BESIDE_NEW_PANEL, BESIDE_PANEL, OBJECT_PANEL } from "./ui/workspace/state";
 import { ComposeBanner, NEW_COMPANY_PANEL, NewCompanyPanel } from "./ui/workspace/compose";
 
 export default definePluginApp((app) => {
@@ -73,6 +73,9 @@ export default definePluginApp((app) => {
   // Организация без чата открывается экраном нового треда BB: карточка — в его боковой
   // панели, над полем — баннер; первое сообщение создаёт тред, привязанный к организации.
   app.slots.experimental_newThreadPanelAction({ id: NEW_COMPANY_PANEL, title: "Manifest", icon: "manifest/id-card", layout: "flush", component: NewCompanyPanel });
+  // A second object beside the main one (Cmd/Ctrl-click, «Рядом» in the list): its own tab.
+  app.slots.threadPanelAction({ id: BESIDE_PANEL, title: "Manifest · рядом", icon: "manifest/id-card", layout: "flush", component: ObjectPanel });
+  app.slots.experimental_newThreadPanelAction({ id: BESIDE_NEW_PANEL, title: "Manifest · рядом", icon: "manifest/id-card", layout: "flush", component: NewCompanyPanel });
   app.composer.customize({ id: "company-intent", scopes: ["new-thread"], banners: [{ id: "company", chrome: "bare", component: ComposeBanner }] });
   app.slots.settingsSection({
     id: "connect",

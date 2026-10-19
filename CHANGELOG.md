@@ -4,6 +4,14 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.7.6
+
+- «Рядом», a click in a dashboard selection and Cmd/Ctrl-click open the organisation in its
+  own «Manifest · рядом» panel tab: bb reused the main object tab, so the card replaced the
+  dashboard or the open organisation. The next organisation replaces the «рядом» tab.
+- The hover card shows the three last touches (direction, channel, date, outcome, summary)
+  and «и ещё N — в карточке»; the separate «Письмо» block is gone — a letter is a touch.
+
 ## manifest 0.7.5
 
 - Hovering an organisation in the left list shows a compact card beside the row: priority,

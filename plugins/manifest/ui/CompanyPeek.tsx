@@ -1,31 +1,32 @@
 // Сведения об организации при наведении на строку списка слева (по приёмке W-20; приём —
-// карточка сессии в плагине sessions bb-workbench): статус, шаг, касания, последнее письмо и
-// два действия — «Карточка рядом» (вкладка панели) и «Чат организации». Сразу видно то, что
-// пришло в строке списка; последнее касание и письмо догружаются при показе и кэшируются
-// до правки организации. Только для устройств с наведением.
+// карточка сессии в плагине sessions bb-workbench): статус, шаг, последние касания и два
+// действия — «Рядом» (вкладка панели) и «Чат организации». Сразу видно то, что пришло в
+// строке списка; последние касания догружаются при показе и кэшируются до правки
+// организации. Письмо отдельно не показываем: отправка и ответ — уже касания.
+// Только для устройств с наведением.
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { usePortalScopeProps } from "../lib/portal-scope";
-import { errorText, useStatus, useTool } from "./hooks";
+import { errorText, useTool } from "./hooks";
 import { ACTION_LABEL, CHANNEL_LABEL, OUTCOME_LABEL, STATUS_LABEL, countryName, daysUntil, formatDate, regionLabel } from "./labels";
-import { Badge, COMPANY_STATUS_TONE, Status } from "./manifest";
-import type { SentLetter } from "./mail/send";
+import { Badge, COMPANY_STATUS_TONE } from "./manifest";
 import type { Card, Interaction, WorkListItem } from "./types";
 
 const SHOW_DELAY = 450;
 const HIDE_DELAY = 220;
+/** Touches shown in the card; the rest — in the card on the right. */
+const TOUCHES = 3;
 
 interface Details {
   key: string;
-  touch: Interaction | null;
-  letter: SentLetter | null;
+  touches: Interaction[];
   sandbox: boolean;
   error: string | null;
 }
 
-/** Last touch and letter per organisation, until it changes (updated_at). */
+/** Last touches per organisation, until it changes (updated_at). */
 const cache = new Map<string, Details>();
 
 export interface Peek {
@@ -68,10 +69,7 @@ export function usePeek() {
 
 function useDetails(item: WorkListItem): Details | null {
   const tool = useTool();
-  const { status } = useStatus();
-  const canMail = !!status?.canMail;
-  // The letter is asked only with the mail capability: a cache filled before it was known is stale.
-  const key = `${item.id}:${item.updated_at}:${canMail ? "mail" : ""}`;
+  const key = `${item.id}:${item.updated_at}`;
   const [details, setDetails] = useState<Details | null>(() => {
     const c = cache.get(item.id);
     return c?.key === key ? c : null;
@@ -84,27 +82,18 @@ function useDetails(item: WorkListItem): Details | null {
     }
     setDetails(null);
     let alive = true;
-    Promise.all([
-      tool<Card>("outreach_get_company", { id: item.id }),
-      canMail ? tool<{ items: SentLetter[] }>("mail_messages", { company_id: item.id, limit: 1 }).catch(() => null) : Promise.resolve(null),
-    ]).then(
-      ([card, mail]) => {
-        const d: Details = {
-          key,
-          touch: card?.interactions?.[0] ?? null,
-          letter: mail?.items?.[0] ?? null,
-          sandbox: !!card?.sandbox_traces,
-          error: null,
-        };
+    tool<Card>("outreach_get_company", { id: item.id }).then(
+      (card) => {
+        const d: Details = { key, touches: (card?.interactions ?? []).slice(0, TOUCHES), sandbox: !!card?.sandbox_traces, error: null };
         cache.set(item.id, d);
         if (alive) setDetails(d);
       },
-      (e: unknown) => alive && setDetails({ key, touch: null, letter: null, sandbox: false, error: errorText(e) }),
+      (e: unknown) => alive && setDetails({ key, touches: [], sandbox: false, error: errorText(e) }),
     );
     return () => {
       alive = false;
     };
-  }, [canMail, item.id, key, tool]);
+  }, [item.id, key, tool]);
   return details;
 }
 
@@ -135,7 +124,7 @@ function Step({ item }: { item: WorkListItem }) {
   );
 }
 
-function Touches({ item }: { item: WorkListItem }) {
+function TouchCount({ item }: { item: WorkListItem }) {
   const n = item.touches_count ?? 0;
   if (!n) return <span className="text-muted-foreground">ещё не было</span>;
   const inbound = item.last_inbound_at && (!item.last_outbound_at || item.last_inbound_at > item.last_outbound_at);
@@ -147,8 +136,10 @@ function Touches({ item }: { item: WorkListItem }) {
   );
 }
 
-function Lazy({ item }: { item: WorkListItem }) {
+/** The last touches, one line each: direction, channel, date, outcome; the summary below. */
+function TouchList({ item }: { item: WorkListItem }) {
   const d = useDetails(item);
+  if (!(item.touches_count ?? 0)) return null;
   if (!d) {
     return (
       <div className="flex flex-col gap-1" aria-label="Загружаем…">
@@ -158,33 +149,27 @@ function Lazy({ item }: { item: WorkListItem }) {
     );
   }
   if (d.error) return <p className="text-destructive">Не загрузилось: {d.error}</p>;
-  const t = d.touch;
-  const l = d.letter;
+  const more = (item.touches_count ?? 0) - d.touches.length;
   return (
-    <>
-      {t ? (
-        <Row label="Касание">
+    <ul className="flex flex-col gap-1 border-l-2 border-border pl-2">
+      {d.touches.map((t) => (
+        <li key={t.id} className="min-w-0">
           <span className="flex flex-wrap items-center gap-1">
-            {t.direction === "in" ? "←" : "→"} {CHANNEL_LABEL[t.channel] ?? t.channel} · {formatDate(t.occurred_at)}
-            {t.outcome ? ` · ${OUTCOME_LABEL[t.outcome] ?? t.outcome}` : ""}
+            <span className={cn(t.direction === "in" && "font-medium")}>
+              {t.direction === "in" ? "←" : "→"} {CHANNEL_LABEL[t.channel] ?? t.channel}
+            </span>
+            <span className="text-muted-foreground">
+              · {formatDate(t.occurred_at)}
+              {t.outcome ? ` · ${OUTCOME_LABEL[t.outcome] ?? t.outcome}` : ""}
+            </span>
             {t.sandbox ? <Badge tone="sandbox">песочница</Badge> : null}
           </span>
-          {t.summary ? <span className="line-clamp-2 text-muted-foreground">{t.summary}</span> : null}
-        </Row>
-      ) : null}
-      {l ? (
-        <Row label="Письмо">
-          <span className="flex flex-wrap items-center gap-1">
-            <Status tone={l.tone}>{l.status_text}</Status>
-            <span className="text-muted-foreground">· {formatDate(l.sent_at ?? l.created_at)}</span>
-            {l.replies?.length ? <Badge tone="volt">ответ</Badge> : null}
-            {l.sandbox ? <Badge tone="sandbox">песочница</Badge> : null}
-          </span>
-          <span className="block truncate text-muted-foreground">{l.subject}</span>
-        </Row>
-      ) : null}
-      {d.sandbox && !t?.sandbox && !l?.sandbox ? <Row label="Песочница">есть следы теста</Row> : null}
-    </>
+          {t.summary ? <span className="block truncate text-muted-foreground">{t.summary}</span> : null}
+        </li>
+      ))}
+      {more > 0 ? <li className="text-muted-foreground">и ещё {more} — в карточке</li> : null}
+      {d.sandbox && !d.touches.some((t) => t.sandbox) ? <li className="text-muted-foreground">есть следы теста песочницы</li> : null}
+    </ul>
   );
 }
 
@@ -262,12 +247,12 @@ export function CompanyPeek({
             <Row label="Шаг">
               <Step item={it} />
             </Row>
-            <Row label="Касания">
-              <Touches item={it} />
-            </Row>
             {it.owner ? <Row label="Ответств.">{it.owner}</Row> : null}
             {it.tags?.length ? <Row label="Метки">{it.tags.join(", ")}</Row> : null}
-            <Lazy item={it} />
+            <Row label="Касания">
+              <TouchCount item={it} />
+            </Row>
+            <TouchList item={it} />
           </div>
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>
