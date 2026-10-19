@@ -141,7 +141,18 @@ needs a Manifest server with the capability `outreach.mail`.
 
 | Plugin | Version | What it does |
 |---|---|---|
-| [`manifest`](plugins/manifest) | 0.5.1 | The outreach workspace: registry, card, company chat, outreach dashboard with topic chats, mail templates and senders, agent tools, connection settings. |
+| [`manifest`](plugins/manifest) | 0.6.0 | The outreach workspace: registry, card, company chat, outreach dashboard with topic chats, mail templates and senders, agent tools, connection settings. |
+### The workspace: chat in the middle, object on the right (since 0.6.0)
+
+Every outreach chat is a native bb thread; the object it works with — an organisation,
+a mailing, a mail template, a dashboard topic or an inbound message — is shown in a tab
+of the thread's side panel. The tab opens by itself and follows the thread wherever you
+open it from. A thread has one object at a time and a trail: when the agent turns an
+agreed letter into a mailing, the mailing opens on the right and the thread goes on with
+it; «← organisation» goes back. An object may have several chats. Section pages are
+pults: lists, an object on the whole screen with its chats, «Новый чат». Widgets adapt
+to the narrow panel, phones and the whole screen.
+
 ### The suppliers list in the sidebar (since 0.5.0)
 
 The plugin brings its own sidebar list, «Потенциальные поставщики» (“Potential
@@ -282,6 +293,7 @@ permissions.
 | `mail_mailings`, `mail_mailing_get`, `mail_mailing_letter` | ✓ company, topic | `outreach.view` | Mailings, their recipients with what will not go and why, one recipient's letter; shown by `::manifest-mailing`. |
 | `mail_mailing_create`, `mail_mailing_update`, `mail_mailing_add`, `mail_mailing_remove` | ✓ company, topic | `outreach.manage` | Prepare a mailing: from a draft or a template, recipients by id or filter, edit the text. Changes no organisation. |
 | `mail_mailing_discard` | | `outreach.manage` | Drop a mailing. |
+| `manifest_focus_get`, `manifest_focus_open` | ✓ all | — | Plugin-local: what is on the right of the thread, and going back to an object of the thread's trail. |
 | `manifest_template_draft` | ✓ template | — | Plugin-local: change the draft shown in the template editor. |
 
 The bundled agent skill [`manifest-outreach`](plugins/manifest/skills/manifest-outreach/SKILL.md)

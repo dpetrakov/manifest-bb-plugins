@@ -4,10 +4,36 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.6.0
+
+The outreach workspace: the chat in the middle, the object on the right. Requires bb 0.46.
+
+- Every outreach chat is a native bb thread. What it works with — an organisation, a
+  mailing, a mail template, a dashboard topic or an inbound message — is a tab of the
+  thread's side panel, which opens by itself and follows the thread wherever it is
+  opened from (the thread list, search, a notification).
+- One object at a time with a trail: when the agent turns an agreed letter into a
+  mailing, the mailing opens on the right and the same thread goes on with it;
+  «← organisation» above the widget goes back. An object may have several chats
+  («Чаты», «Новый чат» in the panel and on its page).
+- Letter and mailing directives in the chat are compact links that open the object on
+  the right; company lists open an organisation on the right of the same thread.
+- Section pages are pults: the registry, an organisation, a mailing, a template or an
+  inbound message on the whole screen («Развернуть»), with its chats. The dashboard
+  page shows the full dashboard; «Чат темы» opens the topic chat with the dashboard on
+  the right.
+- Widgets adapt to the narrow panel, phones and the whole screen by their own width;
+  controls are at least 40 px tall on touch screens.
+- The agent works with what is on the right (`manifest_focus_get`,
+  `manifest_focus_open`) and may change only objects of its thread's chain.
+
 ## manifest 0.5.1
 
 - The border of the switched-on suppliers button is a deeper shade of its own soft
   green instead of black, like the other switched-on footer buttons.
+- A mailing can be cancelled before it is sent: «Удалить рассылку» in the mailing view
+  (with a confirmation) or the agent on an explicit request. It is deleted completely,
+  with its recipients; a sent mailing can't be deleted.
 
 ## manifest 0.5.0
 

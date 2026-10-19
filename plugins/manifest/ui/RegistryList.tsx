@@ -1,11 +1,11 @@
 // Реестр потенциальных поставщиков — компактный список для левого сайдбара
 // (список «Потенциальные поставщики» в сайдбаре) и для корня страницы «Аутрич».
 import { useEffect, useMemo, useState } from "react";
-import { experimental_useAppPanel, useBbNavigate } from "@get-bb/plugin-sdk/app";
+import { useOpenCompany } from "./workspace/state";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { FilterSelect, type Option } from "./FilterSelect";
-import { CARD_TAB, PANEL_PATH, errorText, useCompanyChanged, useRegistry, useStatus, useTool } from "./hooks";
+import { errorText, useCompanyChanged, useRegistry, useStatus, useTool } from "./hooks";
 import { STATUS_LABEL, STATUS_ORDER, countryName, regionLabel } from "./labels";
 import type { Facets, ListItem } from "./types";
 
@@ -49,8 +49,7 @@ export function RegistryList({ onNavigate }: { onNavigate?: () => void }) {
   const { status, error: statusError } = useStatus();
   const reg = useRegistry();
   const tool = useTool();
-  const navigate = useBbNavigate();
-  const panel = experimental_useAppPanel();
+  const openCompany = useOpenCompany();
   const [facets, setFacets] = useState<Facets | null>(null);
   const [search, setSearch] = useState(reg.filters.q);
 
@@ -93,11 +92,12 @@ export function RegistryList({ onNavigate }: { onNavigate?: () => void }) {
   if (!status.connected) return <Note>{status.message || "Плагин не подключён."} Настройки → плагины → Manifest.</Note>;
   if (!status.canView) return <Note>Нет доступа к реестру: нужно право outreach.view в Manifest.</Note>;
 
+  // W-18: an organisation opens in its latest chat (the card on the right); without
+  // chats — its page with the card and «Новый чат».
   const open = (it: ListItem) => {
     reg.select(it.id);
-    navigate.toPluginPanel(PANEL_PATH, { subPath: it.id });
-    panel.openFixedTab({ surface: { kind: "current" }, tab: CARD_TAB });
     onNavigate?.();
+    openCompany(it.id, it.display_name);
   };
 
   return (

@@ -12,6 +12,8 @@ import { CompanyMail } from "../ui/mail/CompanyMail";
 import { LetterDirective } from "../ui/mail/LetterView";
 import { MailingDirective } from "../ui/mail/MailingView";
 import { SUPPLIERS_LIST, switchSuppliersList } from "../ui/SuppliersList";
+import { FocusHeader, ObjectPanel } from "../ui/workspace/ObjectPanel";
+import { MailingChip } from "../ui/workspace/Chips";
 
 const status = (over: Record<string, unknown> = {}) => ({
   connected: true,
@@ -53,6 +55,9 @@ describe("registry (page root)", () => {
       pluginId: "manifest",
       rpc: {
         status: () => status(),
+        // W-18: THK has no chats yet → its page; Woermann has one → its chat.
+        chats_list: ({ id }: { id: string }) => ({ chats: id === "c1" ? [{ threadId: "th-w", title: "Аутрич: Woermann" }] : [] }),
+        focus_set: () => ({ focus: { kind: "company", id: "c1", title: "Woermann" }, trail: [] }),
         tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
           calls.push({ name, args });
           if (name === "outreach_facets") return { result: { regions: [{ value: "europe", count: 2 }], countries } };
@@ -73,9 +78,10 @@ describe("registry (page root)", () => {
     await waitFor(() => expect(calls.some((c) => c.name === "outreach_list_companies" && c.args.country === "DE")).toBe(true));
 
     fireEvent.click(screen.getByText("THK"));
-    expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toPluginPanel" });
+    await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toPluginPanel" }));
     expect(JSON.stringify(r.inspection.navigateCalls.at(-1))).toContain("c2");
-    expect(r.inspection.experimental_fixedTabOpenCalls.length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText("Woermann"));
+    await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toThread", threadId: "th-w" }));
   });
 
   it("shows no data without outreach.view", async () => {
@@ -185,6 +191,8 @@ describe("dashboard (W-15)", () => {
       pluginId: "manifest",
       rpc: {
         status: () => status({ canWork: true }),
+        chats_list: () => ({ chats: [{ threadId: "th-c9", title: "Аутрич: Dealer X" }] }),
+        focus_set: () => ({ focus: { kind: "company", id: "c9", title: "Dealer X" }, trail: [] }),
         seen_get: () => ({ at: null }),
         seen_set: () => ({ ok: true }),
         topic_filter_get: () => ({ filter: {} }),
@@ -212,7 +220,7 @@ describe("dashboard (W-15)", () => {
     expect(screen.getByText("Ждут нашего ответа")).toBeTruthy();
     expect(screen.getByText("3 из 9")).toBeTruthy(); // ответили: без процентов при базе < 20
     fireEvent.click(screen.getByText("Dealer X"));
-    expect(JSON.stringify(r.inspection.experimental_fixedTabOpenCalls.at(-1))).toContain("c9");
+    await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toThread", threadId: "th-c9" }));
     fireEvent.click(screen.getByText("Просрочено", { selector: "span.text-xs" }));
     await waitFor(() => expect(filters.at(-1)).toEqual({ attention: "overdue" }));
   });
@@ -381,7 +389,7 @@ describe("mail (W-16)", () => {
       } as never,
     });
     fireEvent.click(await screen.findByRole("button", { name: "Подготовить письмо" }));
-    expect(await screen.findByText("STIHL parts for Agro Store")).toBeTruthy();
+    expect(await screen.findByText("STIHL parts for Agro Store", undefined, { timeout: 5000 })).toBeTruthy();
     expect(calls).toContain("mail_draft_create");
     expect(screen.getByText("Готово к отправке: так письмо и уйдёт.")).toBeTruthy();
   });
@@ -432,6 +440,11 @@ describe("mail (W-16)", () => {
     fireEvent.click(screen.getAllByTitle("Убрать из рассылки")[2]);
     await waitFor(() => expect(calls.some((c) => c.name === "mail_mailing_remove")).toBe(true));
     expect(await screen.findByText("Не уйдёт: 0")).toBeTruthy();
+    // Delete the whole mailing: two steps, then the tool.
+    fireEvent.click(screen.getByRole("button", { name: "Удалить рассылку" }));
+    expect(calls.some((c) => c.name === "mail_mailing_discard")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    await waitFor(() => expect(calls.some((c) => c.name === "mail_mailing_discard" && c.args.id === MID)).toBe(true));
   });
 });
 
@@ -478,5 +491,123 @@ describe("suppliers list switch (0.5.0)", () => {
     await switchSuppliersList(bare.sdk, "on");
     await switchSuppliersList(bare.sdk, "off");
     expect(bare.state.value).toBe("thread-list/thread-list");
+  });
+});
+
+describe("workspace: object on the right of a thread (W-18)", () => {
+  const MID = "99999999-8888-7777-6666-555555555555";
+  const mailingSummary = {
+    id: MID, name: "STIHL — first letter · 18.10", template_id: null, template_version: null, template_name: "", audience: "", subject: "s", body: "b",
+    edited: false, state: "draft", total: 3, ready: 2, skipped: 1, reasons: {}, recipients: [], partial: true, updated_at: "2026-10-19T10:00:00Z", updated_by: "op",
+  };
+
+  it("opens the object panel from the thread header once and on a button", async () => {
+    const r = renderSlot({ component: FocusHeader }, { threadId: "th1", projectId: "p", isCompactViewport: false }, {
+      rpc: {
+        status: () => status(),
+        focus_get: () => ({ focus: { kind: "company", id: "c1", title: "THK Powertools" }, trail: [] }),
+      } as never,
+    });
+    const button = await screen.findByRole("button", { name: /Открыть справа: Организация THK Powertools/ });
+    await waitFor(() => expect(r.inspection.navigateCalls.filter((c) => c.method === "openThreadPanel")).toHaveLength(1));
+    fireEvent.click(button);
+    const opens = r.inspection.navigateCalls.filter((c) => c.method === "openThreadPanel");
+    expect(opens).toHaveLength(2);
+    expect(JSON.stringify(opens[1])).toContain('"actionId":"object"');
+  });
+
+  it("shows the mailing with breadcrumbs back to the organisation and «Развернуть»", async () => {
+    const rpcCalls: { m: string; a: unknown }[] = [];
+    const r = renderSlot({ component: ObjectPanel }, { threadId: "th1", params: { v: 1 } }, {
+      rpc: {
+        status: () => status({ canMail: true }),
+        focus_get: () => ({ focus: { kind: "mailing", id: MID, title: "STIHL — first letter" }, trail: [{ kind: "company", id: "c1", title: "THK" }] }),
+        focus_back: (a: unknown) => {
+          rpcCalls.push({ m: "focus_back", a });
+          return { focus: { kind: "company", id: "c1", title: "THK" }, trail: [{ kind: "mailing", id: MID, title: "STIHL — first letter" }] };
+        },
+        tool: ({ name }: { name: string }) => {
+          if (name === "mail_mailing_get") return { result: { ...mailingSummary, recipients: [], partial: false } };
+          if (name === "outreach_get_company") return { result: card() };
+          if (name === "mail_company_sender") return { result: { legal_entity: null, sender: null, source: "none", problem: "" } };
+          if (name === "mail_draft_get") throw new Error("Manifest: у организации нет черновика письма");
+          return { result: { items: [] } };
+        },
+      } as never,
+    });
+    expect(await screen.findByText("Рассылка")).toBeTruthy();
+    expect(await screen.findByText("Уйдёт: 2")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Развернуть" }));
+    expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toPluginPanel", path: "mail", options: { subPath: `mailing/${MID}` } });
+    fireEvent.click(screen.getByRole("button", { name: "← THK" }));
+    await waitFor(() => expect(rpcCalls).toHaveLength(1));
+    expect(await screen.findByText("THK Powertools")).toBeTruthy();
+  });
+
+  it("tells a chat without an object where objects open", async () => {
+    renderSlot({ component: ObjectPanel }, { threadId: "th2", params: null }, {
+      rpc: { status: () => status(), focus_get: () => ({ focus: null, trail: [] }) } as never,
+    });
+    expect(await screen.findByText(/не привязан к объекту Manifest/)).toBeTruthy();
+  });
+
+  it("turns a mailing directive into a chip that opens it on the right", async () => {
+    const calls: { m: string; a: unknown }[] = [];
+    let known = false;
+    const r = renderSlot({ component: MailingChip }, {
+      attributes: { id: MID }, source: "", message: { id: "m", threadId: "th1", turnId: null, projectId: null }, openWorkspaceFile: null,
+    }, {
+      rpc: {
+        status: () => status({ canMail: true }),
+        tool: () => ({ result: mailingSummary }),
+        focus_get: () => (known ? { focus: { kind: "mailing", id: MID, title: mailingSummary.name }, trail: [] } : { focus: null, trail: [] }),
+        focus_set: (a: unknown) => {
+          calls.push({ m: "focus_set", a });
+          return { focus: { kind: "mailing", id: MID, title: mailingSummary.name }, trail: [] };
+        },
+      } as never,
+    });
+    const chip = await screen.findByRole("button", { name: /Рассылка «STIHL — first letter · 18.10»/ });
+    expect(screen.getByText("уйдёт 2 из 3 · не уйдёт 1")).toBeTruthy();
+    // New to the thread: the agent's chip asks the person first, naming the object.
+    fireEvent.click(chip);
+    expect(await screen.findByText(/В этом чате агент сможет её менять/)).toBeTruthy();
+    expect(calls).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть" }));
+    await waitFor(() => expect(r.inspection.navigateCalls.some((c) => c.method === "openThreadPanel")).toBe(true));
+    expect(calls[0].a).toMatchObject({ threadId: "th1", focus: { kind: "mailing", id: MID } });
+    // Already in the thread: opens at once.
+    known = true;
+    fireEvent.click(chip);
+    await waitFor(() => expect(calls).toHaveLength(2));
+  });
+
+  it("shows a mailing and an inbound message on the whole screen with their chats", async () => {
+    const r = renderSlot({ component: MailPage }, { subPath: `mailing/${MID}` }, {
+      rpc: {
+        status: () => status({ canMail: true }),
+        chats_list: ({ kind }: { kind: string }) => ({ chats: kind === "mailing" ? [{ threadId: "th-m", title: "Рассылка: STIHL" }] : [] }),
+        tool: ({ name }: { name: string }) => ({ result: name === "mail_mailing_get" ? { ...mailingSummary, partial: false } : { items: [] } }),
+      } as never,
+    });
+    expect(await screen.findByText("Уйдёт: 2")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Рассылка: STIHL" }));
+    expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toThread", threadId: "th-m" });
+  });
+
+  it("opens an inbound message with a link-to-organisation form", async () => {
+    renderSlot({ component: MailPage }, { subPath: "inbound/i1" }, {
+      rpc: {
+        status: () => status({ canMail: true }),
+        chats_list: () => ({ chats: [] }),
+        tool: ({ name }: { name: string }) =>
+          name === "mail_inbound_get"
+            ? { result: { id: "i1", received_at: "2026-10-19T10:00:00Z", kind: "reply", from_address: "a@b.example", from_name: "Ahmed", subject: "Re: STIHL", reply_text: "Send the price list", body_text: "", attachments: [], company_id: null, company_name: "", triage: "unlinked" } }
+            : { result: { items: [] } },
+      } as never,
+    });
+    expect(await screen.findByText("Send the price list")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Привязать" })).toBeTruthy();
+    expect(screen.getByText("Чатов пока нет.")).toBeTruthy();
   });
 });

@@ -11,14 +11,6 @@ import type { FeedItem, Metrics, Queue, Segment } from "../types";
 
 export const DASHBOARD_PATH = "dashboard";
 export const DASHBOARD_ID = "dashboard";
-export const DASH_CARD_TAB = {
-  panelId: DASHBOARD_ID,
-  id: "dash-card",
-  experimental_target: {
-    validate: (v: unknown): v is { companyId: string } =>
-      typeof v === "object" && v !== null && typeof (v as { companyId?: unknown }).companyId === "string",
-  },
-} as const;
 export const REGISTRY_CHANGED = "manifest-registry-changed";
 export const TOPIC_FILTER = "manifest-topic-filter";
 export const TOPICS_CHANGED = "manifest-topics-changed";

@@ -41,7 +41,7 @@ const ALARM = new Set(["waiting_reply", "overdue", "no_next_action"]);
 export function Tiles({ metrics, active, onPick }: { metrics: Metrics; active?: string; onPick: (attention: string) => void }) {
   const a = metrics.activity;
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+    <div className="grid grid-cols-2 gap-2 @md:grid-cols-3 @3xl:grid-cols-6">
       {TILE_KEYS.map((k) => {
         const n = metrics.checks[k];
         const alarm = ALARM.has(k) && n > 0;
@@ -99,7 +99,7 @@ export function QueueView({ queue, onOpen }: { queue: Queue; onOpen: (id: string
                 >
                   <PriorityBadge priority={it.priority} />
                   <span className="min-w-0 flex-1 truncate">{it.display_name}</span>
-                  <span className="hidden flex-none text-xs text-muted-foreground sm:inline">{countryName(it.country_code)}</span>
+                  <span className="hidden flex-none text-xs text-muted-foreground @md:inline">{countryName(it.country_code)}</span>
                   <span className="max-w-[45%] flex-none truncate text-xs text-muted-foreground" title={it.reason}>
                     {it.reason}
                   </span>
@@ -220,8 +220,10 @@ export function Aging({ metrics, onPick }: { metrics: Metrics; onPick: (status: 
   const rows = metrics.aging.filter((r) => !["rejected", "do_not_contact", "handed_over"].includes(r.status));
   const max = Math.max(1, ...rows.flatMap((r) => AGING_ORDER.map((b) => r.buckets[b] ?? 0)));
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">Нет активных организаций.</p>;
+  // На узком (панель, телефон) матрица прокручивается сама, не ломая виджет.
   return (
-    <table className="w-full table-fixed text-xs">
+    <div className="overflow-x-auto">
+    <table className="w-full min-w-[30rem] table-fixed text-xs">
       <thead>
         <tr className="text-muted-foreground">
           <th className="w-32 text-left font-normal">Статус</th>
@@ -261,6 +263,7 @@ export function Aging({ metrics, onPick }: { metrics: Metrics; onPick: (status: 
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
 
@@ -281,7 +284,7 @@ export function Quality({ metrics, onPick }: { metrics: Metrics; onPick: (f: Rec
     </button>
   );
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="grid gap-3 @md:grid-cols-2">
       <div>
         <div className="mb-1 flex gap-1">
           {["1", "2", "3", "4", "5"].map((p) => (

@@ -37,12 +37,20 @@ export function useMailing(id: string) {
   }, [id]);
   useEffect(load, [load]);
   useRealtime(MAILING_CHANGED, (payload) => {
-    if ((payload as { id?: unknown } | null)?.id === id) load();
+    const p = payload as { id?: unknown; deleted?: unknown } | null;
+    if (p?.id !== id) return;
+    if (p.deleted === true) {
+      seq.current++;
+      setMailing(null);
+      setError("рассылка удалена");
+      return;
+    }
+    load();
   });
   return { mailing, error, reload: load };
 }
 
-export function MailingView({ id, onOpenCompany }: { id: string; onOpenCompany?: (companyId: string) => void }) {
+export function MailingView({ id, onOpenCompany, onDeleted }: { id: string; onOpenCompany?: (companyId: string) => void; onDeleted?: () => void }) {
   const tool = useTool();
   const { status } = useStatus();
   const { mailing, error, reload } = useMailing(id);
@@ -51,7 +59,21 @@ export function MailingView({ id, onOpenCompany }: { id: string; onOpenCompany?:
   const [letterError, setLetterError] = useState<string | null>(null);
   const [onlyProblems, setOnlyProblems] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const canEdit = !!status?.canManage;
+
+  const discard = async () => {
+    setBusy(true);
+    try {
+      await tool("mail_mailing_discard", { id });
+      onDeleted?.();
+    } catch (e) {
+      setLetterError(errorText(e));
+    } finally {
+      setBusy(false);
+      setConfirmDelete(false);
+    }
+  };
 
   const recipients = mailing?.recipients ?? [];
   const shown = onlyProblems ? recipients.filter((r) => !r.ready) : recipients;
@@ -100,7 +122,7 @@ export function MailingView({ id, onOpenCompany }: { id: string; onOpenCompany?:
   };
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border bg-background p-3 text-xs">
+    <div className="@container mf-root flex flex-col gap-3 rounded-lg border border-border bg-background p-3 text-xs">
       <header className="flex flex-wrap items-baseline gap-2">
         <h3 className="text-sm font-semibold">{mailing.name}</h3>
         <span className="text-muted-foreground">
@@ -127,7 +149,7 @@ export function MailingView({ id, onOpenCompany }: { id: string; onOpenCompany?:
       {recipients.length === 0 ? (
         <p className="text-muted-foreground">Получателей пока нет. Попросите агента добавить организации — например, по фильтру темы.</p>
       ) : (
-        <div className="grid gap-3 md:grid-cols-[minmax(12rem,16rem)_1fr]">
+        <div className="grid gap-3 @2xl:grid-cols-[minmax(12rem,16rem)_1fr]">
           <div className="flex min-w-0 flex-col gap-1">
             <label className="flex items-center gap-1 text-muted-foreground">
               <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} />
@@ -183,9 +205,28 @@ export function MailingView({ id, onOpenCompany }: { id: string; onOpenCompany?:
           </div>
         </div>
       )}
-      <p className="text-[11px] text-muted-foreground">
-        Текст правится через агента — письмо пересоберётся для каждого. Отправка — следующая версия плагина, нажимает человек.
-      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="flex-1 text-[11px] text-muted-foreground">
+          Текст правится через агента — письмо пересоберётся для каждого. Отправка — следующая версия плагина, нажимает человек.
+        </p>
+        {canEdit && mailing.state !== "sent" ? (
+          confirmDelete ? (
+            <span className="flex items-center gap-1">
+              <span className="text-destructive">Удалить рассылку целиком?</span>
+              <Button size="sm" variant="destructive" className="h-7" disabled={busy} onClick={() => void discard()}>
+                Удалить
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7" disabled={busy} onClick={() => setConfirmDelete(false)}>
+                Отмена
+              </Button>
+            </span>
+          ) : (
+            <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => setConfirmDelete(true)}>
+              Удалить рассылку
+            </Button>
+          )
+        ) : null}
+      </div>
     </div>
   );
 }

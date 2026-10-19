@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import type { rpcContract } from "../server";
 import type { Filter } from "../lib/tools";
 import { DASHBOARD_PATH, REGISTRY_CHANGED, cleanFilter } from "./dashboard/state";
-import { useOpenCard } from "./dashboard/DashboardPage";
+import { KIND_LABEL, useOpenObjectPanel } from "./workspace/state";
 import { errorText, useStatus, useTool } from "./hooks";
 import { FIELD_LABEL, STATUS_LABEL, countryName, daysUntil, fieldValue, formatDate, formatDateTime } from "./labels";
 import { PriorityBadge } from "./RegistryList";
@@ -76,7 +76,14 @@ export function CompaniesDirective({ attributes, message }: PluginMessageDirecti
   const tool = useTool();
   const rpc = useRpc<typeof rpcContract>();
   const navigate = useBbNavigate();
-  const openCard = useOpenCard();
+  const openPanel = useOpenObjectPanel();
+  // W-18: an organisation of the list opens on the right of this thread (its focus).
+  const openCard = (companyId: string, name: string) => {
+    void rpc
+      .call("focus_set", { threadId: message.threadId, focus: { kind: "company", id: companyId, title: name.slice(0, 200) } })
+      .then(() => openPanel(name || KIND_LABEL.company))
+      .catch((e: unknown) => setError(errorText(e)));
+  };
   const { status } = useStatus();
   const [res, setRes] = useState<ListResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -144,7 +151,7 @@ export function CompaniesDirective({ attributes, message }: PluginMessageDirecti
               <li key={it.id}>
                 <button
                   type="button"
-                  onClick={() => openCard(it.id)}
+                  onClick={() => openCard(it.id, it.display_name)}
                   className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-xs hover:bg-state-hover"
                 >
                   <PriorityBadge priority={it.priority} />

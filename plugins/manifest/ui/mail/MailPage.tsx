@@ -8,7 +8,7 @@ import { useBbNavigate, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { PANEL_PATH, errorText, useStatus, useTool } from "../hooks";
+import { errorText, useStatus, useTool } from "../hooks";
 import { formatDateTime } from "../labels";
 import { Note } from "../RegistryList";
 import {
@@ -23,6 +23,9 @@ import {
   type Template,
 } from "./common";
 import { TemplateEditor } from "./TemplateEditor";
+import { ChatsList } from "../workspace/ObjectPanel";
+import { InboundView } from "../workspace/InboundView";
+import { useOpenCompany, type FocusRef } from "../workspace/state";
 import { MailingView } from "./MailingView";
 import type { Mailing } from "./common";
 
@@ -33,26 +36,63 @@ const TABS: [string, string][] = [
   ["inbound", "Неразобранные входящие"],
 ];
 
+/** Объект почты на всю ширину (W-18): сам объект и его чаты. */
+function ObjectPage({ back, backLabel, focus, children }: { back: string; backLabel: string; focus: FocusRef; children: React.ReactNode }) {
+  const navigate = useBbNavigate();
+  return (
+    <div className="@container h-full overflow-y-auto">
+      <div className="mx-auto flex max-w-6xl flex-col gap-3 p-3">
+        <button type="button" className="self-start text-xs text-muted-foreground hover:underline" onClick={() => navigate.toPluginPanel(MAIL_PATH, { subPath: back })}>
+          {backLabel}
+        </button>
+        <div className="flex flex-col gap-4 @4xl:flex-row">
+          <div className="min-w-0 flex-1">{children}</div>
+          <aside className="flex w-full flex-col gap-2 @4xl:w-96 @4xl:flex-none">
+            <h3 className="text-xs font-semibold">Чаты</h3>
+            <ChatsList focus={focus} />
+          </aside>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MailPage({ subPath }: PluginNavPanelProps) {
   const { status } = useStatus();
   const navigate = useBbNavigate();
+  const openCompany = useOpenCompany();
   const [head, rest] = [subPath.split("/")[0] || "templates", subPath.split("/")[1] ?? ""];
   if (!status) return <Note>Подключаемся к Manifest…</Note>;
   if (!status.connected) return <Note>{status.message}</Note>;
   if (!status.canMail) return <Note>Почта появится после обновления Manifest: на сервере ещё нет почтового слоя.</Note>;
-  if (head === "tpl") return <TemplateEditor key={rest} templateId={rest && rest !== "new" ? rest : null} />;
-  if (head === "mailing" && rest) {
+  if (head === "tpl") {
     return (
-      <div className="h-full overflow-y-auto p-3">
-        <button type="button" className="mb-2 text-xs text-muted-foreground hover:underline" onClick={() => navigate.toPluginPanel(MAIL_PATH, { subPath: "mailings" })}>
-          ← Рассылки
-        </button>
-        <MailingView key={rest} id={rest} onOpenCompany={(id) => navigate.toPluginPanel(PANEL_PATH, { subPath: id })} />
+      <div className="@container h-full">
+        <TemplateEditor key={rest} templateId={rest && rest !== "new" ? rest : null} />
       </div>
     );
   }
+  if (head === "mailing" && rest) {
+    return (
+      <ObjectPage back="mailings" backLabel="← Рассылки" focus={{ kind: "mailing", id: rest, title: "" }}>
+        <MailingView
+          key={rest}
+          id={rest}
+          onOpenCompany={(id) => openCompany(id)}
+          onDeleted={() => navigate.toPluginPanel(MAIL_PATH, { subPath: "mailings" })}
+        />
+      </ObjectPage>
+    );
+  }
+  if (head === "inbound" && rest) {
+    return (
+      <ObjectPage back="inbound" backLabel="← Входящие" focus={{ kind: "inbound", id: rest, title: "" }}>
+        <InboundView key={rest} id={rest} onLinked={(c) => openCompany(c.id, c.name)} />
+      </ObjectPage>
+    );
+  }
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="@container mf-root flex h-full min-h-0 flex-col">
       <div className="flex gap-1 border-b border-border px-3">
         {TABS.map(([k, label]) => (
           <button
@@ -270,7 +310,7 @@ function Entities() {
         <section className="rounded-lg border border-border p-3">
           <h3 className="mb-2 font-semibold">Отправитель по умолчанию</h3>
           <p className="mb-2 text-xs text-muted-foreground">Подставляется организации при первом письме и записывается в её карточку.</p>
-          <div className="grid gap-2 text-xs sm:grid-cols-2">
+          <div className="grid gap-2 text-xs @md:grid-cols-2">
             <label className="flex flex-col gap-1">
               <span className="text-muted-foreground">Общий</span>
               {senderSelect(defaults.general.sender_id, (v) => void run("mail_defaults_set", { ...defaults, general: pick(v) }))}

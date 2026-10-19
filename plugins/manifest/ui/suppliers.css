@@ -21,3 +21,14 @@ html[data-manifest-suppliers="on"] :is(button[aria-label="Потенциальн
   /* рамка — тот же тон, насыщеннее (как у включённой кнопки bb-workbench), не чёрная */
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--mf-tone) 80%, var(--foreground));
 }
+
+/*
+ * W-18 (EP-093): виджеты Manifest — в узкой панели, на телефоне и на весь экран. Раскладка
+ * идёт по ширине контейнера (@container в разметке); здесь — касание: на сенсорных
+ * экранах кнопки, поля и списки выбора внутри виджетов не ниже 40 px.
+ */
+@media (pointer: coarse) {
+  .mf-root :is(button, select, input:not([type="checkbox"]):not([type="radio"])) {
+    min-height: 40px;
+  }
+}

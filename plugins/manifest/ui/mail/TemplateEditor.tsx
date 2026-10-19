@@ -4,7 +4,6 @@
 // агент правит его инструментом, правки видны сразу; сохраняет шаблон человек.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ThreadChat,
   experimental_NewThreadComposer,
   useBbNavigate,
   useRealtime,
@@ -17,6 +16,7 @@ import { cn } from "@/lib/utils";
 import type { Draft, rpcContract } from "../../server";
 import { errorText, useStatus, useTool } from "../hooks";
 import { Note } from "../RegistryList";
+import { ChatsList } from "../workspace/ObjectPanel";
 import {
   AUDIENCE_LABEL,
   CompanyPicker,
@@ -53,7 +53,19 @@ function Highlighted({ text }: { text: string }) {
   );
 }
 
-export function TemplateEditor({ templateId }: { templateId: string | null }) {
+/**
+ * Редактор шаблона. На странице «Почта» — с чатом шаблона сбоку; в панели треда (W-18,
+ * `embedded`) — без своего чата: тред уже открыт в центре, его id приходит из панели.
+ */
+export function TemplateEditor({
+  templateId,
+  threadId: givenThread,
+  embedded,
+}: {
+  templateId: string | null;
+  threadId?: string;
+  embedded?: boolean;
+}) {
   const tool = useTool();
   const rpc = useRpc<typeof rpcContract>();
   const sdk = useSdk();
@@ -81,7 +93,13 @@ export function TemplateEditor({ templateId }: { templateId: string | null }) {
     if (!templateId) {
       setTpl(null);
       setDraftLocal(EMPTY);
-      setThreadId(null);
+      setThreadId(givenThread ?? null);
+      if (givenThread) {
+        rpc.call("draft_get", { threadId: givenThread }).then(
+          (r) => alive && setDraftLocal((d) => ({ ...d, ...r.draft })),
+          () => undefined,
+        );
+      }
       return;
     }
     void (async () => {
@@ -90,12 +108,16 @@ export function TemplateEditor({ templateId }: { templateId: string | null }) {
         if (!alive) return;
         setTpl(t);
         setDraftLocal({ name: t.name, audience: t.audience, language: t.language, kind: t.kind, subject: t.subject, body: t.body });
-        const { threadId: th } = await rpc.call("template_thread_get", { templateId }).catch(() => ({ threadId: null }));
+        const { threadId: th } = givenThread
+          ? { threadId: givenThread }
+          : await rpc.call("template_thread_get", { templateId }).catch(() => ({ threadId: null }));
         if (!alive) return;
         setThreadId(th);
         if (!th) return;
         const r = await rpc.call("draft_get", { threadId: th }).catch(() => null);
-        if (alive && r && (r.draft.subject !== undefined || r.draft.body !== undefined)) setDraftLocal((d) => ({ ...d, ...r.draft }));
+        // The thread's draft belongs to the template it was made for: never lay it over another one.
+        const sameTemplate = !r?.templateId || r.templateId === templateId;
+        if (alive && r && sameTemplate && (r.draft.subject !== undefined || r.draft.body !== undefined)) setDraftLocal((d) => ({ ...d, ...r.draft }));
       } catch (e) {
         if (alive) setError(errorText(e));
       }
@@ -170,7 +192,7 @@ export function TemplateEditor({ templateId }: { templateId: string | null }) {
       setDraftLocal((d) => ({ ...d, name: t.name }));
       setSaved(`Сохранено: версия ${t.current_version}`);
       if (threadId && (asNew || !templateId)) await rpc.call("template_thread_link", { templateId: t.id, threadId });
-      if (t.id !== templateId) navigate.toPluginPanel(MAIL_PATH, { subPath: `tpl/${t.id}`, replace: true });
+      if (!embedded && t.id !== templateId) navigate.toPluginPanel(MAIL_PATH, { subPath: `tpl/${t.id}`, replace: true });
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -189,7 +211,9 @@ export function TemplateEditor({ templateId }: { templateId: string | null }) {
           ...(sectionId ? { sectionId } : {}),
         } as Parameters<typeof sdk.threads.spawn>[0]);
         if (templateId) await rpc.call("template_thread_link", { templateId, threadId: thread.id });
-        setThreadId(thread.id);
+        // W-18: the chat is a native thread; the template editor opens on its right.
+        await rpc.call("focus_set", { threadId: thread.id, focus: { kind: "template", id: templateId ?? `new-${thread.id}`.slice(0, 64), title: (draft.name ?? "").slice(0, 200) } });
+        navigate.toThread(thread.id);
       } catch (e) {
         setError(errorText(e));
       }
@@ -200,12 +224,14 @@ export function TemplateEditor({ templateId }: { templateId: string | null }) {
   if (templateId && !tpl && !error) return <Note>Загружаем шаблон…</Note>;
 
   return (
-    <div className="flex h-full min-h-0">
-      <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-3 text-sm">
-        <div className="flex items-center gap-2">
-          <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => navigate.toPluginPanel(MAIL_PATH, { subPath: "templates" })}>
-            ← Шаблоны
-          </button>
+    <div className="@container flex h-full min-h-0 flex-col overflow-y-auto @4xl:flex-row @4xl:overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 text-sm @4xl:overflow-y-auto">
+        <div className="flex flex-wrap items-center gap-2">
+          {embedded ? null : (
+            <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => navigate.toPluginPanel(MAIL_PATH, { subPath: "templates" })}>
+              ← Шаблоны
+            </button>
+          )}
           <span className="flex-1" />
           {saved ? <span className="text-xs text-muted-foreground">{saved}</span> : null}
           {canManage ? (
@@ -222,8 +248,8 @@ export function TemplateEditor({ templateId }: { templateId: string | null }) {
           ) : null}
         </div>
         {error ? <p className="rounded-md border border-destructive/40 px-2 py-1 text-xs text-destructive">{error}</p> : null}
-        <div className="grid gap-2 sm:grid-cols-4">
-          <div className="sm:col-span-4">
+        <div className="grid gap-2 @lg:grid-cols-4">
+          <div className="@lg:col-span-4">
             <Field label="Название">
               <Input className="h-8 text-xs" value={draft.name ?? ""} onChange={(e) => edit({ name: e.target.value })} />
             </Field>
@@ -326,28 +352,26 @@ export function TemplateEditor({ templateId }: { templateId: string | null }) {
           </details>
         ) : null}
       </div>
-      <aside className="flex w-[420px] flex-none flex-col border-l border-border">
-        <div className="border-b border-border px-2 py-1.5 text-xs font-semibold">Чат по шаблону</div>
-        {threadId ? (
-          <div className="min-h-0 flex-1">
-            <ThreadChat threadId={threadId} variant="full" layout="contained" />
-          </div>
-        ) : threadId === null ? (
-          <div className="flex flex-1 flex-col justify-end gap-2 p-2">
-            <p className="text-xs text-muted-foreground">
-              Попросите агента: «напиши первое письмо дистрибьютору на английском», «сделай короче», «добавь вопрос про цены на цепи».
-              Агент меняет черновик слева, сохраняете вы.
-            </p>
-            <NewThreadComposer
-              draftKey={`manifest-template-${templateId ?? "new"}`}
-              placeholder="Что сделать с шаблоном?"
-              onSubmit={(request) => startChat(request as Parameters<typeof sdk.threads.spawn>[0])}
-            />
-          </div>
-        ) : (
-          <Note>Открываем чат…</Note>
-        )}
-      </aside>
+      {embedded ? null : (
+        <aside className="flex w-full flex-col gap-2 border-t border-border p-3 @4xl:w-96 @4xl:flex-none @4xl:border-l @4xl:border-t-0">
+          <h3 className="text-xs font-semibold">Чаты по шаблону</h3>
+          {templateId ? (
+            <ChatsList focus={{ kind: "template", id: templateId, title: draft.name ?? "" }} />
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Попросите агента: «напиши первое письмо дистрибьютору на английском». Откроется чат, черновик шаблона — справа от него;
+                сохраняете вы.
+              </p>
+              <NewThreadComposer
+                draftKey="manifest-template-new"
+                placeholder="Что сделать с шаблоном?"
+                onSubmit={(request) => startChat(request as Parameters<typeof sdk.threads.spawn>[0])}
+              />
+            </>
+          )}
+        </aside>
+      )}
     </div>
   );
 }
