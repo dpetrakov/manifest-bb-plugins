@@ -67,16 +67,14 @@ export function InboundView({ id, onLinked }: { id: string; onLinked?: (company:
         </dd>
       </dl>
       </Card>
-      <p className="text-[11px] text-muted-foreground">Внешнее письмо: текст показан как есть, ссылки и вложения не открываются автоматически.</p>
-      <pre className="mf-card max-h-[60vh] overflow-y-auto whitespace-pre-wrap p-3 font-sans">{x.reply_text || x.body_text}</pre>
+      <pre title="Внешнее письмо: текст как есть, ссылки и вложения не открываются автоматически" className="mf-card max-h-[60vh] overflow-y-auto whitespace-pre-wrap p-3 font-sans">{x.reply_text || x.body_text}</pre>
       {x.attachments.length ? <p className="text-muted-foreground">Вложения: {x.attachments.map((a) => a.filename).join(", ")}</p> : null}
       {error ? <p className="text-destructive">{error}</p> : null}
       {x.company_id && (x.answers ?? []).length > 0 ? (
         <Status tone="ok">Ответ отправлен: {(x.answers ?? []).map((a) => a.status_text).join(", ")}</Status>
       ) : null}
       {status?.canManage && x.company_id && (x.kind === "reply" || x.kind === "other") ? (
-        <div className="mf-card flex flex-wrap items-center gap-2 p-3">
-          <span className="min-w-0 flex-1">Ответ готовится в карточке «{x.company_name}»: черновик «Re: …», текст — с агентом в чате.</span>
+        <div className="flex" title={`Черновик «Re: …» в карточке «${x.company_name}»`}>
           <Button
             size="sm"
             className="h-9"

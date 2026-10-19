@@ -27,7 +27,7 @@ import {
 import { Note, PriorityBadge } from "./RegistryList";
 import type { Card } from "./types";
 import { CompanyMail } from "./mail/CompanyMail";
-import { Badge, COMPANY_STATUS_TONE, KindLabel } from "./manifest";
+import { Badge, COMPANY_STATUS_TONE, ConfirmCard, KindLabel, ModeBadge } from "./manifest";
 
 export function CardTab({ subPath }: PluginNavPanelProps) {
   return <CardView companyId={subPath.split("/")[0] ?? ""} />;
@@ -105,17 +105,15 @@ export function CardView({ companyId, header }: { companyId: string; header?: Re
       )}
 
       <Section title="Работа">
-        <div className="flex items-center gap-2">
-          <PriorityBadge priority={c.priority} manual={c.priority_manual != null} />
-          <span className="text-xs text-muted-foreground">
-            авто P{c.priority_auto}: {PRIORITY_REASON_LABEL[c.priority_reason] ?? c.priority_reason}
-          </span>
-        </div>
         {canEdit ? (
-          <div className="mt-2 grid gap-2">
-            <Labeled label="Ручной приоритет">
+          // Priority and status in one row; two rows only in a narrow panel.
+          <div className="@container">
+          <div className="grid gap-2 @[26rem]:grid-cols-2">
+            <Labeled label="Приоритет">
+              <span className="flex items-center gap-1.5" title={`авто P${c.priority_auto}: ${PRIORITY_REASON_LABEL[c.priority_reason] ?? c.priority_reason}`}>
+              <PriorityBadge priority={c.priority} manual={c.priority_manual != null} />
               <select
-                className={selectCls}
+                className={`${selectCls} min-w-0 flex-1`}
                 value={c.priority_manual ?? ""}
                 disabled={busy}
                 onChange={(e) =>
@@ -127,17 +125,22 @@ export function CardView({ companyId, header }: { companyId: string; header?: Re
                   )
                 }
               >
-                <option value="">Автоматически</option>
+                <option value="">Авто · P{c.priority_auto}</option>
                 {[1, 2, 3, 4, 5].map((p) => (
-                  <option key={p} value={p}>P{p}</option>
+                  <option key={p} value={p}>P{p} вручную</option>
                 ))}
               </select>
+              </span>
             </Labeled>
             <StatusEditor status={c.status} reason={c.status_reason} busy={busy}
               onSave={(status, reason) => run("outreach_update_company", { id: c.id, status, status_reason: reason, expected_updated_at: c.updated_at })} />
           </div>
+          </div>
         ) : (
-          <p className="mt-1">Статус: {STATUS_LABEL[c.status] ?? c.status}</p>
+          <p className="flex items-center gap-2" title={`авто P${c.priority_auto}: ${PRIORITY_REASON_LABEL[c.priority_reason] ?? c.priority_reason}`}>
+            <PriorityBadge priority={c.priority} manual={c.priority_manual != null} />
+            {STATUS_LABEL[c.status] ?? c.status}
+          </p>
         )}
         {c.status_reason && <p className="text-xs text-muted-foreground">Причина: {c.status_reason}</p>}
         {c.do_not_contact && <p className="text-xs text-destructive">Не связываться{c.do_not_contact_reason ? `: ${c.do_not_contact_reason}` : ""}</p>}
@@ -326,9 +329,9 @@ function WorkBlock({
             </Button>
             <Button size="sm" variant="ghost" className="h-7" onClick={() => setTouch(null)}>Отмена</Button>
           </div>
-          <p className="text-muted-foreground">Следующий шаг предложит шаблон каденса; ручной шаг не заменяется.</p>
         </div>
       ) : null}
+      {card.sandbox_traces ? <SandboxTraces companyId={c.id} canEdit={canEdit} busy={busy} run={run} /> : null}
       {(card.interactions ?? []).length > 0 ? (
         <ul className="mt-1 flex flex-col gap-1">
           {(card.interactions ?? []).slice(0, 10).map((x) => (
@@ -337,6 +340,12 @@ function WorkBlock({
                 <span>
                   {x.direction === "out" ? "→" : "←"} {CHANNEL_LABEL[x.channel] ?? x.channel}
                   {x.outcome ? ` · ${OUTCOME_LABEL[x.outcome] ?? x.outcome}` : ""}
+                  {x.sandbox ? (
+                    <>
+                      {" "}
+                      <ModeBadge sandbox />
+                    </>
+                  ) : null}
                 </span>
                 <span className="text-muted-foreground">{formatDateTime(x.occurred_at)}</span>
               </div>
@@ -348,6 +357,44 @@ function WorkBlock({
       ) : (
         <p className="text-muted-foreground">Касаний ещё не было.</p>
       )}
+    </div>
+  );
+}
+
+/** Следы песочницы (W-20): тест прошёл по-настоящему — откатить его кнопкой. */
+function SandboxTraces({ companyId, canEdit, busy, run }: { companyId: string; canEdit: boolean; busy: boolean; run: (name: string, args: Record<string, unknown>) => Promise<boolean> }) {
+  const [confirm, setConfirm] = useState(false);
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-2 rounded-md border border-[rgba(0,168,162,0.35)] bg-[rgba(0,168,162,0.06)] px-2 py-1">
+      <span title="Касания, статус и шаг менялись как в бою, но письма никуда не уходили; в метрики не входят">
+        <ModeBadge sandbox /> следы теста
+      </span>
+      {canEdit ? (
+        confirm ? (
+          <ConfirmCard
+            title="Убрать следы песочницы?"
+            actions={
+              <>
+                <Button size="sm" className="h-7" disabled={busy}
+                  onClick={async () => {
+                    if (await run("outreach_sandbox_rollback", { id: companyId })) setConfirm(false);
+                  }}>
+                  Убрать
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7" disabled={busy} onClick={() => setConfirm(false)}>
+                  Отмена
+                </Button>
+              </>
+            }
+          >
+            <span>Касания песочницы удалятся; статус, шаг и отметки адресов вернутся, какими были до теста.</span>
+          </ConfirmCard>
+        ) : (
+          <Button size="sm" variant="outline" className="h-7" onClick={() => setConfirm(true)}>
+            Убрать следы
+          </Button>
+        )
+      ) : null}
     </div>
   );
 }

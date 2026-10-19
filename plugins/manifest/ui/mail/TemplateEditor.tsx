@@ -359,10 +359,6 @@ export function TemplateEditor({
             <ChatsList focus={{ kind: "template", id: templateId, title: draft.name ?? "" }} />
           ) : (
             <>
-              <p className="text-xs text-muted-foreground">
-                Попросите агента: «напиши первое письмо дистрибьютору на английском». Откроется чат, черновик шаблона — справа от него;
-                сохраняете вы.
-              </p>
               <NewThreadComposer
                 draftKey="manifest-template-new"
                 placeholder="Что сделать с шаблоном?"

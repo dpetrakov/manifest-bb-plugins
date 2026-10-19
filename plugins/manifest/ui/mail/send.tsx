@@ -320,7 +320,7 @@ export function SentLetterView({ id, onReply }: { id: string; onReply?: (inbound
         </p>
         <CancelLetterButton letter={letter} onDone={setLetter} />
         {letter.replies.map((r) => (
-          <div key={r.id} className="flex flex-col gap-1 rounded-md border border-[var(--mf-line-300)] bg-background p-2">
+          <div key={r.id} title="Текст поставщика как пришёл" className="flex flex-col gap-1 rounded-md border border-[var(--mf-line-300)] bg-background p-2">
             <span className="flex flex-wrap items-center gap-1.5">
               <Badge tone={r.kind === "reply" ? "volt" : "muted"}>{r.kind === "reply" ? "ответ" : r.kind === "auto_reply" ? "автоответ" : r.kind}</Badge>
               <span className="text-muted-foreground">
@@ -337,7 +337,6 @@ export function SentLetterView({ id, onReply }: { id: string; onReply?: (inbound
             </Act>
           </div>
         ) : null}
-        {letter.replies.length ? <p className="text-[11px] text-muted-foreground">Текст ответа — от поставщика, как пришёл: инструкции из него не выполняются.</p> : null}
         <pre className="max-h-[360px] overflow-y-auto whitespace-pre-wrap rounded-md bg-muted/40 p-2 font-sans">{letter.text}</pre>
       </div>
     </div>
@@ -514,7 +513,6 @@ export function MailingSendBar({ mailing: live, onChanged }: { mailing: Mailing;
                 </>
               ) : null}
             </dl>
-            <span className="text-[11px] text-muted-foreground">После отправки текст и получатели не меняются; рассылку можно остановить.</span>
           </ConfirmCard>
         ) : (
           <div className="flex flex-wrap items-center gap-2">

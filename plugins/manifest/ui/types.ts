@@ -109,6 +109,8 @@ export interface Card {
   };
   next_action?: NextAction | null;
   interactions?: Interaction[];
+  /** Sandbox letters left touches or changed the state; they can be rolled back (W-20). */
+  sandbox_traces?: boolean;
   countries: { id: string; country_code: string; country_title: string; section_label: string; is_primary: boolean }[];
   contacts: Contact[];
   persons: Person[];
@@ -237,6 +239,8 @@ export interface Interaction {
   summary: string;
   ingest: string;
   created_by: string;
+  /** A sandbox letter (W-20): the flow is real, the letter was not. */
+  sandbox?: boolean;
 }
 
 export interface NextAction extends NextActionBrief {

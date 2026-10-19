@@ -330,7 +330,8 @@ describe("mail (W-16)", () => {
     await screen.findByText(/Evgenii \| MSG <evgenii/);
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "s1" } });
     await waitFor(() => expect(sets).toEqual([{ company_id: "c1", legal_entity_id: "e1", sender_id: "s1" }]));
-    expect(await screen.findByText(/задан для организации/)).toBeTruthy();
+    await waitFor(() => expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("s1"));
+    expect(screen.getByTitle(/задан для организации/)).toBeTruthy();
   });
 
   const letter = (problems: string[] = []) => ({

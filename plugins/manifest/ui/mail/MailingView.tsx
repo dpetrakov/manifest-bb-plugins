@@ -235,14 +235,9 @@ export function MailingView({ id, onOpenCompany, onDeleted }: { id: string; onOp
           </div>
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="flex-1 text-[11px] text-muted-foreground">
-          {sent
-            ? "Рассылка отправлена: текст и получатели не меняются. Ответы поставщиков ведутся в чатах их организаций."
-            : "Текст правится через агента — письмо пересоберётся для каждого. Отправляет человек кнопкой."}
-        </p>
-        {canEdit && !sent ? (
-          confirmDelete ? (
+      {canEdit && !sent ? (
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {confirmDelete ? (
             <span className="flex items-center gap-1">
               <span className="text-destructive">Удалить рассылку целиком?</span>
               <Button size="sm" variant="destructive" className="h-7" disabled={busy} onClick={() => void discard()}>
@@ -256,9 +251,9 @@ export function MailingView({ id, onOpenCompany, onDeleted }: { id: string; onOp
             <Button size="sm" variant="outline" className="h-7 border-destructive/50 text-destructive" onClick={() => setConfirmDelete(true)}>
               Удалить рассылку
             </Button>
-          )
-        ) : null}
+          )}
       </div>
+      ) : null}
     </div>
   );
 }

@@ -127,9 +127,6 @@ export function LetterDirective({ attributes }: PluginMessageDirectiveProps) {
   return (
     <div className="my-2 max-w-3xl">
       <LetterView letter={letter} />
-      <p className="mt-1 text-[11px] text-muted-foreground">
-        Скажите агенту, что изменить, — письмо здесь обновится. Отправляет человек кнопкой в карточке (следующая версия).
-      </p>
     </div>
   );
 }

@@ -20,6 +20,11 @@ Sending letters, statuses and replies (needs Manifest with W-20).
   organisation's card; the agent helps with the text, the person sends it.
 - Live statuses: the plugin asks Manifest what changed every 45 s and refreshes widgets
   and old chips in the chat.
+- Sandbox letters run the whole flow — a touch marked «песочница», the status, the
+  cadence step, the reply — and stay out of the metrics; «Убрать следы» in the card rolls
+  the organisation back to its state before the test.
+- Denser widgets: priority and status in one row (two only in a narrow panel), the
+  sender as one row, no explanatory prose in everyday work (hints moved to tooltips).
 
 - The Manifest look for widgets and chips: object panels, section pages and chat chips are
   light Manifest surfaces in any bb theme (the dark bb theme included) — the backoffice

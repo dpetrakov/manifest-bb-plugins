@@ -504,6 +504,7 @@ export const PANEL_TOOLS = new Set([
   "outreach_batch_preview",
   "outreach_batch_apply",
   "outreach_batch_revert",
+  "outreach_sandbox_rollback",
   // W-16 mail
   "mail_fields",
   "mail_entities",

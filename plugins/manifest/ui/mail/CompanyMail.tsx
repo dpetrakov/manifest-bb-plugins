@@ -62,41 +62,35 @@ export function CompanyMail({ companyId }: { companyId: string }) {
   };
 
   if (!cs) return <p className="text-xs text-muted-foreground">{error ?? "Загружаем…"}</p>;
+  // Режим показываем, только если Manifest его прислал: без поля «бой» был бы неправдой.
+  const mode = cs.legal_entity && "sandbox" in cs.legal_entity ? <ModeBadge sandbox={cs.legal_entity.sandbox} /> : null;
+  const who = cs.sender ? `${cs.sender.display_name} <${cs.sender.address}>${cs.legal_entity ? ` · ${cs.legal_entity.name}` : ""}` : "не задан";
   return (
     <div className="flex flex-col gap-1 text-xs">
-      {cs.sender ? (
-        <p>
-          <span className="font-medium">{cs.sender.display_name}</span>{" "}
-          <span className="text-muted-foreground">&lt;{cs.sender.address}&gt;</span>
-          {cs.legal_entity ? <span className="text-muted-foreground"> · {cs.legal_entity.name}</span> : null}
-          {/* режим показываем, только если Manifest его прислал: без поля «бой» был бы неправдой */}
-          {cs.legal_entity && "sandbox" in cs.legal_entity ? (
-            <>
-              {" "}
-              <ModeBadge sandbox={cs.legal_entity.sandbox} />
-            </>
-          ) : null}
-        </p>
-      ) : null}
-      <p className="text-muted-foreground">Отправитель {SOURCE_LABEL[cs.source] ?? cs.source}.</p>
+      <div className="flex min-w-0 items-center gap-2" title={`Отправитель ${SOURCE_LABEL[cs.source] ?? cs.source}`}>
+        <span className="flex-none text-muted-foreground">Пишет</span>
+        {canEdit && entities ? (
+          <select
+            className={`${selectCls} min-w-0 flex-1`}
+            disabled={busy}
+            value={cs.source === "company" ? cs.sender?.id ?? "" : ""}
+            onChange={(e) => void change(e.target.value)}
+          >
+            <option value="">{cs.source === "company" ? "По умолчанию" : `По умолчанию: ${who}`}</option>
+            {entities.flatMap((e) =>
+              e.senders.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.display_name} &lt;{s.address}&gt; · {e.name}
+                </option>
+              )),
+            )}
+          </select>
+        ) : (
+          <span className="min-w-0 flex-1 truncate">{who}</span>
+        )}
+        {mode}
+      </div>
       {cs.problem ? <Status tone="error">Отправка невозможна: {cs.problem}</Status> : null}
-      {canEdit && entities ? (
-        <select
-          className={selectCls}
-          disabled={busy}
-          value={cs.source === "company" ? cs.sender?.id ?? "" : ""}
-          onChange={(e) => void change(e.target.value)}
-        >
-          <option value="">{cs.source === "company" ? "Снять (вернуть умолчание)" : "Как по умолчанию"}</option>
-          {entities.flatMap((e) =>
-            e.senders.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.display_name} &lt;{s.address}&gt; · {e.name}
-              </option>
-            )),
-          )}
-        </select>
-      ) : null}
       {error ? <p className="text-destructive">{error}</p> : null}
       <DraftBlock companyId={companyId} canEdit={canEdit} />
       <SentBlock companyId={companyId} canEdit={canEdit} />
@@ -169,9 +163,6 @@ function DraftBlock({ companyId, canEdit }: { companyId: string; canEdit: boolea
         <>
           <LetterView letter={letter} compact />
           <SendLetterButton letter={letter} companyId={companyId} onSent={() => reload()} />
-          <p className="text-[11px] text-muted-foreground">
-            {letter.draft.reply_to_inbound_id ? "Ответ поставщику. " : ""}Правьте через чат с агентом: «сделай короче», «спроси про цепи» — письмо обновится здесь. Отправляет человек кнопкой.
-          </p>
           {canEdit ? (
             <div className="flex flex-wrap items-center gap-2">
               <Button
@@ -204,7 +195,7 @@ function DraftBlock({ companyId, canEdit }: { companyId: string; canEdit: boolea
       ) : none ? (
         canEdit ? (
           templates && templates.length === 0 ? (
-            <p className="text-muted-foreground">Шаблонов нет — создайте на странице «Почта аутрича».</p>
+            <p className="text-muted-foreground">Шаблонов нет.</p>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               <select className={selectCls} value={templateId} disabled={busy || !templates} onChange={(e) => setTemplateId(e.target.value)}>

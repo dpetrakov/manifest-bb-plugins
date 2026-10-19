@@ -19,9 +19,6 @@ export function OutreachPage({ subPath }: PluginNavPanelProps) {
   if (!companyId) {
     return (
       <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
-        <p className="px-4 pt-3 text-sm text-muted-foreground">
-          Выберите организацию: откроется её чат с агентом, карточка — справа. Чатов у организации может быть несколько.
-        </p>
         <div className="mf-card mx-auto my-3 min-h-0 w-full max-w-3xl flex-1 overflow-hidden">
           <RegistryList />
         </div>

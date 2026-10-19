@@ -189,11 +189,6 @@ function NewTopic() {
     <div className="mf-island mf-paper h-full">
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col justify-end gap-3 px-4 pb-4">
       <h2 className="text-base font-bold">Новая тема дашборда</h2>
-      <p className="text-sm text-muted-foreground">
-        Тема — отдельный чат с агентом со своим фильтром дашборда. Попросите, например: «покажи, кому пора напомнить в
-        Азии», «какие организации без контактного лица» или «перенеси просроченные шаги на понедельник» — агент подготовит
-        пачку, применяете вы.
-      </p>
       <Input placeholder="Название темы, например «Напоминания на неделю»" value={title} onChange={(e) => setTitle(e.target.value)} />
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <NewThreadComposer

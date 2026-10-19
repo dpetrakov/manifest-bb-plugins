@@ -409,8 +409,7 @@ function InboundList() {
           </button>
           {open === x.id ? (
             <div className="mt-2 flex flex-col gap-2">
-              <p className="text-[11px] text-muted-foreground">Внешнее письмо: текст показан как есть, ссылки и вложения не открываются автоматически.</p>
-              <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted/40 p-2 font-sans text-xs">{x.reply_text || x.body_text}</pre>
+              <pre title="Внешнее письмо: текст как есть, ссылки и вложения не открываются автоматически" className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted/40 p-2 font-sans text-xs">{x.reply_text || x.body_text}</pre>
               {x.attachments.length ? <p className="text-xs text-muted-foreground">Вложения: {x.attachments.map((a) => a.filename).join(", ")}</p> : null}
               {status?.canManage ? (
                 <div className="flex flex-wrap items-center gap-2">
