@@ -1,0 +1,172 @@
+/*
+ * Виджеты Manifest в BB (EP-101, демошит docs/brand/manifest-bb-widgets-demo.html,
+ * согласован 2026-10-19). Токены — брендбук бэкофиса §5, §11, §13.
+ *
+ * Д-1. «Островок»: виджеты и чипы — всегда светлые поверхности Manifest, в том числе в
+ * тёмной теме BB. Утилиты Tailwind плагина читают переменные хоста (--background,
+ * --foreground, --border, --muted, --destructive, --primary…); внутри .mf-island они
+ * переопределены светлыми значениями Manifest, поэтому вся разметка внутри перекрашивается
+ * без правки классов. Порталы (выпадающие меню) живут вне островка и остаются в теме BB.
+ *
+ * Правила вне @layer: они сильнее утилит хоста — поэтому классы mf-* задают только то,
+ * что не задаёт разметка.
+ */
+.mf-island {
+  color-scheme: light;
+  --mf-ink-900: #111315;
+  --mf-ink-700: #2e3433;
+  --mf-ink-500: #66706d;
+  --mf-line-300: #d8dfdc;
+  --mf-line-200: #e7ecea;
+  --mf-paper: #f6f8f7;
+  --mf-surface: #ffffff;
+  --mf-surface-strong: #eef3f1;
+  --mf-volt: #d7ff3f;
+  --mf-teal: #00a8a2;
+  --mf-coral: #ff4f3a;
+  --mf-amber: #f0a51a;
+  --mf-blue: #2f6bff;
+  --mf-green: #1c8f55;
+  /* коралл для текста и сплошных кнопок — темнее на тон, чтобы читался на белом */
+  --mf-coral-ink: #d2361f;
+
+  --background: var(--mf-surface);
+  --foreground: var(--mf-ink-900);
+  --card: var(--mf-surface);
+  --card-foreground: var(--mf-ink-900);
+  --popover: var(--mf-surface);
+  --popover-foreground: var(--mf-ink-900);
+  --primary: var(--mf-ink-900);
+  --primary-foreground: #ffffff;
+  --secondary: var(--mf-surface-strong);
+  --secondary-foreground: var(--mf-ink-900);
+  --muted: var(--mf-surface-strong);
+  --muted-foreground: var(--mf-ink-500);
+  --accent: var(--mf-surface-strong);
+  --accent-foreground: var(--mf-ink-900);
+  --destructive: var(--mf-coral-ink);
+  --destructive-foreground: #ffffff;
+  --border: var(--mf-line-300);
+  --input: var(--mf-line-300);
+  --ring: var(--mf-blue);
+  --state-hover: rgba(17, 19, 21, 0.05);
+  --state-active: rgba(17, 19, 21, 0.08);
+
+  color: var(--mf-ink-900);
+  font-family: Inter, Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0;
+}
+
+/* Д-2. Фон панели объекта и пультов — «бумага» с сеткой 40 px, как фон бэкофиса. */
+.mf-paper {
+  background-color: var(--mf-paper);
+  background-image:
+    linear-gradient(90deg, rgba(216, 223, 220, 0.44) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(216, 223, 220, 0.44) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Белая поверхность с рамкой: карточки внутри панели, шапка панели. */
+.mf-card {
+  background-color: var(--mf-surface);
+  border: 1px solid var(--mf-line-300);
+  border-radius: 8px;
+}
+.mf-surface {
+  background-color: var(--mf-surface);
+}
+
+/* Д-4. Точка-светофор (брендбук §5): одна палитра везде, рядом — текст. */
+.mf-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+.mf-dot--ok { background: var(--mf-green); }
+.mf-dot--info { background: var(--mf-blue); }
+.mf-dot--warning { background: var(--mf-amber); }
+.mf-dot--error { background: var(--mf-coral); }
+.mf-dot--muted { background: var(--mf-line-300); box-shadow: inset 0 0 0 1px var(--mf-ink-500); }
+
+/* Бейдж — фон-палитра + текст (брендбук §11); песочница и бой — Д-3, ответ — Д-4. */
+.mf-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.mf-badge--ok { background: rgba(28, 143, 85, 0.12); color: #146b40; }
+.mf-badge--info { background: rgba(47, 107, 255, 0.1); color: #1f4fc4; }
+.mf-badge--warn { background: rgba(240, 165, 26, 0.16); color: #8a5a00; }
+.mf-badge--err { background: rgba(255, 79, 58, 0.12); color: #c0301f; }
+.mf-badge--muted { background: var(--mf-surface-strong); color: var(--mf-ink-500); }
+.mf-badge--volt { background: var(--mf-volt); color: #111315; }
+.mf-badge--live { background: #111315; color: var(--mf-volt); }
+.mf-badge--sandbox {
+  background: repeating-linear-gradient(135deg, rgba(0, 168, 162, 0.16) 0 6px, rgba(0, 168, 162, 0.06) 6px 12px);
+  color: #00706c;
+  box-shadow: inset 0 0 0 1px rgba(0, 168, 162, 0.35);
+}
+
+/* P1 в реестре: в сайдбаре BB — в теме хоста, в островке — зелёный Manifest. */
+.mf-island .mf-prio-1 {
+  border-color: rgba(28, 143, 85, 0.35);
+  background-color: rgba(28, 143, 85, 0.12);
+  color: #146b40;
+}
+
+/* Число на главной кнопке — салатовым (демошит: «Отправить 18»). */
+.mf-volt-text { color: var(--mf-volt); }
+
+/* Чип в ленте чата: белая карточка с полосой слева, без сетки; песочница — бирюзовая. */
+.mf-chip {
+  background-color: var(--mf-surface);
+  border: 1px solid var(--mf-line-300);
+  border-left: 3px solid var(--mf-ink-900);
+  border-radius: 6px;
+}
+.mf-chip--sandbox { border-left-color: var(--mf-teal); }
+
+/* Подтверждение — карточка внутри чипа или виджета, не всплывающее окно. */
+.mf-confirm {
+  background-color: var(--mf-surface-strong);
+  border: 1px solid var(--mf-line-300);
+  border-radius: 6px;
+}
+
+/* Полоса прогресса из сегментов (рассылка: ушло / в очереди / не ушло). */
+.mf-progress {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--mf-line-200);
+}
+.mf-progress > i { display: block; height: 100%; }
+.mf-progress > .ok { background: var(--mf-green); }
+.mf-progress > .info { background: var(--mf-blue); opacity: 0.55; }
+.mf-progress > .error { background: var(--mf-coral); }
+.mf-progress > .warning { background: var(--mf-amber); }
+
+/* Плитка-число; .mf-kpi--volt — главный результат (ответы). */
+.mf-kpi--volt { border-color: var(--mf-ink-900); box-shadow: inset 3px 0 0 var(--mf-volt); }
+
+/*
+ * Кнопка объекта в шапке треда — в тоне Manifest на рейле BB (фисташковый, --diff-added),
+ * как кнопка «Потенциальные поставщики» в подвале. Это хром BB, не островок.
+ */
+.mf-focus-button {
+  background-color: color-mix(in oklab, var(--diff-added) 18%, transparent);
+}
+@media (hover: hover) {
+  .mf-focus-button:hover {
+    background-color: color-mix(in oklab, var(--diff-added) 28%, transparent);
+  }
+}

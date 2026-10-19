@@ -14,7 +14,7 @@ export function PriorityBadge({ priority, manual }: { priority: number; manual?:
     <span
       className={cn(
         "inline-flex h-5 min-w-7 flex-none items-center justify-center rounded-full border px-1.5 text-[11px] font-semibold",
-        priority === 1 && "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+        priority === 1 && "mf-prio-1 border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
         priority === 2 && "border-border",
         priority === 3 && "border-border",
         priority >= 4 && "border-dashed border-border text-muted-foreground",

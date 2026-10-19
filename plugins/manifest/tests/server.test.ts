@@ -48,7 +48,11 @@ beforeEach(async () => {
       seen.push({ auth: req.headers.authorization, actor: String(req.headers["x-manifest-actor-kind"]), tool: m.params.name, args: m.params.arguments });
       const result =
         m.params.name === "manifest_whoami"
-          ? { email: "op@example.com", contract: 1, can_view_outreach: true, can_manage_outreach: true, capabilities: [...(withWork ? ["outreach.work"] : []), ...(withMail ? ["outreach.mail"] : [])] }
+          ? { email: "op@example.com", contract: 1, can_view_outreach: true, can_manage_outreach: true, capabilities: [...(withWork ? ["outreach.work"] : []), ...(withMail ? ["outreach.mail"] : [])], can_send: withMail }
+          : m.params.name === "mail_send"
+            ? { id: "m1", company_id: "c1", status: "pending" }
+          : m.params.name === "mail_changes"
+            ? { cursor: "2026-10-19T10:00:00Z", letters: [{ id: "m1", company_id: "c1", mailing_id: null, status: "sent" }], mailings: ["mg1"], inbound: ["i1"], companies: ["c1"] }
           : m.params.name === "mail_mailing_create"
             ? { id: String(m.params.arguments.from_company ?? "") === "c1" ? "22222222-2222-2222-2222-222222222222" : "11111111-1111-1111-1111-111111111111", total: 1 }
           : m.params.name === "mail_preview"
@@ -592,5 +596,48 @@ describe("focus of a thread (W-18)", () => {
     meta["forged"] = { focus: { kind: "company", id: "c1", title: "THK" } };
     const forged = (await h.behavior.callAgentTool("outreach_update_company", { id: "c1", status: "ready" }, { threadId: "forged" })) as { isError: boolean };
     expect(forged.isError).toBe(true);
+  });
+});
+
+describe("sending (W-20)", () => {
+  const load = async () => {
+    withWork = true;
+    withMail = true;
+    const { bb, harness } = createFakePluginHost({
+      pluginId: "manifest",
+      experimental_declaredIconNames: ["dashboard", "id-card", "suppliers"],
+      agentSkillIds: ["manifest-outreach"],
+    });
+    await plugin(bb);
+    await harness.behavior.callRpc("login", { url: base, email: "op@example.com", password: "correct horse battery" });
+    return harness;
+  };
+
+  it("lets the panel send as a person, never gives the agent a send tool, and signals the letter", async () => {
+    const h = await load();
+    const s = (await h.behavior.callRpc("status", null)) as { canSend: boolean };
+    expect(s.canSend).toBe(true);
+    await h.behavior.callRpc("tool", { name: "mail_send", args: { company_id: "c1", expect_updated_at: "2026-10-19T09:00:00Z" } });
+    expect(seen.at(-1)).toMatchObject({ tool: "mail_send", actor: "panel" });
+    expect(h.inspection.realtimeSignals.some((x) => x.channel === "manifest-letter-changed" && (x.payload as { id?: string }).id === "m1")).toBe(true);
+    expect(h.inspection.realtimeSignals.some((x) => x.channel === "manifest-company-changed")).toBe(true);
+    // No agent tool sends, cancels or stops — whatever the focus.
+    const cfg = await h.behavior.resolveAgentConfiguration(makePluginAgentConfigurationContext({ pluginMetadata: { companyId: "c1" } }));
+    const names = cfg.tools.map((t) => (typeof t === "string" ? t : t.name));
+    expect(names).toEqual(expect.arrayContaining(["mail_messages", "mail_message_get"]));
+    expect(names.filter((n) => /(^|_)(send|cancel|stop)($|_)/.test(n))).toEqual([]);
+    const refused = (await h.behavior.callAgentTool("mail_send", { company_id: "c1" }, { threadId: "t-any" }).catch((e: unknown) => ({ isError: true, e }))) as { isError: boolean };
+    expect(refused.isError).toBe(true);
+  });
+
+  it("turns Manifest's mail changes into widget signals", async () => {
+    const h = await load();
+    await h.behavior.callRpc("mail_refresh", null);
+    const first = seen.filter((x) => x.tool === "mail_changes");
+    expect(first.at(-1)?.args).toEqual({});
+    await h.behavior.callRpc("mail_refresh", null);
+    expect(seen.filter((x) => x.tool === "mail_changes").at(-1)?.args).toEqual({ after: "2026-10-19T10:00:00Z" });
+    const ch = h.inspection.realtimeSignals.map((x) => x.channel);
+    expect(ch).toEqual(expect.arrayContaining(["manifest-letter-changed", "manifest-mailing-changed", "manifest-inbound-changed", "manifest-company-changed"]));
   });
 });

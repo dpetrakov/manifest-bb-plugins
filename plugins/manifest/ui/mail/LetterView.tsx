@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PluginMessageDirectiveProps } from "@get-bb/plugin-sdk/app";
 import { cn } from "@/lib/utils";
+import { Status } from "../manifest";
 import { errorText, useCompanyChanged, useStatus, useTool } from "../hooks";
 import { formatDateTime } from "../labels";
 import { HtmlFrame, type Letter, type Preview } from "./common";
@@ -70,8 +71,8 @@ export function LetterView({ letter, compact }: { letter: Letter; compact?: bool
 export function PreviewCard({ preview: p, caption, compact }: { preview: Preview; caption?: string; compact?: boolean }) {
   const [view, setView] = useState<"html" | "text">("html");
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3 text-xs">
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+    <div className="mf-island mf-card flex flex-col gap-2 overflow-hidden p-0 text-xs">
+      <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 border-b border-[var(--mf-line-200)] bg-[#fbfcfb] px-3 py-2">
         <dt className="text-muted-foreground">От</dt>
         <dd className="truncate">{p.from ? `${p.from_name} <${p.from}>` : <span className="text-destructive">не задан</span>}</dd>
         <dt className="text-muted-foreground">Кому</dt>
@@ -79,15 +80,18 @@ export function PreviewCard({ preview: p, caption, compact }: { preview: Preview
         <dt className="text-muted-foreground">Тема</dt>
         <dd className="font-medium">{p.subject}</dd>
       </dl>
+      <div className="flex flex-col gap-2 px-3 pb-3">
       {caption ? <p className="text-[11px] text-muted-foreground">{caption}</p> : null}
       {p.problems.length > 0 ? (
-        <ul className="rounded-md border border-destructive/40 bg-destructive/5 px-2 py-1 text-destructive">
+        <ul className="flex flex-col gap-0.5 rounded-md border border-[rgba(240,165,26,0.45)] bg-[rgba(240,165,26,0.08)] px-2 py-1">
           {p.problems.map((x) => (
-            <li key={x}>Не уйдёт: {x}</li>
+            <li key={x}>
+              <Status tone="warning">Не уйдёт: {x}</Status>
+            </li>
           ))}
         </ul>
       ) : (
-        <p className="text-emerald-700">Готово к отправке: так письмо и уйдёт.</p>
+        <Status tone="ok">Готово к отправке: так письмо и уйдёт.</Status>
       )}
       <div className="flex gap-1">
         {(["html", "text"] as const).map((v) => (
@@ -106,6 +110,7 @@ export function PreviewCard({ preview: p, caption, compact }: { preview: Preview
       ) : (
         <pre className="max-h-[480px] overflow-y-auto whitespace-pre-wrap rounded-md bg-muted/40 p-2 font-sans">{p.text}</pre>
       )}
+      </div>
     </div>
   );
 }

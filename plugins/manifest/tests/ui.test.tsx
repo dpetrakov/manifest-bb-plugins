@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { CardTab } from "../ui/CardTab";
@@ -13,7 +13,8 @@ import { LetterDirective } from "../ui/mail/LetterView";
 import { MailingDirective } from "../ui/mail/MailingView";
 import { SUPPLIERS_LIST, switchSuppliersList } from "../ui/SuppliersList";
 import { FocusHeader, ObjectPanel } from "../ui/workspace/ObjectPanel";
-import { MailingChip } from "../ui/workspace/Chips";
+import { LetterChip, MailingChip } from "../ui/workspace/Chips";
+import { MailingSendBar } from "../ui/mail/send";
 
 const status = (over: Record<string, unknown> = {}) => ({
   connected: true,
@@ -388,11 +389,12 @@ describe("mail (W-16)", () => {
         },
       } as never,
     });
-    fireEvent.click(await screen.findByRole("button", { name: "Подготовить письмо" }));
-    expect(await screen.findByText("STIHL parts for Agro Store", undefined, { timeout: 5000 })).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Подготовить письмо" }, { timeout: 12000 }));
+    expect(await screen.findByText("STIHL parts for Agro Store", undefined, { timeout: 12000 })).toBeTruthy();
     expect(calls).toContain("mail_draft_create");
     expect(screen.getByText("Готово к отправке: так письмо и уйдёт.")).toBeTruthy();
-  });
+    // A cold first run (right after npm ci) is slow: the test gets room beyond the default 5 s.
+  }, 15000);
 
   it("shows a mailing: counts, reasons, and each recipient's letter", async () => {
     const MID = "99999999-8888-7777-6666-555555555555";
@@ -609,5 +611,117 @@ describe("workspace: object on the right of a thread (W-18)", () => {
     expect(await screen.findByText("Send the price list")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Привязать" })).toBeTruthy();
     expect(screen.getByText("Чатов пока нет.")).toBeTruthy();
+  });
+});
+
+describe("sending from chips (W-20)", () => {
+  const CID = "11111111-2222-3333-4444-555555555555";
+  const MID = "22222222-2222-2222-2222-222222222222";
+  const LID = "33333333-3333-3333-3333-333333333333";
+  const msg = { id: "m", threadId: "th1", turnId: null, projectId: null };
+  const draft = {
+    draft: { id: "d1", company_id: CID, template_id: "t1", template_version: 1, template_name: "First", person_id: null, contact_id: null,
+      subject: "s", body: "b", edited: false, updated_at: "2026-10-19T10:00:00.123456Z", updated_by: "op" },
+    preview: { subject: "STIHL parts for Agro Store", text: "x", html: "<p>x</p>", missing: [], unknown: [], to: "sales@agro.example",
+      from: "evgenii@test.manifestmail.fyi", from_name: "Evgenii | MSG", problems: [], sample: false,
+      sender: { legal_entity: { name: "Test", sandbox: true } } },
+    fingerprint: "fp-letter",
+  };
+  const sent = {
+    id: LID, company_id: CID, company_name: "Agro Store", legal_entity: "Test", sandbox: true, from: "evgenii@test.manifestmail.fyi",
+    from_name: "Evgenii | MSG", to: "sales@agro.example", subject: "STIHL parts for Agro Store", text: "x", template: "First",
+    mailing_id: null, mailing_name: "", reply_to_inbound_id: null, status: "queued", status_text: "в очереди", tone: "info",
+    final: false, cancellable: true, scheduled_at: null, sent_at: null, created_at: "2026-10-19T10:01:00Z", created_by: "op", replies: [],
+  };
+
+  it("sends a ready letter only after the confirmation, then shows its live status", async () => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    renderSlot({ component: LetterChip }, { attributes: { company: CID }, source: "", message: msg, openWorkspaceFile: null }, {
+      rpc: {
+        status: () => status({ canMail: true, canSend: true }),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          calls.push({ name, args });
+          if (name === "mail_draft_get") return { result: draft };
+          if (name === "outreach_get_company") return { result: { company: { display_name: "Agro Store" } } };
+          if (name === "mail_send") return { result: { ...sent, status: "pending", status_text: "отправляем…" } };
+          if (name === "mail_message_get") return { result: sent };
+          return { result: null };
+        },
+      } as never,
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Отправить" }));
+    expect(await screen.findByText("Отправить письмо?")).toBeTruthy();
+    expect(screen.getByText("настоящему адресу не уйдёт")).toBeTruthy();
+    expect(calls.some((c) => c.name === "mail_send")).toBe(false);
+    const confirmSend = screen.getAllByRole("button", { name: "Отправить" }).at(-1)!;
+    fireEvent.click(confirmSend);
+    await waitFor(() => expect(calls.find((c) => c.name === "mail_send")?.args).toEqual({ company_id: CID, expect_updated_at: "2026-10-19T10:00:00.123456Z", fingerprint: "fp-letter" }));
+    expect(await screen.findByText(/в очереди/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeTruthy();
+  });
+
+  it("keeps the send button inactive without the right to send", async () => {
+    renderSlot({ component: LetterChip }, { attributes: { company: CID }, source: "", message: msg, openWorkspaceFile: null }, {
+      rpc: {
+        status: () => status({ canMail: true, canSend: false }),
+        tool: ({ name }: { name: string }) => ({ result: name === "mail_draft_get" ? draft : { company: { display_name: "Agro Store" } } }),
+      } as never,
+    });
+    const b = (await screen.findByRole("button", { name: "Отправить" })) as HTMLButtonElement;
+    expect(b.disabled).toBe(true);
+    expect(b.title).toMatch(/outreach.send/);
+  });
+
+  it("sends a mailing with the number the person saw", async () => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    const m = {
+      id: MID, name: "STIHL — first letter", template_id: null, template_version: null, template_name: "", audience: "", subject: "s", body: "b",
+      edited: false, state: "draft", total: 3, ready: 2, skipped: 1, reasons: {}, recipients: [], partial: false, updated_at: "2026-10-19T10:00:00Z",
+      updated_by: "op", mode: "live" as const, senders: [{ from: "evgenii@msg.manifestmail.fyi", from_name: "Evgenii | MSG", letters: 2 }], progress: null,
+      fingerprint: "fp-mailing",
+    };
+    function Bar() {
+      return <MailingSendBar mailing={m} />;
+    }
+    renderSlot({ component: Bar }, {} as never, {
+      rpc: {
+        status: () => status({ canMail: true, canSend: true }),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          calls.push({ name, args });
+          return { result: { ...m, state: "sending" } };
+        },
+      } as never,
+    });
+    const open = await screen.findByRole("button", { name: "Отправить 2" });
+    await waitFor(() => expect((open as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(open);
+    expect(await screen.findByText("Отправить 2 письма?")).toBeTruthy();
+    expect(screen.getByText("Evgenii | MSG — 2")).toBeTruthy();
+    fireEvent.click(within(screen.getByRole("group")).getByRole("button", { name: "Отправить 2" }));
+    await waitFor(() => expect(calls.find((c) => c.name === "mail_mailing_send")?.args).toEqual({ id: MID, expect: 2, fingerprint: "fp-mailing" }));
+  });
+
+  it("sends a mailing from its chip in the chat", async () => {
+    const calls: string[] = [];
+    const m = {
+      id: MID, name: "STIHL — first letter", template_id: null, template_version: null, template_name: "", audience: "", subject: "s", body: "b",
+      edited: false, state: "draft", total: 2, ready: 2, skipped: 0, reasons: {}, recipients: [], partial: false, updated_at: "2026-10-19T10:00:00Z",
+      updated_by: "op", mode: "sandbox", senders: [{ from: "qa@test.manifestmail.fyi", from_name: "QA", letters: 2 }], progress: null,
+    };
+    renderSlot({ component: MailingChip }, { attributes: { id: MID }, source: "", message: msg, openWorkspaceFile: null }, {
+      rpc: {
+        status: () => status({ canMail: true, canSend: true }),
+        tool: ({ name }: { name: string }) => {
+          calls.push(name);
+          return { result: m };
+        },
+      } as never,
+    });
+    const open = await screen.findByRole("button", { name: "Отправить 2" });
+    await waitFor(() => expect((open as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(open);
+    expect(await screen.findByText("настоящим адресатам не уйдёт")).toBeTruthy();
+    fireEvent.click(within(screen.getByRole("group")).getByRole("button", { name: "Отправить 2" }));
+    await waitFor(() => expect(calls).toContain("mail_mailing_send"));
   });
 });

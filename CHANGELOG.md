@@ -4,6 +4,29 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.7.0
+
+Sending letters, statuses and replies (needs Manifest with W-20).
+
+- «Отправить» on a letter and «Отправить N» on a mailing — in the chat chip and in the
+  widget on the right — always behind a confirmation: to whom, from whom, sandbox or live,
+  pace. Without the `outreach.send` right the buttons are inactive with the reason. The
+  agent has no tool to send, cancel or stop; Manifest refuses it as well.
+- A sent letter is an object with a live status (queued, sent, bounced, duplicate,
+  cancelled) and the supplier's replies; «Отменить» while it is queued. A mailing shows
+  progress (sent, queued, bounced, replies, unsubscribes), the expected end by the quota
+  and «Остановить».
+- Replies: «Ответить» on an inbound message or a letter starts a «Re: …» draft in the
+  organisation's card; the agent helps with the text, the person sends it.
+- Live statuses: the plugin asks Manifest what changed every 45 s and refreshes widgets
+  and old chips in the chat.
+
+- The Manifest look for widgets and chips: object panels, section pages and chat chips are
+  light Manifest surfaces in any bb theme (the dark bb theme included) — the backoffice
+  palette, a 40 px grid on the panel background, white cards, the Manifest mark, status as
+  a traffic-light dot with text, a teal «песочница» / black «бой» mode badge and a lime
+  «ответ» badge for supplier replies.
+
 ## manifest 0.6.0
 
 The outreach workspace: the chat in the middle, the object on the right. Requires bb 0.46.

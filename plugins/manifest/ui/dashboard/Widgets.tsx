@@ -23,9 +23,9 @@ import type { FeedItem, Metrics, Queue } from "../types";
 
 export function Panel({ title, hint, children, className }: { title: string; hint?: string; children: ReactNode; className?: string }) {
   return (
-    <section className={cn("rounded-lg border border-border bg-card p-3", className)}>
+    <section className={cn("mf-card p-3", className)}>
       <header className="mb-2 flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold">{title}</h3>
+        <h3 className="text-[13px] font-bold">{title}</h3>
         {hint ? <span className="text-[11px] text-muted-foreground">{hint}</span> : null}
       </header>
       {children}
@@ -52,18 +52,18 @@ export function Tiles({ metrics, active, onPick }: { metrics: Metrics; active?: 
             onClick={() => onPick(active === k ? "" : k)}
             aria-pressed={active === k}
             className={cn(
-              "flex flex-col items-start rounded-lg border bg-card px-3 py-2 text-left transition-colors hover:bg-state-hover",
-              alarm ? "border-destructive/50" : "border-border",
+              "flex flex-col items-start rounded-md border bg-card px-3 py-2 text-left transition-colors hover:bg-state-hover",
+              alarm ? "border-destructive/50 shadow-[inset_3px_0_0_var(--mf-coral)]" : "border-border",
               active === k && "ring-1 ring-ring",
             )}
           >
-            <span className={cn("text-2xl font-semibold tabular-nums", alarm && "text-destructive")}>{n}</span>
+            <span className={cn("text-2xl font-bold tabular-nums", alarm && "text-destructive")}>{n}</span>
             <span className="text-xs text-muted-foreground">{ATTENTION_LABEL[k]}</span>
           </button>
         );
       })}
-      <div className="flex flex-col items-start rounded-lg border border-border bg-card px-3 py-2">
-        <span className="text-2xl font-semibold tabular-nums">{a.positive_30d}</span>
+      <div className="mf-kpi--volt flex flex-col items-start rounded-md border bg-card px-3 py-2">
+        <span className="text-2xl font-bold tabular-nums">{a.positive_30d}</span>
         <span className="text-xs text-muted-foreground" title="Организации с ответом «интерес» или «прислали условия» за 30 дней">
           Позитивных ответов, 30 дн
         </span>
@@ -130,7 +130,7 @@ export function Funnel({ metrics, active, onPick }: { metrics: Metrics; active: 
         >
           <span className="w-32 flex-none truncate text-muted-foreground">{STATUS_LABEL[f.status] ?? f.status}</span>
           <span className="relative h-4 flex-1 rounded-sm bg-muted">
-            <span className="absolute inset-y-0 left-0 rounded-sm bg-primary/70" style={{ width: `${(f.count / max) * 100}%` }} />
+            <span className="absolute inset-y-0 left-0 rounded-sm bg-[var(--mf-teal)]" style={{ width: `${(f.count / max) * 100}%` }} />
           </span>
           <span className="w-8 flex-none text-right tabular-nums">{f.count}</span>
         </button>
@@ -161,9 +161,9 @@ export function Funnel({ metrics, active, onPick }: { metrics: Metrics; active: 
 
 const STAGES: { key: string; label: string; statuses: string[]; cls: string }[] = [
   { key: "early", label: "до контакта", statuses: ["new", "to_qualify", "ready"], cls: "bg-muted-foreground/30" },
-  { key: "work", label: "в работе", statuses: ["contacted", "replied", "qualified"], cls: "bg-primary/70" },
-  { key: "done", label: "передан", statuses: ["handed_over"], cls: "bg-emerald-500/70" },
-  { key: "out", label: "отказ / не писать", statuses: ["rejected", "do_not_contact"], cls: "bg-destructive/50" },
+  { key: "work", label: "в работе", statuses: ["contacted", "replied", "qualified"], cls: "bg-[var(--mf-teal)]" },
+  { key: "done", label: "передан", statuses: ["handed_over"], cls: "bg-[var(--mf-green)]" },
+  { key: "out", label: "отказ / не писать", statuses: ["rejected", "do_not_contact"], cls: "bg-[var(--mf-coral)]" },
 ];
 
 export function Regions({ metrics, active, onPick }: { metrics: Metrics; active: string; onPick: (region: string) => void }) {

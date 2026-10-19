@@ -20,6 +20,7 @@ import { KIND_LABEL, useOpenObjectPanel } from "./workspace/state";
 import { errorText, useStatus, useTool } from "./hooks";
 import { FIELD_LABEL, STATUS_LABEL, countryName, daysUntil, fieldValue, formatDate, formatDateTime } from "./labels";
 import { PriorityBadge } from "./RegistryList";
+import { ManifestMark, StatusDot } from "./manifest";
 import type { Batch, ListResult, WorkListItem } from "./types";
 
 /** Many directives in a long topic: reload once after a burst of changes. */
@@ -62,9 +63,12 @@ export function filterFromAttributes(attrs: Readonly<Record<string, string>>): F
 
 function Frame({ title, children, actions }: { title: string; children: React.ReactNode; actions?: React.ReactNode }) {
   return (
-    <div data-bb-plugin="manifest" className="my-2 rounded-lg border border-border bg-card text-sm">
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
-        <span className="truncate text-xs font-semibold">{title}</span>
+    <div data-bb-plugin="manifest" className="mf-island mf-chip my-2 text-sm">
+      <div className="flex items-center justify-between gap-2 border-b border-[var(--mf-line-200)] px-3 py-1.5">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <ManifestMark />
+          <span className="truncate text-[13px] font-semibold">{title}</span>
+        </span>
         <span className="flex flex-none gap-1">{actions}</span>
       </div>
       <div className="px-3 py-2">{children}</div>
@@ -158,7 +162,8 @@ export function CompaniesDirective({ attributes, message }: PluginMessageDirecti
                   <span className="min-w-0 flex-1 truncate">{it.display_name}</span>
                   <span className="flex-none text-muted-foreground">{countryName(it.country_code)}</span>
                   <span className="w-28 flex-none truncate text-muted-foreground">{STATUS_LABEL[it.status] ?? it.status}</span>
-                  <span className={cn("w-24 flex-none truncate text-right", overdue ? "text-destructive" : "text-muted-foreground")}>
+                  <span className={cn("inline-flex w-24 flex-none items-center justify-end gap-1 truncate text-right", overdue ? "text-destructive" : "text-muted-foreground")}>
+                    {overdue ? <StatusDot tone="error" /> : null}
                     {na ? `шаг ${formatDate(na.due_on)}` : it.last_touch_at ? `касание ${formatDate(it.last_touch_at)}` : "без касаний"}
                   </span>
                 </button>

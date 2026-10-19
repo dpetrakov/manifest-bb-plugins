@@ -224,8 +224,8 @@ export function TemplateEditor({
   if (templateId && !tpl && !error) return <Note>Загружаем шаблон…</Note>;
 
   return (
-    <div className="@container flex h-full min-h-0 flex-col overflow-y-auto @4xl:flex-row @4xl:overflow-hidden">
-      <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 text-sm @4xl:overflow-y-auto">
+    <div className="@container mf-island mf-paper flex h-full min-h-0 flex-col gap-2 overflow-y-auto p-2 @4xl:flex-row @4xl:overflow-hidden">
+      <div className="mf-card flex min-w-0 flex-1 flex-col gap-3 p-3 text-sm @4xl:overflow-y-auto">
         <div className="flex flex-wrap items-center gap-2">
           {embedded ? null : (
             <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => navigate.toPluginPanel(MAIL_PATH, { subPath: "templates" })}>
@@ -288,7 +288,7 @@ export function TemplateEditor({
               type="button"
               title={f.title}
               onClick={() => insert(f.path)}
-              className="rounded-full border border-border px-2 py-0.5 text-[11px] hover:bg-state-hover"
+              className="rounded-full border border-border bg-muted px-2 py-0.5 font-mono text-[11px] hover:bg-state-hover"
             >
               {`{{${f.path}}}`}
             </button>
@@ -353,8 +353,8 @@ export function TemplateEditor({
         ) : null}
       </div>
       {embedded ? null : (
-        <aside className="flex w-full flex-col gap-2 border-t border-border p-3 @4xl:w-96 @4xl:flex-none @4xl:border-l @4xl:border-t-0">
-          <h3 className="text-xs font-semibold">Чаты по шаблону</h3>
+        <aside className="mf-card flex w-full flex-col gap-2 self-start p-3 @4xl:w-96 @4xl:flex-none">
+          <h3 className="text-[13px] font-bold">Чаты по шаблону</h3>
           {templateId ? (
             <ChatsList focus={{ kind: "template", id: templateId, title: draft.name ?? "" }} />
           ) : (

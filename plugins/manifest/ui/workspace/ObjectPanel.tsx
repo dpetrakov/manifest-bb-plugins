@@ -18,6 +18,7 @@ import { Note } from "../RegistryList";
 import { MailingView } from "../mail/MailingView";
 import { TemplateEditor } from "../mail/TemplateEditor";
 import { InboundView } from "./InboundView";
+import { KindLabel } from "../manifest";
 import { KIND_LABEL, fullPagePath, useFocus, useOpenObjectPanel, useStartChat, type FocusRef } from "./state";
 import { useRealtime } from "@get-bb/plugin-sdk/app";
 import { FOCUS_CHANGED } from "./state";
@@ -28,13 +29,13 @@ export function ObjectPanel({ threadId }: PluginThreadPanelProps) {
   const { focus, trail, error, setFocus, back, forget } = useFocus(threadId);
   const navigate = useBbNavigate();
   const [chatsOpen, setChatsOpen] = useState(false);
-  if (focus === undefined) return <Note>{error ?? "Открываем…"}</Note>;
-  if (!focus) return <Note>Этот чат не привязан к объекту Manifest. Объекты открываются из разделов «Аутрич», «Дашборд аутрича», «Почта аутрича».</Note>;
+  if (focus === undefined) return <PanelNote>{error ?? "Открываем…"}</PanelNote>;
+  if (!focus) return <PanelNote>Этот чат не привязан к объекту Manifest. Объекты открываются из разделов «Аутрич», «Дашборд аутрича», «Почта аутрича».</PanelNote>;
   const open = (ref: FocusRef) => void setFocus(ref);
   const full = fullPagePath(focus, threadId);
   return (
-    <div className="@container mf-root flex h-full min-h-0 flex-col">
-      <header className="flex flex-col gap-1 border-b border-border px-3 py-2">
+    <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
+      <header className="mf-surface flex flex-col gap-1 border-b border-border px-3 py-2">
         {trail.length > 0 ? (
           <nav aria-label="Цепочка объектов" className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
             {trail.slice(-3).map((r) => (
@@ -46,8 +47,8 @@ export function ObjectPanel({ threadId }: PluginThreadPanelProps) {
         ) : null}
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{KIND_LABEL[focus.kind]}</div>
-            <div className="truncate text-sm font-semibold">{focus.title || KIND_LABEL[focus.kind]}</div>
+            <KindLabel>{KIND_LABEL[focus.kind]}</KindLabel>
+            <div className="truncate text-base font-bold leading-snug">{focus.title || KIND_LABEL[focus.kind]}</div>
           </div>
           <Button size="sm" variant="ghost" className="h-8" onClick={() => setChatsOpen(!chatsOpen)} aria-expanded={chatsOpen}>
             Чаты
@@ -61,6 +62,15 @@ export function ObjectPanel({ threadId }: PluginThreadPanelProps) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <FocusBody focus={focus} threadId={threadId} onOpen={open} onBack={() => void forget(focus)} />
       </div>
+    </div>
+  );
+}
+
+/** Подсказка панели — на «бумаге» Manifest, как и виджеты. */
+function PanelNote({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mf-island mf-paper h-full">
+      <Note>{children}</Note>
     </div>
   );
 }
@@ -174,7 +184,7 @@ export function FocusHeader({ threadId, isCompactViewport }: PluginThreadHeaderA
     <Button
       size="sm"
       variant="ghost"
-      className="h-8 max-w-[16rem] gap-1 px-2 text-xs"
+      className="mf-focus-button h-8 max-w-[16rem] gap-1 px-2 text-xs"
       aria-label={`Открыть справа: ${KIND_LABEL[focus.kind]} ${focus.title}`}
       onClick={() => openPanel(focus.title || KIND_LABEL[focus.kind])}
     >

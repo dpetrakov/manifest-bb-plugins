@@ -27,6 +27,7 @@ import {
 import { Note, PriorityBadge } from "./RegistryList";
 import type { Card } from "./types";
 import { CompanyMail } from "./mail/CompanyMail";
+import { Badge, COMPANY_STATUS_TONE, KindLabel } from "./manifest";
 
 export function CardTab({ subPath }: PluginNavPanelProps) {
   return <CardView companyId={subPath.split("/")[0] ?? ""} />;
@@ -85,14 +86,20 @@ export function CardView({ companyId, header }: { companyId: string; header?: Re
   const persons = new Map(card.persons.map((p) => [p.id, p.full_name]));
 
   return (
-    <div className="@container mf-root flex h-full min-h-0 flex-col overflow-y-auto px-3 py-3 text-sm">
+    <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col gap-2 overflow-y-auto px-3 py-3 text-sm">
       {header}
-      <h2 className="text-base font-semibold">{c.display_name}</h2>
-      <p className="text-xs text-muted-foreground">
-        {KIND_LABEL[c.kind] ?? c.kind} · {countryName(c.country_code)} · {regionLabel(c.region)}
-      </p>
+      <div className="flex flex-col gap-1">
+        <KindLabel>Организация</KindLabel>
+        <h2 className="m-0 text-base font-bold leading-snug">{c.display_name}</h2>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <Badge tone={COMPANY_STATUS_TONE[c.status] ?? "muted"}>{STATUS_LABEL[c.status] ?? c.status}</Badge>
+          <span>
+            {KIND_LABEL[c.kind] ?? c.kind} · {countryName(c.country_code)} · {regionLabel(c.region)}
+          </span>
+        </div>
+      </div>
       {error && (
-        <p role="alert" className="mt-2 rounded-md border border-destructive/40 px-2 py-1 text-xs text-destructive">
+        <p role="alert" className="rounded-md border border-destructive/40 bg-background px-2 py-1 text-xs text-destructive">
           {error}
         </p>
       )}
@@ -347,8 +354,8 @@ function WorkBlock({
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="mt-3 border-t border-border pt-2">
-      <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
+    <section className="mf-card px-3 py-2">
+      <h3 className="mb-1.5 text-[13px] font-bold">{title}</h3>
       {children}
     </section>
   );

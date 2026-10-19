@@ -14,6 +14,7 @@ import { PANEL_ID, PANEL_PATH } from "./ui/hooks";
 import { OutreachPage } from "./ui/OutreachPage";
 import { FOOTER_LABEL, SuppliersList, SuppliersSwitch, requestSuppliersToggle } from "./ui/SuppliersList";
 import "./ui/suppliers.css";
+import "./ui/manifest/manifest.css";
 import { DashboardPage, TopicBar } from "./ui/dashboard/DashboardPage";
 import { AttentionAccessory } from "./ui/dashboard/Accessory";
 import { DASHBOARD_ID, DASHBOARD_PATH } from "./ui/dashboard/state";

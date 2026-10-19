@@ -102,7 +102,8 @@ export function rulesFor(ref: FocusRef, opts: { work: boolean; mail: boolean }):
         opts.mail
           ? "Письмо — только через черновик: шаблон (mail_templates) → mail_draft_create → письмо видно справа в карточке; в ответ его не печатай. " +
             "Правки — mail_draft_update с темой/текстом целиком, подстановки оставляй переменными. " +
-            "Отправить то же письмо другим организациям — mail_mailing_create {from_company}: рассылка откроется справа, и тред продолжит работу с ней."
+            "Отправить то же письмо другим организациям — mail_mailing_create {from_company}: рассылка откроется справа, и тред продолжит работу с ней. " +
+            "Отправляет человек кнопкой «Отправить» (инструмента у тебя нет); отправленные письма и их статусы — mail_messages {company_id}, ответы — в mail_message_get."
           : "",
       ]
         .filter(Boolean)
@@ -113,7 +114,7 @@ export function rulesFor(ref: FocusRef, opts: { work: boolean; mail: boolean }):
         "Получатели — mail_mailing_add / mail_mailing_remove (company_ids или filter), текст — mail_mailing_update целиком, " +
           "с подстановками и фрагментами [[ … || … ]], чтобы письмо подходило каждому. Сводка — mail_mailing_get, письмо получателя — mail_mailing_letter.",
         "Список получателей и письма в ответ не печатай — пользователь видит их справа. Удалить рассылку — mail_mailing_discard, только по явной просьбе.",
-        "Отправляет человек кнопкой; ты не отправляешь.",
+        "Отправляет и останавливает рассылку человек кнопкой; ты не отправляешь. После отправки прогресс — в mail_mailing_get (progress), ответы ведутся в чатах организаций.",
       ].join("\n");
     case "template":
       return [

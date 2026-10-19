@@ -7,9 +7,11 @@ import { useRealtime, type PluginMessageDirectiveProps } from "@get-bb/plugin-sd
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { MAILING_CHANGED, errorText, useStatus, useTool } from "../hooks";
+import { Badge, KindLabel, Status, StatusDot } from "../manifest";
 import { countryName, formatDateTime } from "../labels";
 import type { Mailing, MailingLetter } from "./common";
 import { PreviewCard } from "./LetterView";
+import { MailingSendBar } from "./send";
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -53,7 +55,9 @@ export function useMailing(id: string) {
 export function MailingView({ id, onOpenCompany, onDeleted }: { id: string; onOpenCompany?: (companyId: string) => void; onDeleted?: () => void }) {
   const tool = useTool();
   const { status } = useStatus();
-  const { mailing, error, reload } = useMailing(id);
+  const { mailing: loaded, error, reload } = useMailing(id);
+  const [fresh, setFresh] = useState<Mailing | null>(null);
+  const mailing = fresh && loaded && fresh.updated_at >= loaded.updated_at ? fresh : loaded;
   const [current, setCurrent] = useState<string | null>(null);
   const [letter, setLetter] = useState<MailingLetter | null>(null);
   const [letterError, setLetterError] = useState<string | null>(null);
@@ -76,7 +80,8 @@ export function MailingView({ id, onOpenCompany, onDeleted }: { id: string; onOp
   };
 
   const recipients = mailing?.recipients ?? [];
-  const shown = onlyProblems ? recipients.filter((r) => !r.ready) : recipients;
+  const sent = !!mailing && mailing.state !== "draft";
+  const shown = onlyProblems ? recipients.filter((r) => (sent ? r.replied : !r.ready)) : recipients;
   const selected = current && shown.some((r) => r.company_id === current) ? current : (shown[0]?.company_id ?? null);
   const stamp = mailing?.updated_at ?? "";
 
@@ -122,26 +127,47 @@ export function MailingView({ id, onOpenCompany, onDeleted }: { id: string; onOp
   };
 
   return (
-    <div className="@container mf-root flex flex-col gap-3 rounded-lg border border-border bg-background p-3 text-xs">
-      <header className="flex flex-wrap items-baseline gap-2">
-        <h3 className="text-sm font-semibold">{mailing.name}</h3>
+    <div className="@container mf-root mf-island mf-card flex flex-col gap-3 p-3 text-xs">
+      <header className="flex flex-col gap-0.5">
+        <KindLabel>Рассылка</KindLabel>
+        <h3 className="m-0 text-base font-bold leading-snug">{mailing.name}</h3>
         <span className="text-muted-foreground">
           {mailing.template_name ? `по шаблону «${mailing.template_name}»${mailing.edited ? " · изменён" : ""}` : "без шаблона"} ·{" "}
           {formatDateTime(mailing.updated_at)}
         </span>
       </header>
-      <div className="flex flex-wrap gap-2">
-        <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-emerald-700">Уйдёт: {mailing.ready}</span>
-        <span className={cn("rounded-md px-2 py-1", mailing.skipped ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground")}>
-          Не уйдёт: {mailing.skipped}
-        </span>
-        <span className="rounded-md bg-muted px-2 py-1 text-muted-foreground">Всего: {mailing.total}</span>
-      </div>
-      {Object.keys(mailing.reasons).length > 0 ? (
-        <ul className="text-destructive">
+      {sent && mailing.progress ? (
+        <div className="flex flex-wrap gap-2">
+          <Status tone="ok" className="rounded-md border border-border bg-background px-2 py-1 font-semibold">Отправлено: {mailing.progress.sent}</Status>
+          {mailing.progress.in_channel ? (
+            <Status tone="info" className="rounded-md border border-border bg-background px-2 py-1 font-semibold">В очереди: {mailing.progress.in_channel}</Status>
+          ) : null}
+          {mailing.progress.failed ? (
+            <Status tone="error" className="rounded-md border border-border bg-background px-2 py-1 font-semibold">Недоставка: {mailing.progress.failed}</Status>
+          ) : null}
+          {mailing.progress.cancelled ? (
+            <Status tone="muted" className="rounded-md border border-border bg-background px-2 py-1 font-semibold">Снято: {mailing.progress.cancelled}</Status>
+          ) : null}
+          <Badge tone="volt" className="self-center">ответов: {mailing.progress.replies}</Badge>
+          {mailing.progress.unsubscribes ? <Badge tone="muted" className="self-center">отписок: {mailing.progress.unsubscribes}</Badge> : null}
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <Status tone="ok" className="rounded-md border border-border bg-background px-2 py-1 font-semibold">Уйдёт: {mailing.ready}</Status>
+          <Status tone={mailing.skipped ? "warning" : "muted"} className="rounded-md border border-border bg-background px-2 py-1 font-semibold">
+            Не уйдёт: {mailing.skipped}
+          </Status>
+          <Badge tone="muted" className="self-center">Всего: {mailing.total}</Badge>
+        </div>
+      )}
+      <MailingSendBar mailing={mailing} onChanged={(m) => setFresh(m)} />
+      {!sent && Object.keys(mailing.reasons).length > 0 ? (
+        <ul className="flex flex-col gap-0.5 text-foreground">
           {Object.entries(mailing.reasons).map(([r, n]) => (
             <li key={r}>
-              {r} — {n}
+              <Status tone="warning">
+                {r} — {n}
+              </Status>
             </li>
           ))}
         </ul>
@@ -153,17 +179,21 @@ export function MailingView({ id, onOpenCompany, onDeleted }: { id: string; onOp
           <div className="flex min-w-0 flex-col gap-1">
             <label className="flex items-center gap-1 text-muted-foreground">
               <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} />
-              Только с проблемами
+              {sent ? "Только ответившие" : "Только с проблемами"}
             </label>
-            <ul className="max-h-[520px] overflow-y-auto rounded-md border border-border">
+            <ul className="max-h-[520px] overflow-y-auto rounded-md border border-border bg-background">
               {shown.map((r) => (
-                <li key={r.company_id} className={cn("flex items-center gap-1 border-b border-border last:border-0", r.company_id === selected && "bg-state-active")}>
+                <li key={r.company_id} className={cn("flex items-center gap-1 border-b border-border last:border-0", r.company_id === selected && "bg-muted shadow-[inset_2px_0_0_var(--foreground)]")}>
                   <button type="button" className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left" onClick={() => setCurrent(r.company_id)}>
-                    <span className={cn("size-2 flex-none rounded-full", r.ready ? "bg-emerald-500" : "bg-destructive")} title={r.ready ? "уйдёт" : r.problems.join("; ")} />
+                    <StatusDot
+                      tone={sent ? (r.tone ?? "muted") : r.ready ? "ok" : "warning"}
+                      title={sent ? (r.status_text ?? r.problems.join("; ")) : r.ready ? "уйдёт" : r.problems.join("; ")}
+                    />
                     <span className="min-w-0 flex-1 truncate">{r.company_name}</span>
-                    <span className="flex-none text-muted-foreground">{countryName(r.country_code)}</span>
+                    {r.replied ? <Badge tone="volt">ответ</Badge> : null}
+                    <span className="flex-none text-muted-foreground">{sent ? (r.status_text ?? "не отправлялось") : countryName(r.country_code)}</span>
                   </button>
-                  {canEdit ? (
+                  {canEdit && !sent ? (
                     <button
                       type="button"
                       disabled={busy}
@@ -207,9 +237,11 @@ export function MailingView({ id, onOpenCompany, onDeleted }: { id: string; onOp
       )}
       <div className="flex flex-wrap items-center gap-2">
         <p className="flex-1 text-[11px] text-muted-foreground">
-          Текст правится через агента — письмо пересоберётся для каждого. Отправка — следующая версия плагина, нажимает человек.
+          {sent
+            ? "Рассылка отправлена: текст и получатели не меняются. Ответы поставщиков ведутся в чатах их организаций."
+            : "Текст правится через агента — письмо пересоберётся для каждого. Отправляет человек кнопкой."}
         </p>
-        {canEdit && mailing.state !== "sent" ? (
+        {canEdit && !sent ? (
           confirmDelete ? (
             <span className="flex items-center gap-1">
               <span className="text-destructive">Удалить рассылку целиком?</span>
@@ -221,7 +253,7 @@ export function MailingView({ id, onOpenCompany, onDeleted }: { id: string; onOp
               </Button>
             </span>
           ) : (
-            <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => setConfirmDelete(true)}>
+            <Button size="sm" variant="outline" className="h-7 border-destructive/50 text-destructive" onClick={() => setConfirmDelete(true)}>
               Удалить рассылку
             </Button>
           )

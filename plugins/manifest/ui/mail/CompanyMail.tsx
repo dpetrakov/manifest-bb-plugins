@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { errorText, useCompanyChanged, useStatus, useTool } from "../hooks";
+import { ModeBadge, Status } from "../manifest";
 import { MAIL_PATH, selectCls, type CompanySender, type LegalEntity, type Mailing, type Template } from "./common";
 import { LetterView, useLetter } from "./LetterView";
+import { SendLetterButton, SentLetters } from "./send";
 
 const SOURCE_LABEL: Record<string, string> = {
   company: "задан для организации",
@@ -67,10 +69,17 @@ export function CompanyMail({ companyId }: { companyId: string }) {
           <span className="font-medium">{cs.sender.display_name}</span>{" "}
           <span className="text-muted-foreground">&lt;{cs.sender.address}&gt;</span>
           {cs.legal_entity ? <span className="text-muted-foreground"> · {cs.legal_entity.name}</span> : null}
+          {/* режим показываем, только если Manifest его прислал: без поля «бой» был бы неправдой */}
+          {cs.legal_entity && "sandbox" in cs.legal_entity ? (
+            <>
+              {" "}
+              <ModeBadge sandbox={cs.legal_entity.sandbox} />
+            </>
+          ) : null}
         </p>
       ) : null}
       <p className="text-muted-foreground">Отправитель {SOURCE_LABEL[cs.source] ?? cs.source}.</p>
-      {cs.problem ? <p className="text-destructive">Отправка невозможна: {cs.problem}</p> : null}
+      {cs.problem ? <Status tone="error">Отправка невозможна: {cs.problem}</Status> : null}
       {canEdit && entities ? (
         <select
           className={selectCls}
@@ -90,6 +99,29 @@ export function CompanyMail({ companyId }: { companyId: string }) {
       ) : null}
       {error ? <p className="text-destructive">{error}</p> : null}
       <DraftBlock companyId={companyId} canEdit={canEdit} />
+      <SentBlock companyId={companyId} canEdit={canEdit} />
+    </div>
+  );
+}
+
+/** Отправленные письма организации (W-20): статус, ответы, «Ответить». */
+function SentBlock({ companyId, canEdit }: { companyId: string; canEdit: boolean }) {
+  const tool = useTool();
+  const [problem, setProblem] = useState<string | null>(null);
+  const reply = async (inboundId: string) => {
+    setProblem(null);
+    try {
+      // The draft of the answer appears above, in «Письмо» (signal «company changed»).
+      await tool("mail_reply_draft_create", { inbound_id: inboundId });
+    } catch (e) {
+      setProblem(errorText(e));
+    }
+  };
+  return (
+    <div className="mt-2 flex flex-col gap-2 border-t border-[var(--mf-line-200)] pt-2">
+      <p className="font-semibold">Отправленные</p>
+      {problem ? <p className="text-destructive">{problem}</p> : null}
+      <SentLetters companyId={companyId} onReply={canEdit ? (id) => void reply(id) : undefined} />
     </div>
   );
 }
@@ -129,16 +161,19 @@ function DraftBlock({ companyId, canEdit }: { companyId: string; canEdit: boolea
   };
 
   return (
-    <div className="mt-2 flex flex-col gap-2 border-t border-border pt-2">
-      <p className="font-medium">Письмо</p>
+    <div className="mt-2 flex flex-col gap-2 border-t border-[var(--mf-line-200)] pt-2">
+      <p className="font-semibold">Письмо</p>
       {error ? <p className="text-destructive">{error}</p> : null}
       {problem ? <p className="text-destructive">{problem}</p> : null}
       {letter ? (
         <>
           <LetterView letter={letter} compact />
-          <p className="text-[11px] text-muted-foreground">Правьте через чат с агентом: «сделай короче», «спроси про цепи» — письмо обновится здесь и в чате.</p>
+          <SendLetterButton letter={letter} companyId={companyId} onSent={() => reload()} />
+          <p className="text-[11px] text-muted-foreground">
+            {letter.draft.reply_to_inbound_id ? "Ответ поставщику. " : ""}Правьте через чат с агентом: «сделай короче», «спроси про цепи» — письмо обновится здесь. Отправляет человек кнопкой.
+          </p>
           {canEdit ? (
-            <div>
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
                 variant="outline"
@@ -159,7 +194,8 @@ function DraftBlock({ companyId, canEdit }: { companyId: string; canEdit: boolea
               >
                 Разослать и другим
               </Button>
-              <Button size="sm" variant="ghost" className="h-7 text-destructive" disabled={busy} onClick={() => void run("mail_draft_discard", { company_id: companyId })}>
+              <span className="flex-1" />
+              <Button size="sm" variant="outline" className="h-7 border-destructive/50 text-destructive" disabled={busy} onClick={() => void run("mail_draft_discard", { company_id: companyId })}>
                 Удалить черновик
               </Button>
             </div>

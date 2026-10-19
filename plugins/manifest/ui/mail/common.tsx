@@ -99,10 +99,16 @@ export interface Preview {
   from_name: string;
   problems: string[];
   sample: boolean;
+  /** Who the letter goes from; the legal entity tells sandbox or live (W-20). */
+  sender?: { legal_entity: { name: string; sandbox: boolean } | null } | null;
 }
 
 export interface Inbound {
   id: string;
+  /** W-20: our letters answering it. */
+  answers?: { id: string; status: string; status_text: string; tone: string; created_at: string; created_by: string }[];
+  letter?: { id: string; subject: string; mailing_id: string | null; mailing_name: string } | null;
+  sandbox?: boolean;
   received_at: string;
   kind: string;
   from_address: string;
@@ -129,10 +135,13 @@ export interface Letter {
     subject: string;
     body: string;
     edited: boolean;
+    reply_to_inbound_id?: string | null;
     updated_at: string;
     updated_by: string;
   };
   preview: Preview;
+  /** What goes out; sending requires the one the person confirmed (W-20). */
+  fingerprint?: string;
 }
 
 export interface MailingRecipient {
@@ -145,6 +154,13 @@ export interface MailingRecipient {
   from: string;
   ready: boolean;
   problems: string[];
+  /** After sending (W-20): the letter of this recipient and how it went. */
+  message_id?: string;
+  status?: string;
+  status_text?: string;
+  tone?: "ok" | "info" | "warning" | "error" | "muted";
+  sent_at?: string | null;
+  replied?: boolean;
 }
 
 /** One letter for many recipients (W-17). */
@@ -166,6 +182,11 @@ export interface Mailing {
   recipients: MailingRecipient[];
   updated_at: string;
   updated_by: string;
+  /** W-20: progress of a sent mailing; mode and senders of the ready letters. */
+  progress?: import("./send").MailingProgress | null;
+  mode?: "sandbox" | "live" | "mixed" | "";
+  senders?: import("./send").SenderCount[];
+  fingerprint?: string;
 }
 
 export interface MailingLetter {

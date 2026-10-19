@@ -28,6 +28,7 @@ import { InboundView } from "../workspace/InboundView";
 import { useOpenCompany, type FocusRef } from "../workspace/state";
 import { MailingView } from "./MailingView";
 import type { Mailing } from "./common";
+import { ModeBadge, Status } from "../manifest";
 
 const TABS: [string, string][] = [
   ["templates", "Шаблоны"],
@@ -40,15 +41,15 @@ const TABS: [string, string][] = [
 function ObjectPage({ back, backLabel, focus, children }: { back: string; backLabel: string; focus: FocusRef; children: React.ReactNode }) {
   const navigate = useBbNavigate();
   return (
-    <div className="@container h-full overflow-y-auto">
+    <div className="@container mf-root mf-island mf-paper h-full overflow-y-auto">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 p-3">
         <button type="button" className="self-start text-xs text-muted-foreground hover:underline" onClick={() => navigate.toPluginPanel(MAIL_PATH, { subPath: back })}>
           {backLabel}
         </button>
         <div className="flex flex-col gap-4 @4xl:flex-row">
           <div className="min-w-0 flex-1">{children}</div>
-          <aside className="flex w-full flex-col gap-2 @4xl:w-96 @4xl:flex-none">
-            <h3 className="text-xs font-semibold">Чаты</h3>
+          <aside className="mf-card flex w-full flex-col gap-2 self-start p-3 @4xl:w-96 @4xl:flex-none">
+            <h3 className="text-[13px] font-bold">Чаты</h3>
             <ChatsList focus={focus} />
           </aside>
         </div>
@@ -67,7 +68,7 @@ export function MailPage({ subPath }: PluginNavPanelProps) {
   if (!status.canMail) return <Note>Почта появится после обновления Manifest: на сервере ещё нет почтового слоя.</Note>;
   if (head === "tpl") {
     return (
-      <div className="@container h-full">
+      <div className="@container mf-root mf-island mf-paper h-full">
         <TemplateEditor key={rest} templateId={rest && rest !== "new" ? rest : null} />
       </div>
     );
@@ -92,8 +93,8 @@ export function MailPage({ subPath }: PluginNavPanelProps) {
     );
   }
   return (
-    <div className="@container mf-root flex h-full min-h-0 flex-col">
-      <div className="flex gap-1 border-b border-border px-3">
+    <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
+      <div className="mf-surface flex gap-1 overflow-x-auto border-b border-border px-3">
         {TABS.map(([k, label]) => (
           <button
             key={k}
@@ -149,7 +150,7 @@ function Templates() {
       ) : items.length === 0 ? (
         <Note>Шаблонов пока нет. Создайте первый — агент поможет с текстом.</Note>
       ) : (
-        <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+        <ul className="flex flex-col divide-y divide-border mf-card overflow-hidden">
           {items.map((t) => (
             <li key={t.id}>
               <button
@@ -196,7 +197,7 @@ function Mailings() {
     );
   }
   return (
-    <ul className="flex flex-col divide-y divide-border rounded-lg border border-border text-sm">
+    <ul className="flex flex-col divide-y divide-border mf-card overflow-hidden text-sm">
       {items.map((m) => (
         <li key={m.id}>
           <button
@@ -204,7 +205,9 @@ function Mailings() {
             onClick={() => navigate.toPluginPanel(MAIL_PATH, { subPath: `mailing/${m.id}` })}
             className="flex w-full items-baseline justify-between gap-2 px-3 py-2 text-left hover:bg-state-hover"
           >
-            <span className="font-medium">{m.name}</span>
+            <Status tone={m.skipped ? "warning" : m.total ? "ok" : "muted"} className="font-medium">
+              {m.name}
+            </Status>
             <span className="text-[11px] text-muted-foreground">
               {m.total} получ. · {m.template_name || "без шаблона"} · {formatDateTime(m.updated_at)}
             </span>
@@ -267,20 +270,24 @@ function Entities() {
       {error ? <p className="rounded-md border border-destructive/40 px-2 py-1 text-xs text-destructive">{error}</p> : null}
       {items.length === 0 ? <Note>Юрлиц пока нет. Их заводит администратор в вебе Manifest («Аутрич → Почта»).</Note> : null}
       {items.map((e) => (
-        <section key={e.id} className="rounded-lg border border-border p-3">
+        <section key={e.id} className="mf-card overflow-hidden p-3">
           <header className="flex flex-wrap items-baseline gap-2">
             <h3 className="font-semibold">{e.name}</h3>
             <span className="text-xs text-muted-foreground">{e.subdomain}</span>
-            {e.sandbox ? <span className="rounded-full border border-border px-1.5 text-[11px]">песочница</span> : null}
+            <ModeBadge sandbox={e.sandbox} />
             <span className="flex-1" />
-            <span className={cn("text-xs", e.health_ok ? "text-emerald-600" : "text-destructive")}>
+            <Status tone={e.health_ok == null ? "muted" : e.health_ok ? "ok" : "error"} className="text-xs">
               {e.health_ok == null ? "канал не проверялся" : e.health_ok ? "канал в порядке" : `канал: ${e.health_error || "ошибка"}`}
-            </span>
+            </Status>
             <Button size="sm" variant="ghost" className="h-7" disabled={busy || !canSettings} onClick={() => void run("mail_entity_health", { id: e.id })}>
               Проверить
             </Button>
           </header>
-          {!e.ready ? <p className="mt-1 text-xs text-destructive">Не готово к отправке: {e.ready_problems.join(", ")}</p> : null}
+          {!e.ready ? (
+            <Status tone="error" className="mt-1 text-xs">
+              Не готово к отправке: {e.ready_problems.join(", ")}
+            </Status>
+          ) : null}
           {e.quota ? (
             <p className="mt-1 text-xs text-muted-foreground">
               Сегодня {e.quota.sent_today} из {e.quota.daily_limit} (прогрев {e.quota.warmup_stage}) · в очереди {e.quota.queue_depth}
@@ -294,11 +301,11 @@ function Entities() {
                 <span className="font-medium">{s.display_name}</span>
                 <span className="text-muted-foreground">&lt;{s.address}&gt;</span>
                 {s.registered_at ? (
-                  <span className="text-emerald-600">зарегистрирован</span>
+                  <Status tone="ok">зарегистрирован</Status>
                 ) : (
-                  <span className="text-destructive" title={s.register_error}>
+                  <Status tone="error" title={s.register_error}>
                     не зарегистрирован
-                  </span>
+                  </Status>
                 )}
               </li>
             ))}
@@ -307,7 +314,7 @@ function Entities() {
         </section>
       ))}
       {defaults ? (
-        <section className="rounded-lg border border-border p-3">
+        <section className="mf-card overflow-hidden p-3">
           <h3 className="mb-2 font-semibold">Отправитель по умолчанию</h3>
           <p className="mb-2 text-xs text-muted-foreground">Подставляется организации при первом письме и записывается в её карточку.</p>
           <div className="grid gap-2 text-xs @md:grid-cols-2">
@@ -385,15 +392,15 @@ function InboundList() {
   if (!items) return <Note>{error ?? "Загружаем…"}</Note>;
   if (items.length === 0) return <Note>Неразобранных писем нет: все входящие привязаны к организациям.</Note>;
   return (
-    <ul className="flex flex-col divide-y divide-border rounded-lg border border-border text-sm">
+    <ul className="flex flex-col divide-y divide-border mf-card overflow-hidden text-sm">
       {error ? <li className="px-3 py-1 text-xs text-destructive">{error}</li> : null}
       {items.map((x) => (
         <li key={x.id} className="px-3 py-2">
           <button type="button" className="flex w-full flex-col text-left" onClick={() => setOpen(open === x.id ? null : x.id)}>
             <span className="flex justify-between gap-2 text-xs">
-              <span className="truncate font-medium">
+              <Status tone="warning" className="truncate font-medium">
                 {x.from_name ? `${x.from_name} <${x.from_address}>` : x.from_address}
-              </span>
+              </Status>
               <span className="flex-none text-muted-foreground">
                 {INBOUND_KIND_LABEL[x.kind] ?? x.kind} · {formatDateTime(x.received_at)}
               </span>

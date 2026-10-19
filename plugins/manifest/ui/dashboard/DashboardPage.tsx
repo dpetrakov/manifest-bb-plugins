@@ -60,8 +60,8 @@ function Dashboard({ topicId }: { topicId: string | null }) {
     navigate.toThread(topicId);
   };
   return (
-    <div className="@container mf-root flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs">
+    <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
+      <div className="mf-surface flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs">
         <span className="flex-1 text-muted-foreground">
           {topicId
             ? "Дашборд темы. Работа с агентом — в чате темы: дашборд будет справа от него."
@@ -99,7 +99,7 @@ export function DashboardBody({ topicId, onOpenCompany }: { topicId: string | nu
   const pick = (next: Partial<Filter>) => void setFilter({ ...filter, ...next });
 
   return (
-    <div className="@container flex min-w-0 flex-col gap-3 p-3">
+    <div className="@container mf-island mf-paper flex min-w-0 flex-col gap-3 p-3">
       <FilterBar
         filter={filter}
         onChange={(f) => void setFilter(f)}
@@ -108,7 +108,7 @@ export function DashboardBody({ topicId, onOpenCompany }: { topicId: string | nu
         canSave={!!status?.canManage}
       />
       {filterError || data.error ? (
-        <p role="alert" className="rounded-md border border-destructive/40 px-2 py-1 text-xs text-destructive">
+        <p role="alert" className="rounded-md border border-destructive/40 bg-background px-2 py-1 text-xs text-destructive">
           {filterError ?? data.error}
         </p>
       ) : null}
@@ -186,8 +186,9 @@ function NewTopic() {
   );
 
   return (
+    <div className="mf-island mf-paper h-full">
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col justify-end gap-3 px-4 pb-4">
-      <h2 className="text-base font-semibold">Новая тема дашборда</h2>
+      <h2 className="text-base font-bold">Новая тема дашборда</h2>
       <p className="text-sm text-muted-foreground">
         Тема — отдельный чат с агентом со своим фильтром дашборда. Попросите, например: «покажи, кому пора напомнить в
         Азии», «какие организации без контактного лица» или «перенеси просроченные шаги на понедельник» — агент подготовит
@@ -200,6 +201,7 @@ function NewTopic() {
         placeholder="Что сделать в этой теме?"
         onSubmit={(request) => create(request as Parameters<typeof sdk.threads.spawn>[0])}
       />
+    </div>
     </div>
   );
 }

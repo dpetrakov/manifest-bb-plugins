@@ -57,6 +57,12 @@ export const STATUS_CHANGED = "manifest-status-changed";
 export const REGISTRY_CHANGED = "manifest-registry-changed";
 /** A mailing changed (W-17): directives and the mail page reload it. */
 export const MAILING_CHANGED = "manifest-mailing-changed";
+/** A sent letter changed (W-20); payload { id, companyId }. */
+export const LETTER_CHANGED = "manifest-letter-changed";
+/** An inbound message changed or arrived (W-20); payload { id }. */
+export const INBOUND_CHANGED = "manifest-inbound-changed";
+/** How often the plugin asks Manifest what changed in mail (sending.md §4.4). */
+export const MAIL_POLL_MS = 45_000;
 /** Realtime channel: the filter of a dashboard topic changed; payload { threadId, filter }. */
 export const TOPIC_FILTER = "manifest-topic-filter";
 /** Realtime channel: the list of dashboard topics changed. */
@@ -83,6 +89,8 @@ const statusSchema = z.object({
   /** Manifest has the mail layer: legal entities, senders, templates, inbound (W-16). */
   canMail: z.boolean(),
   canMailSettings: z.boolean(),
+  /** May send letters (outreach.send, W-20). */
+  canSend: z.boolean(),
   /** unauthorized | unavailable | contract | null */
   problem: z.string().nullable(),
   message: z.string(),
@@ -115,6 +123,8 @@ export const rpcContract = defineRpcContract({
     output: z.object({ result: z.unknown() }),
   },
   chat_get: { input: z.object({ companyId: z.string().min(1).max(64) }), output: z.object({ threadId: z.string().nullable() }) },
+  /** Ask Manifest what changed in mail now and signal the widgets (W-20). */
+  mail_refresh: { input: z.null(), output: z.object({ ok: z.boolean() }) },
   chat_link: {
     input: z.object({ companyId: z.string().min(1).max(64), threadId: z.string().min(1).max(64) }),
     output: z.object({ ok: z.boolean() }),
@@ -223,6 +233,19 @@ export default async function plugin(bb: BbPluginApi) {
   /** Publishes the «changed» signals after a mutating tool. */
   function changed(name: string, args: Record<string, unknown>, structured: unknown) {
     if (READ_TOOLS.has(name)) return;
+    if (name === "mail_send" || name === "mail_message_cancel") {
+      const x = structured as { id?: unknown; company_id?: unknown } | null;
+      const companyId = typeof x?.company_id === "string" ? x.company_id : typeof args.company_id === "string" ? args.company_id : null;
+      if (typeof x?.id === "string") bb.realtime.publish(LETTER_CHANGED, { id: x.id, companyId });
+      if (companyId) bb.realtime.publish(COMPANY_CHANGED, { companyId });
+      return;
+    }
+    if (name === "mail_reply_draft_create") {
+      const companyId = (structured as { draft?: { company_id?: unknown } } | null)?.draft?.company_id;
+      if (typeof companyId === "string") bb.realtime.publish(COMPANY_CHANGED, { companyId });
+      if (typeof args.inbound_id === "string") bb.realtime.publish(INBOUND_CHANGED, { id: args.inbound_id });
+      return;
+    }
     if (name.startsWith("mail_mailing")) {
       const id = typeof args.id === "string" ? args.id : (structured as { id?: unknown } | null)?.id;
       if (typeof id === "string") bb.realtime.publish(MAILING_CHANGED, { id, deleted: name === "mail_mailing_discard" });
@@ -252,7 +275,7 @@ export default async function plugin(bb: BbPluginApi) {
     const c = await connection();
     const base: Status = {
       connected: false, url: c.url, email: c.email, canView: false, canManage: false, canWork: false, canMail: false,
-      canMailSettings: false, problem: null, message: "",
+      canMailSettings: false, canSend: false, problem: null, message: "",
     };
     if (!c.url || !c.token) return { ...base, problem: "unauthorized", message: "Плагин не подключён: войдите в настройках плагина." };
     try {
@@ -264,6 +287,7 @@ export default async function plugin(bb: BbPluginApi) {
         can_manage_outreach?: boolean;
         capabilities?: string[];
         can_mail_settings?: boolean;
+        can_send?: boolean;
       };
       if (who.contract !== CONTRACT_VERSION) {
         return { ...base, problem: "contract", message: `Версия Manifest не совпадает с плагином (контракт ${who.contract ?? "?"}, нужен ${CONTRACT_VERSION}). Обновите плагин.` };
@@ -287,6 +311,7 @@ export default async function plugin(bb: BbPluginApi) {
         canWork,
         canMail,
         canMailSettings: !!who.can_mail_settings,
+        canSend: !!who.can_send,
       };
     } catch (error) {
       if (error instanceof ManifestError) return { ...base, problem: error.code === "unauthorized" ? "unauthorized" : "unavailable", message: error.message };
@@ -294,8 +319,13 @@ export default async function plugin(bb: BbPluginApi) {
     }
   }
 
+  let mailCursor = "";
   bb.rpc.register(rpcContract, {
     status: () => status(),
+    mail_refresh: async () => {
+      await pollMail();
+      return { ok: true };
+    },
     login: async ({ url, email, password }) => {
       const base = normalizeBaseUrl(url);
       const old = await connection();
@@ -823,5 +853,31 @@ export default async function plugin(bb: BbPluginApi) {
   // synchronous and must not wait for a panel to ask for the status.
   void status().catch(() => undefined);
 
-  bb.onDispose(() => bb.log.info("disposed"));
+  // Live statuses (W-20, sending.md §4.4): statuses change in Manifest's sync, not in
+  // the plugin, so the plugin asks what changed and signals the widgets.
+  async function pollMail() {
+    if (!mailCapability) return;
+    const c = await connection();
+    if (!c.url || !c.token) return;
+    const { structured } = await call("mail_changes", mailCursor ? { after: mailCursor } : {}, "panel");
+    const ch = structured as {
+      cursor?: string;
+      letters?: { id: string; company_id: string | null }[];
+      mailings?: string[];
+      inbound?: string[];
+      companies?: string[];
+    } | null;
+    if (!ch) return;
+    for (const l of ch.letters ?? []) bb.realtime.publish(LETTER_CHANGED, { id: l.id, companyId: l.company_id });
+    for (const id of ch.mailings ?? []) bb.realtime.publish(MAILING_CHANGED, { id, deleted: false });
+    for (const id of ch.inbound ?? []) bb.realtime.publish(INBOUND_CHANGED, { id });
+    for (const companyId of ch.companies ?? []) bb.realtime.publish(COMPANY_CHANGED, { companyId });
+    if (typeof ch.cursor === "string") mailCursor = ch.cursor;
+  }
+  const mailTimer = setInterval(() => void pollMail().catch(() => undefined), MAIL_POLL_MS);
+
+  bb.onDispose(() => {
+    clearInterval(mailTimer);
+    bb.log.info("disposed");
+  });
 }

@@ -141,7 +141,15 @@ needs a Manifest server with the capability `outreach.mail`.
 
 | Plugin | Version | What it does |
 |---|---|---|
-| [`manifest`](plugins/manifest) | 0.6.0 | The outreach workspace: registry, card, company chat, outreach dashboard with topic chats, mail templates and senders, agent tools, connection settings. |
+| [`manifest`](plugins/manifest) | 0.7.0 | The outreach workspace: registry, card, company chat, outreach dashboard with topic chats, mail templates and senders, agent tools, connection settings. |
+### Sending letters (since 0.7.0)
+
+A letter or a mailing is sent by a person — «Отправить» in the chat chip or in the widget
+on the right, behind a confirmation that names the recipients, the sender and the mode
+(sandbox or live). The agent prepares and edits letters but has no tool to send. A sent
+letter keeps a live status and the supplier's replies; a mailing shows its progress and
+can be stopped. «Ответить» starts an answer in the organisation's card.
+
 ### The workspace: chat in the middle, object on the right (since 0.6.0)
 
 Every outreach chat is a native bb thread; the object it works with — an organisation,
@@ -293,6 +301,8 @@ permissions.
 | `mail_mailings`, `mail_mailing_get`, `mail_mailing_letter` | ✓ company, topic | `outreach.view` | Mailings, their recipients with what will not go and why, one recipient's letter; shown by `::manifest-mailing`. |
 | `mail_mailing_create`, `mail_mailing_update`, `mail_mailing_add`, `mail_mailing_remove` | ✓ company, topic | `outreach.manage` | Prepare a mailing: from a draft or a template, recipients by id or filter, edit the text. Changes no organisation. |
 | `mail_mailing_discard` | | `outreach.manage` | Drop a mailing. |
+| `mail_message_get`, `mail_messages` | ✓ | `outreach.view` | A sent letter (status, replies) and the letters of an organisation or a mailing. |
+| `mail_send`, `mail_message_cancel`, `mail_mailing_send`, `mail_mailing_stop` | — (panels only) | `outreach.send` | Sending, cancelling and stopping — a person's button; Manifest refuses the agent. |
 | `manifest_focus_get`, `manifest_focus_open` | ✓ all | — | Plugin-local: what is on the right of the thread, and going back to an object of the thread's trail. |
 | `manifest_template_draft` | ✓ template | — | Plugin-local: change the draft shown in the template editor. |
 
