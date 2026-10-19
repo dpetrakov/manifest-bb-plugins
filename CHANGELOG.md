@@ -4,6 +4,18 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.7.2
+
+- One layout for every object: the chat in the middle, the object on the right in the bb
+  side panel (resizable; whole screen — the panel's own ⤢). «Развернуть» is gone.
+- An organisation without a chat opens bb's New thread screen with the card in its side
+  panel and a «Новый чат: …» banner; the first message creates the thread, linked to the
+  organisation — the same as an organisation with chats.
+- The dashboard works the same way: the «Дашборд аутрича» rail opens the last dashboard
+  chat or a new one, with the dashboard on the right; any number of chats about it, each
+  with its own filter. «Темы» and their switcher are gone.
+- The «Аутрич» rail only switches the list on the left; the middle stays with the chat.
+
 ## manifest 0.7.1
 
 - The object panel no longer shows the object twice: inside the panel the widget drops

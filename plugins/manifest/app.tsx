@@ -15,7 +15,7 @@ import { OutreachPage } from "./ui/OutreachPage";
 import { FOOTER_LABEL, SuppliersList, SuppliersSwitch, requestSuppliersToggle } from "./ui/SuppliersList";
 import "./ui/suppliers.css";
 import "./ui/manifest/manifest.css";
-import { DashboardPage, TopicBar } from "./ui/dashboard/DashboardPage";
+import { DashboardPage } from "./ui/dashboard/DashboardPage";
 import { AttentionAccessory } from "./ui/dashboard/Accessory";
 import { DASHBOARD_ID, DASHBOARD_PATH } from "./ui/dashboard/state";
 import { BatchDirective, CompaniesDirective } from "./ui/directives";
@@ -24,6 +24,7 @@ import { LetterChip, MailingChip } from "./ui/workspace/Chips";
 import { MAIL_ID, MAIL_PATH } from "./ui/mail/common";
 import { FocusHeader, ObjectPanel } from "./ui/workspace/ObjectPanel";
 import { OBJECT_PANEL } from "./ui/workspace/state";
+import { ComposeBanner, NEW_COMPANY_PANEL, NewCompanyPanel } from "./ui/workspace/compose";
 
 export default definePluginApp((app) => {
   app.slots.navPanel({
@@ -40,7 +41,6 @@ export default definePluginApp((app) => {
     icon: "manifest/dashboard",
     path: DASHBOARD_PATH,
     component: DashboardPage,
-    headerContent: TopicBar,
     experimental_sidebarAccessory: AttentionAccessory,
   });
   // W-16: почта — шаблоны (с чатом по шаблону), юрлица и отправители, неразобранные входящие.
@@ -70,6 +70,10 @@ export default definePluginApp((app) => {
   // шапке треда показывает, что открыто, и сама открывает панель.
   app.slots.threadPanelAction({ id: OBJECT_PANEL, title: "Manifest", icon: "manifest/id-card", layout: "flush", component: ObjectPanel });
   app.slots.experimental_threadHeaderAction({ id: "focus", title: "Объект Manifest", component: FocusHeader });
+  // Организация без чата открывается экраном нового треда BB: карточка — в его боковой
+  // панели, над полем — баннер; первое сообщение создаёт тред, привязанный к организации.
+  app.slots.experimental_newThreadPanelAction({ id: NEW_COMPANY_PANEL, title: "Организация Manifest", icon: "manifest/id-card", layout: "flush", component: NewCompanyPanel });
+  app.composer.customize({ id: "company-intent", scopes: ["new-thread"], banners: [{ id: "company", chrome: "bare", component: ComposeBanner }] });
   app.slots.settingsSection({
     id: "connect",
     title: "Подключение к Manifest",

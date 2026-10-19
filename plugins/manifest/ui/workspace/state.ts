@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useBbNavigate, useRealtime, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { rpcContract } from "../../server";
 import { DASHBOARD_PATH } from "../dashboard/state";
-import { PANEL_PATH, errorText } from "../hooks";
+import { PANEL_PATH, errorText, useTool } from "../hooks";
+import { setComposeIntent } from "./intent";
 import { MAIL_PATH } from "../mail/common";
 
 /** Same name as FOCUS_CHANGED in server.ts. */
@@ -149,12 +150,14 @@ export function useStartChat() {
 }
 
 /**
- * Opens an organisation from a page (pult): its latest chat with the card on the right,
- * or — without chats — its page with the card and «Новый чат».
+ * Opens an organisation from a page or the list: its latest chat with the card on the
+ * right, or — without chats — BB's New thread screen with the card in its side panel
+ * (compose.tsx): the same layout either way.
  */
 export function useOpenCompany() {
   const rpc = useRpc<typeof rpcContract>();
   const navigate = useBbNavigate();
+  const tool = useTool();
   return useCallback(
     (companyId: string, title = "") => {
       void rpc
@@ -162,7 +165,16 @@ export function useOpenCompany() {
         .then(async ({ chats }) => {
           const last = chats[0];
           if (!last) {
-            navigate.toPluginPanel(PANEL_PATH, { subPath: companyId });
+            let name = title;
+            if (!name) {
+              name = await tool<{ company?: { display_name?: string } }>("outreach_get_company", { id: companyId }).then(
+                (c) => c.company?.display_name ?? "",
+                () => "",
+              );
+            }
+            setComposeIntent("company", companyId, name);
+            const { sectionId } = await rpc.call("section_ensure", null).catch(() => ({ sectionId: null }));
+            navigate.toCompose({ focusPrompt: true, ...(sectionId ? { placement: { sectionId, pinned: false } } : {}) });
             return;
           }
           await rpc.call("focus_set", { threadId: last.threadId, focus: { kind: "company", id: companyId, title: title.slice(0, 200) } });

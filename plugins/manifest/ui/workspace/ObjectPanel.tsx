@@ -1,4 +1,4 @@
-// Объект треда в боковой панели (W-18, ADR-049): крошки, «Развернуть», «Чаты (N)» и
+// Объект треда в боковой панели (W-18, ADR-049): крошки, «Чаты (N)» (на весь экран — кнопка ⤢ панели BB) и
 // виджет по виду объекта. Одна вкладка на тред — её содержимое следует за фокусом.
 import { useEffect, useState } from "react";
 import {
@@ -19,20 +19,19 @@ import { MailingView } from "../mail/MailingView";
 import { TemplateEditor } from "../mail/TemplateEditor";
 import { InboundView } from "./InboundView";
 import { KindLabel } from "../manifest";
-import { KIND_LABEL, fullPagePath, useFocus, useOpenObjectPanel, useStartChat, type FocusRef } from "./state";
+import { KIND_LABEL, useFocus, useOpenObjectPanel, useStartChat, type FocusRef } from "./state";
 import { useRealtime } from "@get-bb/plugin-sdk/app";
 import { FOCUS_CHANGED } from "./state";
+import { rememberThread } from "./intent";
 
 const NewThreadComposer = experimental_NewThreadComposer;
 
 export function ObjectPanel({ threadId }: PluginThreadPanelProps) {
   const { focus, trail, error, setFocus, back, forget } = useFocus(threadId);
-  const navigate = useBbNavigate();
   const [chatsOpen, setChatsOpen] = useState(false);
   if (focus === undefined) return <PanelNote>{error ?? "Открываем…"}</PanelNote>;
   if (!focus) return <PanelNote>Этот чат не привязан к объекту Manifest. Объекты открываются из разделов «Аутрич», «Дашборд аутрича», «Почта аутрича».</PanelNote>;
   const open = (ref: FocusRef) => void setFocus(ref);
-  const full = fullPagePath(focus, threadId);
   return (
     <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
       <header className="mf-surface flex flex-col gap-1 border-b border-border px-3 py-2">
@@ -52,9 +51,6 @@ export function ObjectPanel({ threadId }: PluginThreadPanelProps) {
           </div>
           <Button size="sm" variant="ghost" className="h-8" onClick={() => setChatsOpen(!chatsOpen)} aria-expanded={chatsOpen}>
             Чаты
-          </Button>
-          <Button size="sm" variant="ghost" className="h-8" onClick={() => navigate.toPluginPanel(full.path, { subPath: full.subPath })}>
-            Развернуть
           </Button>
         </div>
         {chatsOpen ? <ChatsList focus={focus} currentThreadId={threadId} /> : null}
@@ -156,6 +152,7 @@ const OPENED = "manifest:panel-opened:";
 export function FocusHeader({ threadId, isCompactViewport }: PluginThreadHeaderActionProps) {
   const { focus } = useFocus(threadId);
   const openPanel = useOpenObjectPanel();
+  useEffect(() => rememberThread(threadId, focus?.kind === "topic"), [threadId, focus?.kind]);
   useEffect(() => {
     // On a phone the panel is a sheet over the chat: it opens by the button only.
     if (!focus || isCompactViewport) return;

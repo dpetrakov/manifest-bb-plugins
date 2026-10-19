@@ -1,31 +1,22 @@
-// Страница «Дашборд аутрича» (W-15, docs/outreach/dashboard.md §6): слева —
-// плитки, очередь «Сегодня», воронка, регионы, матрица застоя, качество данных и
-// лента изменений по фильтру активной темы; справа — чат темы. Темы — треды bb
-// в разделе «Аутрич»: переключатель в заголовке, subPath — id треда активной
-// темы, subPath "new" — создание темы. Карточка организации открывается во
-// вкладке «Карточка» правой панели bb.
-import { useCallback, useState } from "react";
-import {
-  experimental_NewThreadComposer,
-  useBbNavigate,
-  useRpc,
-  useSdk,
-  type PluginNavPanelProps,
-} from "@get-bb/plugin-sdk/app";
+// «Дашборд аутрича» (W-15, docs/outreach/dashboard.md §6; по приёмке W-20): дашборд живёт
+// справа от чата, как карточка организации, — во вкладке боковой панели треда (ресайз,
+// на весь экран — кнопка ⤢ панели BB). Рейл открывает последний чат по дашборду или
+// экран нового треда BB с дашбордом справа; у каждого чата свой фильтр. Тело дашборда —
+// DashboardBody: плитки, очередь «Сегодня», воронка, регионы, застой, качество данных,
+// лента изменений.
+import { useCallback, useEffect, useState } from "react";
+import { useBbNavigate, useRpc, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 import type { rpcContract } from "../../server";
-import { errorText, useStatus } from "../hooks";
+import { useStatus } from "../hooks";
 import { formatDateTime } from "../labels";
 import { Note } from "../RegistryList";
-import { AttentionAccessory } from "./Accessory";
 import { FilterBar } from "./FilterBar";
 import { useOpenCompany } from "../workspace/state";
-import { DASHBOARD_PATH, useDashboardData, useSegments, useTopicFilter, useTopics, type Filter } from "./state";
+import { railTarget, setComposeIntent } from "../workspace/intent";
+import { useDashboardData, useSegments, useTopicFilter, type Filter } from "./state";
 import { Aging, Feed, Funnel, Panel, Quality, QueueView, Regions, Tiles, agingFilter } from "./Widgets";
 
-const NewThreadComposer = experimental_NewThreadComposer;
 const NEW = "new";
 
 /** Opens an organisation from the dashboard page: its latest chat or its page (W-18). */
@@ -42,8 +33,42 @@ export function DashboardPage({ subPath }: PluginNavPanelProps) {
   if (!status.canWork) {
     return <Note>Дашборд появится после обновления Manifest: на сервере ещё нет слоя работы аутрича (касания, очередь, метрики).</Note>;
   }
-  if (topicId === NEW) return <NewTopic />;
-  return <Dashboard topicId={topicId} />;
+  return <DashboardEntry topicId={topicId === NEW ? null : topicId} />;
+}
+
+/** A new chat about the dashboard: BB's New thread screen with the dashboard on the right. */
+export function useNewDashboardChat() {
+  const rpc = useRpc<typeof rpcContract>();
+  const navigate = useBbNavigate();
+  return useCallback(async () => {
+    setComposeIntent("topic", "", "");
+    const { sectionId } = await rpc.call("section_ensure", null).catch(() => ({ sectionId: null }));
+    navigate.toCompose({ focusPrompt: true, ...(sectionId ? { placement: { sectionId, pinned: false } } : {}) });
+  }, [navigate, rpc]);
+}
+
+/**
+ * The «Дашборд аутрича» rail (по приёмке W-20): the dashboard lives on the right of a
+ * chat, like an organisation's card — the rail opens the last dashboard chat or BB's
+ * New thread screen with the dashboard in its side panel. A topic link opens its chat.
+ * After «back» (a redirect a moment ago) the dashboard is shown here.
+ */
+function DashboardEntry({ topicId }: { topicId: string | null }) {
+  const navigate = useBbNavigate();
+  const newChat = useNewDashboardChat();
+  const [stay, setStay] = useState(false);
+  useEffect(() => {
+    if (topicId) {
+      navigate.toThread(topicId);
+      return;
+    }
+    const target = railTarget("dashboard");
+    if (target === undefined) setStay(true);
+    else if (target) navigate.toThread(target);
+    else void newChat();
+  }, [navigate, newChat, topicId]);
+  if (!stay) return <Note>Открываем дашборд…</Note>;
+  return <Dashboard topicId={null} />;
 }
 
 /**
@@ -52,6 +77,7 @@ export function DashboardPage({ subPath }: PluginNavPanelProps) {
  */
 function Dashboard({ topicId }: { topicId: string | null }) {
   const navigate = useBbNavigate();
+  const newChat = useNewDashboardChat();
   const rpc = useRpc<typeof rpcContract>();
   const openCard = useOpenCard();
   const openTopicChat = async () => {
@@ -62,14 +88,14 @@ function Dashboard({ topicId }: { topicId: string | null }) {
   return (
     <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
       <div className="mf-surface flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs">
-        <span className="flex-1 text-muted-foreground">{topicId ? "Дашборд темы" : "Весь реестр"}</span>
+        <span className="flex-1 text-muted-foreground">Весь реестр</span>
         {topicId ? (
           <Button size="sm" className="h-8" onClick={() => void openTopicChat()}>
-            Чат темы
+            Чат
           </Button>
         ) : (
-          <Button size="sm" className="h-8" onClick={() => navigate.toPluginPanel(DASHBOARD_PATH, { subPath: NEW })}>
-            Новая тема
+          <Button size="sm" className="h-8" onClick={() => void newChat()}>
+            Новый чат по дашборду
           </Button>
         )}
       </div>
@@ -153,89 +179,3 @@ export function DashboardBody({ topicId, onOpenCompany }: { topicId: string | nu
 }
 
 /** Создание темы: название и первое сообщение агенту. */
-function NewTopic() {
-  const sdk = useSdk();
-  const rpc = useRpc<typeof rpcContract>();
-  const navigate = useBbNavigate();
-  const [title, setTitle] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  const create = useCallback(
-    async (request: Parameters<typeof sdk.threads.spawn>[0]) => {
-      try {
-        const name = title.trim() || "Тема аутрича";
-        const { sectionId } = await rpc.call("section_ensure", null);
-        const thread = await sdk.threads.spawn({
-          ...request,
-          title: name.slice(0, 120),
-          pluginMetadata: { kind: "dashboard", filter: {} },
-          ...(sectionId ? { sectionId } : {}),
-        } as Parameters<typeof sdk.threads.spawn>[0]);
-        await rpc.call("topic_add", { threadId: thread.id, title: name.slice(0, 120) });
-        // W-18: the topic is a native thread with its dashboard on the right.
-        navigate.toThread(thread.id);
-      } catch (e) {
-        setError(errorText(e));
-      }
-    },
-    [navigate, rpc, sdk, title],
-  );
-
-  return (
-    <div className="mf-island mf-paper h-full">
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col justify-end gap-3 px-4 pb-4">
-      <h2 className="text-base font-bold">Новая тема дашборда</h2>
-      <Input placeholder="Название темы, например «Напоминания на неделю»" value={title} onChange={(e) => setTitle(e.target.value)} />
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <NewThreadComposer
-        draftKey="manifest-dashboard-topic"
-        placeholder="Что сделать в этой теме?"
-        onSubmit={(request) => create(request as Parameters<typeof sdk.threads.spawn>[0])}
-      />
-    </div>
-    </div>
-  );
-}
-
-/** Переключатель тем в заголовке страницы. */
-export function TopicBar({ subPath }: PluginNavPanelProps) {
-  const navigate = useBbNavigate();
-  const { topics } = useTopics();
-  const active = subPath.split("/")[0] || "";
-  return (
-    <div className="flex max-w-[60vw] items-center gap-1 overflow-x-auto">
-      {/* На bb 0.46 рейл без подписей и счётчиков: «ждут + просрочено» — здесь и бейджем вкладки «Поставщики». */}
-      <AttentionAccessory />
-      <button
-        type="button"
-        onClick={() => navigate.toPluginPanel(DASHBOARD_PATH, { subPath: "" })}
-        aria-pressed={!active}
-        className={cn("whitespace-nowrap rounded-md px-2 py-0.5 text-xs hover:bg-state-hover", !active && "bg-state-active")}
-      >
-        Весь реестр
-      </button>
-      {(topics ?? []).map((t) => (
-        <button
-          key={t.threadId}
-          type="button"
-          onClick={() => navigate.toPluginPanel(DASHBOARD_PATH, { subPath: t.threadId })}
-          aria-pressed={active === t.threadId}
-          title={t.title}
-          className={cn(
-            "max-w-48 truncate whitespace-nowrap rounded-md px-2 py-0.5 text-xs hover:bg-state-hover",
-            active === t.threadId && "bg-state-active",
-          )}
-        >
-          {t.title}
-        </button>
-      ))}
-      <button
-        type="button"
-        onClick={() => navigate.toPluginPanel(DASHBOARD_PATH, { subPath: NEW })}
-        className="whitespace-nowrap rounded-md px-2 py-0.5 text-xs text-muted-foreground hover:bg-state-hover"
-      >
-        + Тема
-      </button>
-    </div>
-  );
-}

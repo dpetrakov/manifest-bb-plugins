@@ -7,6 +7,8 @@ import { ConnectSection } from "../ui/ConnectSection";
 import { OutreachPage } from "../ui/OutreachPage";
 import { DashboardPage } from "../ui/dashboard/DashboardPage";
 import { BatchDirective, filterFromAttributes } from "../ui/directives";
+import { DashboardBody } from "../ui/dashboard/DashboardPage";
+import { useOpenCompany } from "../ui/workspace/state";
 import { Feed } from "../ui/dashboard/Widgets";
 import { MailPage } from "../ui/mail/MailPage";
 import { CompanyMail } from "../ui/mail/CompanyMail";
@@ -79,9 +81,14 @@ describe("registry (page root)", () => {
     fireEvent.keyDown(search, { key: "Enter" });
     await waitFor(() => expect(calls.some((c) => c.name === "outreach_list_companies" && c.args.country === "DE")).toBe(true));
 
+    // The rail opened the section: the list is on the left, the centre goes back to a chat.
+    expect(r.inspection.navigateCalls[0]).toMatchObject({ method: "toCompose" });
+    // No chats yet: BB's New thread screen, the organisation remembered for its panel and banner.
+    const before = r.inspection.navigateCalls.length;
     fireEvent.click(screen.getByText("THK"));
-    await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toPluginPanel" }));
-    expect(JSON.stringify(r.inspection.navigateCalls.at(-1))).toContain("c2");
+    await waitFor(() => expect(r.inspection.navigateCalls.length).toBeGreaterThan(before));
+    expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toCompose" });
+    expect(window.sessionStorage.getItem("manifest:compose-intent")).toContain("c2");
     fireEvent.click(screen.getByText("Woermann"));
     await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toThread", threadId: "th-w" }));
   });
@@ -189,7 +196,12 @@ describe("dashboard (W-15)", () => {
   it("shows checks, the queue and opens the card; a tile filters the topic", async () => {
     const calls: { name: string; args: Record<string, unknown> }[] = [];
     const filters: unknown[] = [];
-    const r = renderSlot({ component: DashboardPage }, { subPath: "th-1" }, {
+    // The dashboard lives on the right of a chat: its body, as the thread panel shows it.
+    function Body() {
+      const open = useOpenCompany();
+      return <DashboardBody topicId="th-1" onOpenCompany={open} />;
+    }
+    const r = renderSlot({ component: Body }, {} as never, {
       pluginId: "manifest",
       rpc: {
         status: () => status({ canWork: true }),
@@ -391,12 +403,15 @@ describe("mail (W-16)", () => {
         },
       } as never,
     });
-    fireEvent.click(await screen.findByRole("button", { name: "Подготовить письмо" }, { timeout: 12000 }));
-    expect(await screen.findByText("STIHL parts for Agro Store", undefined, { timeout: 12000 })).toBeTruthy();
+    // The button shows before the templates arrive and stays inactive until then: a click
+    // in that moment is lost (this was the «flaky» failure, not slowness).
+    const prepare = (await screen.findByRole("button", { name: "Подготовить письмо" })) as HTMLButtonElement;
+    await waitFor(() => expect(prepare.disabled).toBe(false));
+    fireEvent.click(prepare);
+    expect(await screen.findByText("STIHL parts for Agro Store")).toBeTruthy();
     expect(calls).toContain("mail_draft_create");
     expect(screen.getByText("Готово к отправке: так письмо и уйдёт.")).toBeTruthy();
-    // A cold first run (right after npm ci) is slow: the test gets room beyond the default 5 s.
-  }, 15000);
+  });
 
   it("shows a mailing: counts, reasons, and each recipient's letter", async () => {
     const MID = "99999999-8888-7777-6666-555555555555";
@@ -541,8 +556,8 @@ describe("workspace: object on the right of a thread (W-18)", () => {
     });
     expect(await screen.findByText("Рассылка")).toBeTruthy();
     expect(await screen.findByText("Уйдёт: 2")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Развернуть" }));
-    expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toPluginPanel", path: "mail", options: { subPath: `mailing/${MID}` } });
+    // Whole screen is the bb panel's own ⤢: no «Развернуть» of ours.
+    expect(screen.queryByRole("button", { name: "Развернуть" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "← THK" }));
     await waitFor(() => expect(rpcCalls).toHaveLength(1));
     expect(await screen.findByText("Работа")).toBeTruthy();
@@ -652,7 +667,10 @@ describe("sending from chips (W-20)", () => {
         },
       } as never,
     });
-    fireEvent.click(await screen.findByRole("button", { name: "Отправить" }));
+    // Inactive until the status arrives (the right to send): wait, then click.
+    const send = (await screen.findByRole("button", { name: "Отправить" })) as HTMLButtonElement;
+    await waitFor(() => expect(send.disabled).toBe(false));
+    fireEvent.click(send);
     expect(await screen.findByText("Отправить письмо?")).toBeTruthy();
     expect(screen.getByText("настоящему адресу не уйдёт")).toBeTruthy();
     expect(calls.some((c) => c.name === "mail_send")).toBe(false);
@@ -770,5 +788,17 @@ describe("organisation before a chat", () => {
     expect(await screen.findByText("Работа")).toBeTruthy();
     // The card does not repeat the name next to the chat.
     expect(screen.getAllByText("THK Powertools")).toHaveLength(1);
+  });
+});
+
+describe("dashboard rail", () => {
+  it("opens BB's New thread screen with the dashboard on the right when there is no dashboard chat", async () => {
+    window.sessionStorage.clear();
+    const r = renderSlot({ component: DashboardPage }, { subPath: "" }, {
+      pluginId: "manifest",
+      rpc: { status: () => status({ canWork: true }), section_ensure: () => ({ sectionId: null }) } as never,
+    });
+    await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toCompose" }));
+    expect(window.sessionStorage.getItem("manifest:compose-intent")).toContain('"kind":"topic"');
   });
 });

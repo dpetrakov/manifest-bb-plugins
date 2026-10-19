@@ -124,7 +124,7 @@ export function rulesFor(ref: FocusRef, opts: { work: boolean; mail: boolean }):
       ].join("\n");
     case "topic":
       return [
-        `Справа — дашборд темы ${JSON.stringify(ref.title)} по её фильтру.`,
+        `Справа — дашборд аутрича по фильтру этого чата (${JSON.stringify(ref.title)}); у каждого чата по дашборду свой фильтр.`,
         "Числа бери только из outreach_metrics, outreach_queue, outreach_list_companies; выборку показывай manifest_dashboard_show.",
         "Прямых правок организаций в теме нет: изменения — outreach_batch_preview и директива ::manifest-batch, применяет человек.",
         opts.mail ? "Рассылку по выборке — mail_mailing_create {template_id, filter}: она откроется справа." : "",

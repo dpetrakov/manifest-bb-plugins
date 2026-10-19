@@ -125,6 +125,14 @@ export const rpcContract = defineRpcContract({
   chat_get: { input: z.object({ companyId: z.string().min(1).max(64) }), output: z.object({ threadId: z.string().nullable() }) },
   /** Ask Manifest what changed in mail now and signal the widgets (W-20). */
   mail_refresh: { input: z.null(), output: z.object({ ok: z.boolean() }) },
+  /**
+   * The person sent the first message of a new chat about an organisation from BB's
+   * New thread screen: the thread BB creates is linked to it (focus, chat index).
+   */
+  compose_submitted: {
+    input: z.object({ kind: z.enum(["company", "topic"]), id: z.string().max(64), title: z.string().max(200) }),
+    output: z.object({ ok: z.boolean() }),
+  },
   chat_link: {
     input: z.object({ companyId: z.string().min(1).max(64), threadId: z.string().min(1).max(64) }),
     output: z.object({ ok: z.boolean() }),
@@ -319,8 +327,55 @@ export default async function plugin(bb: BbPluginApi) {
     }
   }
 
+  // New chat from BB's New thread screen (outreach, no chat yet): the banner reports the
+  // submission, BB reports the created thread; whichever comes second links them.
+  const LINK_WINDOW_MS = 20_000;
+  type Composed = { kind: "company" | "topic"; id: string; title: string };
+  let pendingCompose: (Composed & { at: number }) | null = null;
+  let lastCreated: { threadId: string; at: number } | null = null;
+  async function linkComposed(threadId: string, c: Composed) {
+    if (c.kind === "topic") {
+      // A chat about the dashboard is a topic: its own filter, the dashboard on the right.
+      await bb.sdk.threads.updatePluginMetadata({ threadId, set: { kind: "dashboard", filter: {} } });
+      const all = (await topics()).filter((t) => t.threadId !== threadId);
+      all.push({ threadId, title: "Чат по дашборду", createdAt: new Date().toISOString() });
+      await bb.storage.kv.set(TOPICS, all);
+      bb.realtime.publish(TOPICS_CHANGED, {});
+      await saveFocus(threadId, pushFocus(await loadFocus(threadId), { kind: "topic", id: threadId, title: "Дашборд аутрича" }), true);
+      return;
+    }
+    if (!c.id) return;
+    const old = await bb.storage.kv.get<string>(threadKey(c.id));
+    if (old && old !== threadId) await loadFocus(old);
+    await bb.storage.kv.set(threadKey(c.id), threadId);
+    await saveFocus(threadId, pushFocus(await loadFocus(threadId), { kind: "company", id: c.id, title: c.title.slice(0, 200) }), true);
+  }
+  bb.events.on("thread.created", async ({ thread }) => {
+    const now = Date.now();
+    const p = pendingCompose;
+    if (p && now - p.at < LINK_WINDOW_MS) {
+      pendingCompose = null;
+      await linkComposed(thread.id, p);
+      return;
+    }
+    lastCreated = { threadId: thread.id, at: now };
+  });
+
   let mailCursor = "";
   bb.rpc.register(rpcContract, {
+    compose_submitted: async ({ kind, id, title }) => {
+      const now = Date.now();
+      // A thread created just before the report is the one (BB may report it first);
+      // anything older is someone else's.
+      const c = lastCreated;
+      if (c && now - c.at < 5_000) {
+        lastCreated = null;
+        await linkComposed(c.threadId, { kind, id, title });
+      } else {
+        pendingCompose = { kind, id, title, at: now };
+      }
+      return { ok: true };
+    },
     status: () => status(),
     mail_refresh: async () => {
       await pollMail();

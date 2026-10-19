@@ -3,7 +3,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createFakePluginHost, makePluginAgentConfigurationContext } from "@get-bb/plugin-sdk/testing";
+import { createFakePluginHost, makePluginAgentConfigurationContext, makeThreadResponse } from "@get-bb/plugin-sdk/testing";
 import plugin from "../server";
 
 interface Seen {
@@ -575,6 +575,26 @@ describe("focus of a thread (W-18)", () => {
     f = (await h.behavior.callRpc("focus_forget", { threadId: "t5", kind: "mailing", id: MID })) as { focus: { id: string } | null; trail: { id: string }[] };
     expect(f.focus).toMatchObject({ kind: "inbound", id: "i1" });
     expect(f.trail.some((r) => r.id === MID)).toBe(false);
+  });
+
+  it("links a thread made on BB's New thread screen to the organisation, in either order", async () => {
+    const h = await load();
+    // BB reports the thread first, the banner a moment later.
+    await h.behavior.emitThreadEvent("thread.created", { thread: makeThreadResponse({ id: "th-new-1" }) });
+    await h.behavior.callRpc("compose_submitted", { kind: "company", id: "c1", title: "THK" });
+    expect((await focusOf(h, "th-new-1")).focus).toMatchObject({ kind: "company", id: "c1" });
+    // The banner first, then BB.
+    await h.behavior.callRpc("compose_submitted", { kind: "company", id: "c2", title: "Beta" });
+    await h.behavior.emitThreadEvent("thread.created", { thread: makeThreadResponse({ id: "th-new-2" }) });
+    expect((await focusOf(h, "th-new-2")).focus).toMatchObject({ kind: "company", id: "c2" });
+    // A chat about the dashboard becomes a topic with the dashboard on the right.
+    await h.behavior.callRpc("compose_submitted", { kind: "topic", id: "", title: "" });
+    await h.behavior.emitThreadEvent("thread.created", { thread: makeThreadResponse({ id: "th-dash" }) });
+    expect((await focusOf(h, "th-dash")).focus).toMatchObject({ kind: "topic", id: "th-dash" });
+    expect(meta["th-dash"]).toMatchObject({ kind: "dashboard" });
+    // A thread nobody asked for is not linked.
+    await h.behavior.emitThreadEvent("thread.created", { thread: makeThreadResponse({ id: "th-other" }) });
+    expect((await focusOf(h, "th-other")).focus).toBeNull();
   });
 
   it("reads threads from before W-18 without metadata trust", async () => {
