@@ -142,7 +142,7 @@ function FocusBody({ focus, threadId, onOpen, onBack }: { focus: FocusRef; threa
     case "template":
       return <TemplateEditor key={focus.id} templateId={focus.id.startsWith("new-") ? null : focus.id} threadId={threadId} embedded />;
     case "topic":
-      return <DashboardBody topicId={focus.id || threadId || null} onOpenCompany={(id) => onOpen({ kind: "company", id, title: "" })} />;
+      return <DashboardBody topicId={focus.id || threadId || null} threadId={threadId} onOpenCompany={(id) => onOpen({ kind: "company", id, title: "" })} />;
     case "inbound":
       return <InboundView key={focus.id} id={focus.id} embedded onLinked={(c) => onOpen({ kind: "company", id: c.id, title: c.name })} />;
   }

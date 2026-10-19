@@ -48,6 +48,13 @@ function pillText(key: string, value: unknown, segments: Segment[]): string {
   return `${key}: ${String(value)}`;
 }
 
+/** The filter in words, as the pills show it: for the list's «dashboard selection» banner. */
+export function filterLabel(filter: Filter, segments: Segment[]): string {
+  return Object.entries(cleanFilter(filter))
+    .map(([k, v]) => pillText(k, v, segments))
+    .join(" · ");
+}
+
 export function FilterBar({
   filter,
   onChange,

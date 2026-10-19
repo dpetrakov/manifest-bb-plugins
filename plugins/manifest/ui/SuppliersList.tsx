@@ -111,7 +111,7 @@ export function SuppliersSwitch() {
 }
 
 /** Список тредов «Потенциальные поставщики». */
-export function SuppliersList({ onNavigate }: PluginThreadListProps) {
+export function SuppliersList({ onNavigate, activeThreadId }: PluginThreadListProps) {
   const sdk = useSdk();
   // Пока список показан, кнопка подвала — «включена» (плотнее тон, рамка).
   useLayoutEffect(() => {
@@ -137,7 +137,7 @@ export function SuppliersList({ onNavigate }: PluginThreadListProps) {
   return (
     <div data-bb-plugin={PLUGIN_ID} className="h-full">
       <ListBoundary>
-        <RegistryList onNavigate={onNavigate} />
+        <RegistryList onNavigate={onNavigate} activeThreadId={activeThreadId} />
       </ListBoundary>
     </div>
   );

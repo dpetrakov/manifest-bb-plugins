@@ -11,10 +11,10 @@ import type { rpcContract } from "../../server";
 import { useStatus } from "../hooks";
 import { formatDateTime } from "../labels";
 import { Note } from "../RegistryList";
-import { FilterBar } from "./FilterBar";
+import { FilterBar, filterLabel } from "./FilterBar";
 import { useOpenCompany } from "../workspace/state";
 import { railTarget, setComposeIntent } from "../workspace/intent";
-import { useDashboardData, useSegments, useTopicFilter, type Filter } from "./state";
+import { useDashboardData, useDashboardSelection, useSegments, useTopicFilter, type Filter } from "./state";
 import { Aging, Feed, Funnel, Panel, Quality, QueueView, Regions, Tiles, agingFilter } from "./Widgets";
 
 const NEW = "new";
@@ -111,11 +111,21 @@ function Dashboard({ topicId }: { topicId: string | null }) {
  * ширине самого виджета (@container), а не окна; в узком виде второстепенные блоки
  * свёрнуты.
  */
-export function DashboardBody({ topicId, onOpenCompany }: { topicId: string | null; onOpenCompany: (companyId: string) => void }) {
+export function DashboardBody({
+  topicId,
+  threadId,
+  onOpenCompany,
+}: {
+  topicId: string | null;
+  /** The thread the dashboard is shown in: the list follows its filter there. */
+  threadId?: string | null;
+  onOpenCompany: (companyId: string) => void;
+}) {
   const { status } = useStatus();
   const { filter, setFilter, error: filterError } = useTopicFilter(topicId);
   const data = useDashboardData(filter);
   const { segments, reload: reloadSegments } = useSegments();
+  useDashboardSelection(threadId ?? "", filter, filterLabel(filter, segments));
   const m = data.metrics;
   const statuses = filter.statuses ?? [];
   const pick = (next: Partial<Filter>) => void setFilter({ ...filter, ...next });

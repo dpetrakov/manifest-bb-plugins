@@ -6,7 +6,8 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
 import type { Topic, rpcContract } from "../../server";
 import type { Filter } from "../../lib/tools";
-import { errorText, useStatus, useTool } from "../hooks";
+import { errorText, putSelection, useRegistryLoad, useStatus, useTool } from "../hooks";
+import { requestSuppliersShow } from "../SuppliersList";
 import type { FeedItem, Metrics, Queue, Segment } from "../types";
 
 export const DASHBOARD_PATH = "dashboard";
@@ -82,6 +83,38 @@ export function useTopicFilter(threadId: string | null) {
     [rpc, threadId],
   );
   return { filter, setFilter, error };
+}
+
+/** Threads whose dashboard already opened the list: the person may close it again. */
+const listShownFor = new Set<string>();
+
+/**
+ * Dashboard → list (по приёмке W-20): a non-empty dashboard filter becomes the selection of
+ * the left list for the thread the dashboard is in; the list opens once per thread. An
+ * unmounted panel tab keeps it (the person looks at a card next to the dashboard); only
+ * the New thread screen ("") drops it on leaving.
+ */
+export function useDashboardSelection(scope: string, filter: Filter, label: string) {
+  const load = useRegistryLoad();
+  const clean = cleanFilter(filter);
+  const key = JSON.stringify(clean);
+  useEffect(() => {
+    const empty = key === "{}";
+    const reload = putSelection(scope, empty ? null : { filter: JSON.parse(key) as Record<string, unknown>, label, key });
+    if (!empty && !listShownFor.has(scope)) {
+      listShownFor.add(scope);
+      requestSuppliersShow();
+    }
+    if (reload) void load();
+  }, [key, label, load, scope]);
+  useEffect(
+    () => () => {
+      if (scope !== "") return;
+      listShownFor.delete(scope);
+      if (putSelection(scope, null)) void load();
+    },
+    [load, scope],
+  );
 }
 
 export interface DashboardData {

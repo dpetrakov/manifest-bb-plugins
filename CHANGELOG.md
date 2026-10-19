@@ -4,6 +4,15 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.7.4
+
+- The dashboard filter drives the organisation list on the left: while a dashboard chat is
+  open, the list shows its selection with a «Выборка дашборда: …» banner (opening the list
+  if it was hidden). × unlinks it until the dashboard filter changes; another chat — the
+  list's own filter. Each dashboard chat keeps its own selection.
+- In a dashboard chat a click on an organisation opens its card in a separate panel tab next
+  to the dashboard; Cmd/Ctrl-click goes to the organisation's chat.
+
 ## manifest 0.7.3
 
 - «Почта аутрича» works like the dashboard: the rail opens the last mail chat or a new

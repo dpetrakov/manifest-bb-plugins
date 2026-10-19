@@ -45,7 +45,7 @@ function Channels({ it }: { it: ListItem }) {
   );
 }
 
-export function RegistryList({ onNavigate }: { onNavigate?: () => void }) {
+export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate?: () => void; activeThreadId?: string | null }) {
   const { status, error: statusError } = useStatus();
   const reg = useRegistry();
   const tool = useTool();
@@ -58,6 +58,8 @@ export function RegistryList({ onNavigate }: { onNavigate?: () => void }) {
   const [search, setSearch] = useState(reg.filters.q);
 
   const ready = status?.connected && status.canView;
+  // The list follows the open thread: in a dashboard chat — its selection.
+  useEffect(() => reg.setScope(activeThreadId ?? ""), [activeThreadId, reg.setScope]);
   useEffect(() => {
     if (!ready) return;
     void reg.load();
@@ -103,24 +105,52 @@ export function RegistryList({ onNavigate }: { onNavigate?: () => void }) {
     onNavigate?.();
     openCompany(it.id, it.display_name);
   };
+  // In a dashboard chat the card opens next to the dashboard; Cmd/Ctrl-click — its chat.
+  const sel = reg.selection;
+  const click = (it: ListItem, mod: boolean) => {
+    if (sel && !mod) {
+      reg.select(it.id);
+      pin(it);
+    } else if (mod && !sel) pin(it);
+    else open(it);
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-col gap-1.5 px-2 pb-2 pt-1">
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Название, контакт, город…"
-          aria-label="Поиск по реестру"
-          className="h-7 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        />
-        <div className="flex flex-wrap gap-1">
-          <FilterSelect label="Регион" value={reg.filters.region} options={regionOptions} onChange={(v) => reg.setFilter("region", v)} />
-          <FilterSelect label="Страна" value={reg.filters.country} options={countryOptions} onChange={(v) => reg.setFilter("country", v)} />
-          <FilterSelect label="Приоритет" value={reg.filters.priority} options={priorityOptions} onChange={(v) => reg.setFilter("priority", v)} />
-          <FilterSelect label="Статус" value={reg.filters.status} options={statusOptions} onChange={(v) => reg.setFilter("status", v)} />
-        </div>
+        {sel ? (
+          <div role="status" className="flex items-start gap-1 rounded-md border border-border bg-muted/50 px-2 py-1 text-xs">
+            <span className="min-w-0 flex-1">
+              Выборка дашборда: <b className="font-medium">{sel.label}</b>
+            </span>
+            <button
+              type="button"
+              aria-label="Отвязать от дашборда"
+              title="Отвязать от дашборда — свой фильтр списка"
+              className="rounded px-1 text-muted-foreground hover:bg-state-hover hover:text-foreground"
+              onClick={reg.unlink}
+            >
+              ×
+            </button>
+          </div>
+        ) : (
+          <>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Название, контакт, город…"
+              aria-label="Поиск по реестру"
+              className="h-7 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <div className="flex flex-wrap gap-1">
+              <FilterSelect label="Регион" value={reg.filters.region} options={regionOptions} onChange={(v) => reg.setFilter("region", v)} />
+              <FilterSelect label="Страна" value={reg.filters.country} options={countryOptions} onChange={(v) => reg.setFilter("country", v)} />
+              <FilterSelect label="Приоритет" value={reg.filters.priority} options={priorityOptions} onChange={(v) => reg.setFilter("priority", v)} />
+              <FilterSelect label="Статус" value={reg.filters.status} options={statusOptions} onChange={(v) => reg.setFilter("status", v)} />
+            </div>
+          </>
+        )}
         <span className="text-[11px] text-muted-foreground">
           {reg.loading && reg.items.length === 0 ? "Загружаем…" : `Найдено: ${reg.total}`}
         </span>
@@ -131,7 +161,7 @@ export function RegistryList({ onNavigate }: { onNavigate?: () => void }) {
           <li key={it.id}>
             <button
               type="button"
-              title="Cmd/Ctrl-клик или перетащить в сторону — отдельной вкладкой"
+              title={sel ? "Карточка рядом с дашбордом; Cmd/Ctrl-клик — чат организации" : "Cmd/Ctrl-клик или перетащить в сторону — отдельной вкладкой"}
               draggable
               onDragStart={(e) => {
                 e.dataTransfer.effectAllowed = "copy";
@@ -144,7 +174,7 @@ export function RegistryList({ onNavigate }: { onNavigate?: () => void }) {
               onAuxClick={(e) => {
                 if (e.button === 1) pin(it);
               }}
-              onClick={(e) => (e.metaKey || e.ctrlKey ? pin(it) : open(it))}
+              onClick={(e) => click(it, e.metaKey || e.ctrlKey)}
               className={cn(
                 "flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-state-hover",
                 reg.selectedId === it.id && "bg-state-active",

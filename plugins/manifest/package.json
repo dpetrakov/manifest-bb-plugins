@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-manifest",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "type": "module",
   "engines": {
     "bb": ">=0.46",

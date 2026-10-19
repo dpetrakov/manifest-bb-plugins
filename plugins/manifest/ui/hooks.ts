@@ -62,8 +62,24 @@ export interface Filters {
   status: string;
 }
 
+/**
+ * Выборка дашборда (по приёмке W-20): пока на экране чат по дашборду, список слева
+ * показывает организации его фильтра. Выборки — по тредам: у каждого чата по дашборду своя;
+ * "" — экран нового треда. Список берёт выборку открытого треда; в другом треде — свой фильтр.
+ */
+export interface Selection {
+  filter: Record<string, unknown>;
+  label: string;
+  key: string;
+}
+
 interface ListState {
   filters: Filters;
+  /** Open thread of the window ("" — not a thread: New thread screen, pages). */
+  scope: string;
+  selections: Record<string, Selection>;
+  /** Selection key a person unlinked by ×, per thread: a new dashboard filter links again. */
+  dismissed: Record<string, string>;
   items: ListItem[];
   total: number;
   loading: boolean;
@@ -74,6 +90,9 @@ interface ListState {
 const PAGE = 50;
 let state: ListState = {
   filters: { q: "", region: "", country: "", priority: "", status: "" },
+  scope: "",
+  selections: {},
+  dismissed: {},
   items: [],
   total: 0,
   loading: false,
@@ -91,25 +110,48 @@ const subscribe = (l: () => void) => {
 };
 let seq = 0;
 
-export function useRegistry() {
-  const snapshot = useSyncExternalStore(subscribe, () => state, () => state);
-  const tool = useTool();
+/** The dashboard selection the list shows now, if any. */
+export function activeSelection(s: ListState = state): Selection | null {
+  const sel = s.selections[s.scope];
+  return sel && s.dismissed[s.scope] !== sel.key ? sel : null;
+}
 
-  const load = useCallback(
+/** Stores a thread's dashboard selection (null — none); true if the list must reload. */
+export function putSelection(scope: string, sel: Selection | null): boolean {
+  const prev = state.selections[scope];
+  if (sel ? prev?.key === sel.key && prev.label === sel.label : !prev) return false;
+  const before = activeSelection()?.key;
+  const selections = { ...state.selections };
+  if (sel) selections[scope] = sel;
+  else delete selections[scope];
+  emit({ selections });
+  return activeSelection()?.key !== before;
+}
+
+/** Loads the registry page: the dashboard selection or the list's own filter. */
+export function useRegistryLoad() {
+  const tool = useTool();
+  return useCallback(
     async (append = false) => {
       const my = ++seq;
       const f = state.filters;
+      const sel = activeSelection();
       emit({ loading: true, error: null });
       try {
-        const res = await tool<ListResult>("outreach_list_companies", {
-          q: f.q || undefined,
-          region: f.region || undefined,
-          country: f.country || undefined,
-          priorities: f.priority ? [Number(f.priority)] : undefined,
-          status: f.status || undefined,
-          limit: PAGE,
-          offset: append ? state.items.length : 0,
-        });
+        const page = { limit: PAGE, offset: append ? state.items.length : 0 };
+        const res = await tool<ListResult>(
+          "outreach_list_companies",
+          sel
+            ? { ...sel.filter, ...page }
+            : {
+                q: f.q || undefined,
+                region: f.region || undefined,
+                country: f.country || undefined,
+                priorities: f.priority ? [Number(f.priority)] : undefined,
+                status: f.status || undefined,
+                ...page,
+              },
+        );
         if (my !== seq) return;
         emit({ items: append ? [...state.items, ...res.items] : res.items, total: res.total, loading: false });
       } catch (e) {
@@ -119,6 +161,11 @@ export function useRegistry() {
     },
     [tool],
   );
+}
+
+export function useRegistry() {
+  const snapshot = useSyncExternalStore(subscribe, () => state, () => state);
+  const load = useRegistryLoad();
 
   const setFilter = useCallback(
     (key: keyof Filters, value: string) => {
@@ -130,7 +177,26 @@ export function useRegistry() {
 
   const select = useCallback((id: string | null) => emit({ selectedId: id }), []);
 
-  return { ...snapshot, load, setFilter, select };
+  /** The window moved to another thread: its dashboard selection or the own filter. */
+  const setScope = useCallback(
+    (scope: string) => {
+      if (state.scope === scope) return;
+      const before = activeSelection()?.key;
+      emit({ scope });
+      if (activeSelection()?.key !== before) void load();
+    },
+    [load],
+  );
+
+  /** × on the banner: back to the own filter until the dashboard filter changes. */
+  const unlink = useCallback(() => {
+    const sel = activeSelection();
+    if (!sel) return;
+    emit({ dismissed: { ...state.dismissed, [state.scope]: sel.key } });
+    void load();
+  }, [load]);
+
+  return { ...snapshot, selection: activeSelection(snapshot), load, setFilter, select, setScope, unlink };
 }
 
 /** Refetch on «company changed» (panel or agent edit). */

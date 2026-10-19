@@ -16,6 +16,8 @@ import { CompanyMail } from "../ui/mail/CompanyMail";
 import { LetterDirective } from "../ui/mail/LetterView";
 import { MailingDirective } from "../ui/mail/MailingView";
 import { SUPPLIERS_LIST, switchSuppliersList } from "../ui/SuppliersList";
+import { RegistryList } from "../ui/RegistryList";
+import { useState } from "react";
 import { FocusHeader, ObjectBody, ObjectPanel } from "../ui/workspace/ObjectPanel";
 import { LetterChip, MailingChip } from "../ui/workspace/Chips";
 import { MailingSendBar } from "../ui/mail/send";
@@ -804,6 +806,105 @@ describe("dashboard rail", () => {
     });
     await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toCompose" }));
     expect(window.sessionStorage.getItem("manifest:compose-intent")).toContain('"kind":"topic"');
+  });
+});
+
+describe("dashboard selection in the list", () => {
+  it("shows the dashboard's organisations on the left while its chat is open", async () => {
+    const lists: Record<string, unknown>[] = [];
+    let shown = 0;
+    window.addEventListener("manifest:suppliers-list", (e) => {
+      if ((e as CustomEvent).detail === "on") shown++;
+    });
+    // A dashboard chat (th-sel) and the sidebar list; «Другой чат» moves the window elsewhere.
+    function Window() {
+      const [thread, setThread] = useState("th-sel");
+      return (
+        <>
+          <button type="button" onClick={() => setThread("th-other")}>Другой чат</button>
+          <DashboardBody topicId="th-sel" threadId="th-sel" onOpenCompany={() => undefined} />
+          <RegistryList activeThreadId={thread} />
+        </>
+      );
+    }
+    const r = renderSlot({ component: Window }, {} as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status({ canWork: true }),
+        seen_get: () => ({ at: null }),
+        seen_set: () => ({ ok: true }),
+        topic_filter_get: () => ({ filter: { attention: "overdue", country: "IN" } }),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          if (name === "outreach_list_companies") {
+            lists.push(args);
+            const sel = args.attention === "overdue";
+            return { result: { items: [sel ? item("c9", "Dealer X", "IN") : item("c1", "Woermann")], total: 1, limit: 50, offset: 0 } };
+          }
+          if (name === "outreach_facets") return { result: { regions: [], countries } };
+          if (name === "outreach_metrics") return { result: metrics };
+          if (name === "outreach_queue") return { result: { as_of: metrics.as_of, today: metrics.today, groups: [] } };
+          if (name === "outreach_feed") return { result: { items: [], since: metrics.as_of } };
+          if (name === "outreach_segments") return { result: { items: [] } };
+          return { result: null };
+        },
+      } as never,
+    });
+    const banner = await screen.findByText(/Выборка дашборда/);
+    expect(banner.textContent).toContain("Просрочено");
+    expect(shown).toBe(1);
+    await waitFor(() => expect(lists.at(-1)).toMatchObject({ attention: "overdue", country: "IN" }));
+    expect(screen.queryByLabelText("Поиск по реестру")).toBeNull();
+    // A click opens the card next to the dashboard; the chat stays.
+    fireEvent.click(await screen.findByText("Dealer X"));
+    await waitFor(() => expect(r.inspection.navigateCalls.some((c) => c.method === "openThreadPanel")).toBe(true));
+    expect(JSON.stringify(r.inspection.navigateCalls.find((c) => c.method === "openThreadPanel"))).toContain('"pin"');
+    expect(r.inspection.navigateCalls.some((c) => c.method === "toThread")).toBe(false);
+    // Another chat: the list's own filter.
+    fireEvent.click(screen.getByText("Другой чат"));
+    expect(await screen.findByText("Woermann")).toBeTruthy();
+    expect(screen.queryByText(/Выборка дашборда/)).toBeNull();
+    expect(lists.at(-1)?.attention).toBeUndefined();
+  });
+
+  it("unlinks the list by × until the dashboard filter changes", async () => {
+    const lists: Record<string, unknown>[] = [];
+    function Window() {
+      return (
+        <>
+          <DashboardBody topicId="th-x" threadId="th-x" onOpenCompany={() => undefined} />
+          <RegistryList activeThreadId="th-x" />
+        </>
+      );
+    }
+    renderSlot({ component: Window }, {} as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status({ canWork: true }),
+        seen_get: () => ({ at: null }),
+        seen_set: () => ({ ok: true }),
+        topic_filter_get: () => ({ filter: { attention: "overdue" } }),
+        topic_filter_set: ({ filter }: { filter: unknown }) => ({ filter }),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          if (name === "outreach_list_companies") {
+            lists.push(args);
+            return { result: { items: [item("c1", "Woermann")], total: 1, limit: 50, offset: 0 } };
+          }
+          if (name === "outreach_facets") return { result: { regions: [], countries } };
+          if (name === "outreach_metrics") return { result: metrics };
+          if (name === "outreach_queue") return { result: { as_of: metrics.as_of, today: metrics.today, groups: [] } };
+          if (name === "outreach_feed") return { result: { items: [], since: metrics.as_of } };
+          if (name === "outreach_segments") return { result: { items: [] } };
+          return { result: null };
+        },
+      } as never,
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Отвязать от дашборда" }));
+    expect(await screen.findByLabelText("Поиск по реестру")).toBeTruthy();
+    await waitFor(() => expect(lists.at(-1)?.attention).toBeUndefined());
+    // A new pick on the dashboard links the list again.
+    fireEvent.click(screen.getByText("Ждут нашего ответа"));
+    expect(await screen.findByText(/Выборка дашборда/)).toBeTruthy();
+    await waitFor(() => expect(lists.at(-1)).toMatchObject({ attention: "waiting_reply" }));
   });
 });
 
