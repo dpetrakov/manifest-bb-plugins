@@ -52,7 +52,18 @@ export function useMailing(id: string) {
   return { mailing, error, reload: load };
 }
 
-export function MailingView({ id, onOpenCompany, onDeleted }: { id: string; onOpenCompany?: (companyId: string) => void; onDeleted?: () => void }) {
+export function MailingView({
+  id,
+  onOpenCompany,
+  onDeleted,
+  embedded,
+}: {
+  id: string;
+  onOpenCompany?: (companyId: string) => void;
+  onDeleted?: () => void;
+  /** Inside the object panel: its header already names the mailing. */
+  embedded?: boolean;
+}) {
   const tool = useTool();
   const { status } = useStatus();
   const { mailing: loaded, error, reload } = useMailing(id);
@@ -129,8 +140,12 @@ export function MailingView({ id, onOpenCompany, onDeleted }: { id: string; onOp
   return (
     <div className="@container mf-root mf-island mf-card flex flex-col gap-3 p-3 text-xs">
       <header className="flex flex-col gap-0.5">
-        <KindLabel>Рассылка</KindLabel>
-        <h3 className="m-0 text-base font-bold leading-snug">{mailing.name}</h3>
+        {embedded ? null : (
+          <>
+            <KindLabel>Рассылка</KindLabel>
+            <h3 className="m-0 text-base font-bold leading-snug">{mailing.name}</h3>
+          </>
+        )}
         <span className="text-muted-foreground">
           {mailing.template_name ? `по шаблону «${mailing.template_name}»${mailing.edited ? " · изменён" : ""}` : "без шаблона"} ·{" "}
           {formatDateTime(mailing.updated_at)}

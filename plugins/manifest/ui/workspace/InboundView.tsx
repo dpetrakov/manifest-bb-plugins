@@ -7,7 +7,7 @@ import { formatDateTime } from "../labels";
 import { CompanyPicker, INBOUND_KIND_LABEL, type Inbound } from "../mail/common";
 import { Badge, Card, KindLabel, Status } from "../manifest";
 
-export function InboundView({ id, onLinked }: { id: string; onLinked?: (company: { id: string; name: string }) => void }) {
+export function InboundView({ id, onLinked, embedded }: { id: string; onLinked?: (company: { id: string; name: string }) => void; embedded?: boolean }) {
   const tool = useTool();
   const { status } = useStatus();
   const [x, setX] = useState<Inbound | null>(null);
@@ -41,7 +41,7 @@ export function InboundView({ id, onLinked }: { id: string; onLinked?: (company:
     <div className="@container mf-island flex flex-col gap-2 p-2 text-xs">
       <Card>
       <div className="flex flex-wrap items-center gap-2">
-        <KindLabel>Входящее письмо</KindLabel>
+        {embedded ? null : <KindLabel>Входящее письмо</KindLabel>}
         {x.kind === "reply" ? <Badge tone="volt">ответ</Badge> : null}
       </div>
       <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">

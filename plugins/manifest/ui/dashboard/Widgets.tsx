@@ -2,7 +2,7 @@
 // Manifest; проценты только при знаменателе от 20; цвет — только у нарушений.
 // Любой элемент кликабелен: плитка и полоса задают фильтр темы, строка
 // очереди и ленты открывает карточку справа.
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { PriorityBadge } from "../RegistryList";
 import {
@@ -326,14 +326,64 @@ function feedText(it: FeedItem): string {
     if (it.field === "done") return `шаг закрыт: ${it.new_value}`;
     return `шаг: ${it.new_value || "—"}`;
   }
+  // Mail events read as events, not as «field: old → new».
+  if (it.field === "mail_sent") return `письмо: ${it.new_value}`;
+  if (it.field === "mail_draft") return it.new_value ? `черновик письма: ${it.new_value}` : `черновик письма удалён`;
+  if (it.field === "sandbox_rollback") return `песочница: ${it.new_value}`;
   const label = FIELD_LABEL[it.field] ?? it.field;
   return `${label}: ${fieldValue(it.field, it.old_value)} → ${fieldValue(it.field, it.new_value)}`;
 }
 
+/** How many changes the dashboard shows; the rest — «Все изменения». */
+export const FEED_TOP = 8;
+
 export function Feed({ items, seenAt, onOpen }: { items: FeedItem[]; seenAt: string | null; onOpen: (id: string) => void }) {
+  const [all, setAll] = useState(false);
   if (items.length === 0) {
     return <p className="text-sm text-muted-foreground">{seenAt ? "С прошлого визита изменений нет." : "Изменений за неделю нет."}</p>;
   }
+  return (
+    <>
+      <FeedList items={items.slice(0, FEED_TOP)} onOpen={onOpen} />
+      {items.length > FEED_TOP ? (
+        <button type="button" className="self-start rounded-md px-1.5 py-1 text-xs font-semibold hover:bg-state-hover" onClick={() => setAll(true)}>
+          Все изменения · {items.length} →
+        </button>
+      ) : null}
+      {all ? (
+        // Full list over the dashboard: the dashboard keeps its layout, Esc or «×» closes.
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Что изменилось"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-[rgba(17,19,21,0.35)] p-4"
+          onClick={() => setAll(false)}
+          onKeyDown={(e) => e.key === "Escape" && setAll(false)}
+        >
+          <div className="mf-island mf-card flex max-h-full w-full max-w-2xl flex-col gap-2 p-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2">
+              <h4 className="m-0 flex-1 text-[13px] font-bold">Что изменилось · {items.length}</h4>
+              <button type="button" aria-label="Закрыть" autoFocus className="rounded-md px-2 py-1 hover:bg-state-hover" onClick={() => setAll(false)}>
+                ×
+              </button>
+            </div>
+            <div className="min-h-0 overflow-y-auto">
+              <FeedList
+                items={items}
+                onOpen={(id) => {
+                  setAll(false);
+                  onOpen(id);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function FeedList({ items, onOpen }: { items: FeedItem[]; onOpen: (id: string) => void }) {
   return (
     <ul className="flex flex-col">
       {items.map((it) => (

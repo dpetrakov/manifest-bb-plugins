@@ -4,6 +4,19 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.7.1
+
+- The object panel no longer shows the object twice: inside the panel the widget drops
+  its own header (organisation, mailing, inbound message) — the panel header names it.
+- Dashboard «Что изменилось»: the top 8 changes; «Все изменения» opens the full list over
+  the dashboard. Mail events read as words (letter, draft, sender, legal entity, sandbox).
+- An organisation without an open chat opens like a thread: the new-chat composer (and
+  its earlier chats) in the middle, the card on the right at the width of the thread panel;
+  the first message opens the thread with the card still on the right. «Развернуть» shows
+  the card on the whole width.
+- 0.7.0 shipped twice under one version tag, so bb kept the first build; 0.7.1 carries
+  the denser widgets and the sandbox flow of the second one.
+
 ## manifest 0.7.0
 
 Sending letters, statuses and replies (needs Manifest with W-20).

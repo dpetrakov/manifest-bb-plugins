@@ -34,7 +34,8 @@ export function CardTab({ subPath }: PluginNavPanelProps) {
 }
 
 /** The card of one organisation (the «Карточка» tab of the outreach page and of the dashboard). */
-export function CardView({ companyId, header }: { companyId: string; header?: ReactNode }) {
+/** embedded — inside the object panel: its header already names the organisation. */
+export function CardView({ companyId, header, embedded }: { companyId: string; header?: ReactNode; embedded?: boolean }) {
   const { status } = useStatus();
   const tool = useTool();
   const [card, setCard] = useState<Card | null>(null);
@@ -89,8 +90,12 @@ export function CardView({ companyId, header }: { companyId: string; header?: Re
     <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col gap-2 overflow-y-auto px-3 py-3 text-sm">
       {header}
       <div className="flex flex-col gap-1">
-        <KindLabel>Организация</KindLabel>
-        <h2 className="m-0 text-base font-bold leading-snug">{c.display_name}</h2>
+        {embedded ? null : (
+          <>
+            <KindLabel>Организация</KindLabel>
+            <h2 className="m-0 text-base font-bold leading-snug">{c.display_name}</h2>
+          </>
+        )}
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <Badge tone={COMPANY_STATUS_TONE[c.status] ?? "muted"}>{STATUS_LABEL[c.status] ?? c.status}</Badge>
           <span>

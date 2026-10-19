@@ -108,7 +108,7 @@ export function useOpenObjectPanel() {
 export function fullPagePath(ref: FocusRef, threadId: string): { path: string; subPath: string } {
   switch (ref.kind) {
     case "company":
-      return { path: PANEL_PATH, subPath: ref.id };
+      return { path: PANEL_PATH, subPath: `${ref.id}/full` };
     case "mailing":
       return { path: MAIL_PATH, subPath: `mailing/${ref.id}` };
     case "template":

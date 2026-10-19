@@ -7,6 +7,7 @@ import { ConnectSection } from "../ui/ConnectSection";
 import { OutreachPage } from "../ui/OutreachPage";
 import { DashboardPage } from "../ui/dashboard/DashboardPage";
 import { BatchDirective, filterFromAttributes } from "../ui/directives";
+import { Feed } from "../ui/dashboard/Widgets";
 import { MailPage } from "../ui/mail/MailPage";
 import { CompanyMail } from "../ui/mail/CompanyMail";
 import { LetterDirective } from "../ui/mail/LetterView";
@@ -544,7 +545,8 @@ describe("workspace: object on the right of a thread (W-18)", () => {
     expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toPluginPanel", path: "mail", options: { subPath: `mailing/${MID}` } });
     fireEvent.click(screen.getByRole("button", { name: "← THK" }));
     await waitFor(() => expect(rpcCalls).toHaveLength(1));
-    expect(await screen.findByText("THK Powertools")).toBeTruthy();
+    expect(await screen.findByText("Работа")).toBeTruthy();
+    expect(screen.queryByText("THK Powertools")).toBeNull(); // the panel header names it, the card does not repeat it
   });
 
   it("tells a chat without an object where objects open", async () => {
@@ -670,7 +672,8 @@ describe("sending from chips (W-20)", () => {
     });
     const b = (await screen.findByRole("button", { name: "Отправить" })) as HTMLButtonElement;
     expect(b.disabled).toBe(true);
-    expect(b.title).toMatch(/outreach.send/);
+    // Until the status arrives the reason is «нет подключения»; then — the missing right.
+    await waitFor(() => expect(b.title).toMatch(/outreach.send/));
   });
 
   it("sends a mailing with the number the person saw", async () => {
@@ -724,5 +727,48 @@ describe("sending from chips (W-20)", () => {
     expect(await screen.findByText("настоящим адресатам не уйдёт")).toBeTruthy();
     fireEvent.click(within(screen.getByRole("group")).getByRole("button", { name: "Отправить 2" }));
     await waitFor(() => expect(calls).toContain("mail_mailing_send"));
+  });
+});
+
+describe("dashboard feed", () => {
+  it("shows the top changes and the full list over the dashboard", async () => {
+    const items = Array.from({ length: 12 }, (_, i) => ({
+      id: `f${i}`, company_id: `c${i}`, company_name: `Org ${i}`, entity: "company", field: i === 0 ? "mail_sent" : "status",
+      old_value: "new", new_value: i === 0 ? "STIHL parts" : "contacted", actor: "op@example.com", at: "2026-10-19T10:00:00Z", batch_id: null,
+    }));
+    const opened: string[] = [];
+    function F() {
+      return <Feed items={items as never} seenAt={null} onOpen={(id) => opened.push(id)} />;
+    }
+    renderSlot({ component: F }, {} as never, { rpc: {} as never });
+    expect(await screen.findByText("Org 7")).toBeTruthy();
+    expect(screen.queryByText("Org 8")).toBeNull();
+    expect(screen.getByText(/письмо: STIHL parts/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Все изменения · 12/ }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByText("Org 11"));
+    expect(opened).toEqual(["c11"]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
+describe("organisation before a chat", () => {
+  it("puts the new chat in the middle and the card on the right, «Развернуть» goes wide", async () => {
+    renderSlot({ component: OutreachPage }, { subPath: "c1" }, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status(),
+        chats_list: () => ({ chats: [] }),
+        tool: ({ name }: { name: string }) =>
+          name === "outreach_get_company"
+            ? { result: card() }
+            : { result: { items: [], total: 0 } },
+      } as never,
+    });
+    expect(await screen.findByRole("heading", { name: "THK Powertools" })).toBeTruthy();
+    expect(await screen.findByText("Чатов пока нет.")).toBeTruthy();
+    expect(await screen.findByText("Работа")).toBeTruthy();
+    // The card does not repeat the name next to the chat.
+    expect(screen.getAllByText("THK Powertools")).toHaveLength(1);
   });
 });

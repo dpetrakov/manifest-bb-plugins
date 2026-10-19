@@ -78,7 +78,7 @@ function PanelNote({ children }: { children: React.ReactNode }) {
 function FocusBody({ focus, threadId, onOpen, onBack }: { focus: FocusRef; threadId: string; onOpen: (ref: FocusRef) => void; onBack: () => void }) {
   switch (focus.kind) {
     case "company":
-      return <CardView key={focus.id} companyId={focus.id} />;
+      return <CardView key={focus.id} companyId={focus.id} embedded />;
     case "mailing":
       return (
         <div className="p-2">
@@ -87,6 +87,7 @@ function FocusBody({ focus, threadId, onOpen, onBack }: { focus: FocusRef; threa
             id={focus.id}
             onOpenCompany={(id) => onOpen({ kind: "company", id, title: "" })}
             onDeleted={onBack}
+            embedded
           />
         </div>
       );
@@ -95,7 +96,7 @@ function FocusBody({ focus, threadId, onOpen, onBack }: { focus: FocusRef; threa
     case "topic":
       return <DashboardBody topicId={focus.id || threadId} onOpenCompany={(id) => onOpen({ kind: "company", id, title: "" })} />;
     case "inbound":
-      return <InboundView key={focus.id} id={focus.id} onLinked={(c) => onOpen({ kind: "company", id: c.id, title: c.name })} />;
+      return <InboundView key={focus.id} id={focus.id} embedded onLinked={(c) => onOpen({ kind: "company", id: c.id, title: c.name })} />;
   }
 }
 

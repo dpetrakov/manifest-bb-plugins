@@ -156,6 +156,10 @@ export const FIELD_LABEL: Record<string, string> = {
   done: "Шаг",
   due_on: "Срок шага",
   verification: "Проверка канала",
+  priority_manual: "Приоритет вручную",
+  do_not_contact: "Не связываться",
+  mail_sender: "Отправитель",
+  mail_legal_entity: "Юрлицо отправителя",
 };
 
 /** Human value of a history / batch field. */
