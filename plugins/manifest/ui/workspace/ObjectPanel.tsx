@@ -45,23 +45,29 @@ export function pinOf(params: unknown): FocusRef | null {
 }
 
 /**
- * A second object beside the chat (its own tab): shown for reference; «Сделать объектом
- * чата» moves the thread's focus to it (then the agent may work with it).
+ * A second object beside the chat (its own «рядом» tab, по приёмке W-20): for reference — the
+ * chat is about the main tab's object. Warm paper and an amber bar say so; «Сделать основной»
+ * goes to this object's own chat (its last one or a new one), where it is the object.
  */
-export function PinnedObject({ pin, threadId }: { pin: FocusRef; threadId?: string }) {
-  const { setFocus } = useFocus(threadId ?? "");
+export function PinnedObject({ pin, threadId, mainTitle }: { pin: FocusRef; threadId?: string; mainTitle?: string | null }) {
+  const { focus } = useFocus(threadId ?? "");
+  const openObject = useOpenObject();
+  const main = threadId ? (focus ? focus.title || KIND_LABEL[focus.kind] : null) : (mainTitle ?? null);
   return (
-    <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
-      <header className="mf-surface flex items-center gap-2 border-b border-border px-3 py-2">
+    <div className="@container mf-root mf-island mf-paper mf-beside flex h-full min-h-0 flex-col">
+      <div className="mf-beside-bar flex items-center gap-2 px-3 py-1.5 text-xs">
+        <span className="min-w-0 flex-1 truncate" title={main ? `Чат слева — о «${main}», эта карточка открыта рядом` : "Чат слева — не об этой карточке"}>
+          <b>Рядом</b> · чат {main ? <>о «{main}»</> : "не о ней"}
+        </span>
+        <Button size="sm" className="h-7 flex-none" aria-label="Сделать основной: перейти в её чат" onClick={() => void openObject(pin)}>
+          Сделать основной →
+        </Button>
+      </div>
+      <header className="flex items-center gap-2 border-b border-border px-3 py-2">
         <div className="min-w-0 flex-1">
           <KindLabel>{KIND_LABEL[pin.kind]}</KindLabel>
           <div className="truncate text-base font-bold leading-snug">{pin.title || KIND_LABEL[pin.kind]}</div>
         </div>
-        {threadId ? (
-          <Button size="sm" variant="ghost" className="h-8" onClick={() => void setFocus(pin)}>
-            Сделать объектом чата
-          </Button>
-        ) : null}
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <ObjectBody focus={pin} threadId={threadId} />

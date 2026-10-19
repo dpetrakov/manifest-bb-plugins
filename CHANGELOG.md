@@ -4,6 +4,13 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.7.8
+
+- The «Manifest · рядом» tab looks different from the chat's own object: warm paper instead
+  of the cool one and an amber bar «Рядом · чат о «…»» naming what the chat is about.
+- «Сделать основной →» on that bar goes to the card's own chat (its last one, or bb's New
+  thread screen), where it is the object. «Сделать объектом чата» is gone.
+
 ## manifest 0.7.7
 
 - Fix «Рядом» from the left list: bb declines side-panel opens from the sidebar (it has no

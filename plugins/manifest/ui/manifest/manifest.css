@@ -66,6 +66,19 @@
   background-size: 40px 40px;
 }
 
+/*
+ * «Рядом» (по приёмке W-20): вкладка второго объекта — не объект чата. Тёплая бумага вместо
+ * холодной (сетка та же, виджеты внутри — тоже) и янтарная полоса сверху: «чат — о другом».
+ */
+.mf-beside,
+.mf-beside .mf-paper {
+  background-color: #fbf5e6;
+}
+.mf-beside-bar {
+  background-color: color-mix(in oklab, var(--mf-amber) 18%, var(--mf-surface));
+  border-bottom: 1px solid color-mix(in oklab, var(--mf-amber) 50%, transparent);
+}
+
 /* Белая поверхность с рамкой: карточки внутри панели, шапка панели. */
 .mf-card {
   background-color: var(--mf-surface);

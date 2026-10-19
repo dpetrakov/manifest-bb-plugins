@@ -996,6 +996,24 @@ describe("«рядом» from the sidebar", () => {
   });
 });
 
+describe("the «рядом» tab", () => {
+  it("says the chat is about the main object and makes the card the main one", async () => {
+    const r = renderSlot({ component: ObjectPanel }, { threadId: "th-dash", params: { v: 1, pin: { kind: "company", id: "c7", title: "Agro Tools" } } } as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status({ canWork: true }),
+        focus_get: () => ({ focus: { kind: "topic", id: "", title: "" }, trail: [] }),
+        chats_list: () => ({ chats: [{ threadId: "th-agro", title: "Аутрич: Agro Tools" }] }),
+        focus_set: () => ({ focus: { kind: "company", id: "c7", title: "Agro Tools" }, trail: [] }),
+        tool: ({ name }: { name: string }) => (name === "outreach_get_company" ? { result: card() } : { result: null }),
+      } as never,
+    });
+    expect(await screen.findByText(/о «Дашборд аутрича»/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Сделать основной/ }));
+    await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toThread", threadId: "th-agro" }));
+  });
+});
+
 describe("objects beside the chat", () => {
   it("opens an organisation in a separate panel tab on Cmd-click", async () => {
     const r = renderSlot({ component: OutreachPage }, { subPath: "" }, {

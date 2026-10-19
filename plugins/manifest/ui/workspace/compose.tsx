@@ -78,7 +78,7 @@ export function ComposeBanner() {
 export function NewCompanyPanel({ params }: PluginNewThreadPanelProps) {
   const [intent] = useIntent();
   const pin = pinOf(params);
-  if (pin) return <PinnedObject pin={pin} />;
+  if (pin) return <PinnedObject pin={pin} mainTitle={intent ? intentTitle(intent) : null} />;
   if (!intent) return <p className="p-3 text-xs text-muted-foreground">Чат не привязан к объекту Manifest.</p>;
   return (
     <div className="h-full min-h-0 overflow-y-auto">
