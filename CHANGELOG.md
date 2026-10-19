@@ -4,6 +4,19 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.7.3
+
+- «Почта аутрича» works like the dashboard: the rail opens the last mail chat or a new
+  one with the mail hub on the right (templates, mailings, legal entities, unmatched
+  inbound). A mailing, a template or a message opens its own chat with it on the right
+  (or bb's New thread screen when it has none).
+- Mailings are a table: state, mode, recipients, sent, queued, bounced, replies, updated.
+- The New thread screen keeps one panel tab that follows the object instead of a new tab
+  per click; the dashboard in that panel scrolls.
+- A second object beside the chat: Cmd/Ctrl-click (or middle click) an organisation, or
+  drag it out of the list towards the panel — it opens in a separate tab; «Сделать объектом
+  чата» moves the chat to it.
+
 ## manifest 0.7.2
 
 - One layout for every object: the chat in the middle, the object on the right in the bb

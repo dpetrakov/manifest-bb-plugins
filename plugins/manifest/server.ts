@@ -32,6 +32,7 @@ import {
 } from "./lib/tools";
 import {
   EMPTY_FOCUS,
+  FOCUS_KINDS,
   KIND_TITLE,
   addChat,
   backFocus,
@@ -130,7 +131,7 @@ export const rpcContract = defineRpcContract({
    * New thread screen: the thread BB creates is linked to it (focus, chat index).
    */
   compose_submitted: {
-    input: z.object({ kind: z.enum(["company", "topic"]), id: z.string().max(64), title: z.string().max(200) }),
+    input: z.object({ kind: z.enum(FOCUS_KINDS), id: z.string().max(64), title: z.string().max(200) }),
     output: z.object({ ok: z.boolean() }),
   },
   chat_link: {
@@ -330,7 +331,7 @@ export default async function plugin(bb: BbPluginApi) {
   // New chat from BB's New thread screen (outreach, no chat yet): the banner reports the
   // submission, BB reports the created thread; whichever comes second links them.
   const LINK_WINDOW_MS = 20_000;
-  type Composed = { kind: "company" | "topic"; id: string; title: string };
+  type Composed = { kind: FocusRef["kind"]; id: string; title: string };
   let pendingCompose: (Composed & { at: number }) | null = null;
   let lastCreated: { threadId: string; at: number } | null = null;
   async function linkComposed(threadId: string, c: Composed) {
@@ -344,7 +345,23 @@ export default async function plugin(bb: BbPluginApi) {
       await saveFocus(threadId, pushFocus(await loadFocus(threadId), { kind: "topic", id: threadId, title: "Дашборд аутрича" }), true);
       return;
     }
+    if (c.kind === "mail") {
+      await saveFocus(threadId, pushFocus(await loadFocus(threadId), { kind: "mail", id: "hub", title: "Почта аутрича" }), true);
+      return;
+    }
+    if (c.kind === "template") {
+      // A template chat: the draft lives in the thread; a saved template is linked to it.
+      const tid = c.id || `new-${threadId}`.slice(0, 64);
+      await bb.sdk.threads.updatePluginMetadata({ threadId, set: { kind: "template", ...(c.id ? { templateId: c.id } : {}) } });
+      if (c.id) await bb.storage.kv.set(`tpl:${c.id}`, threadId);
+      await saveFocus(threadId, pushFocus(await loadFocus(threadId), { kind: "template", id: tid, title: c.title.slice(0, 200) }), true);
+      return;
+    }
     if (!c.id) return;
+    if (c.kind !== "company") {
+      await saveFocus(threadId, pushFocus(await loadFocus(threadId), await titled({ kind: c.kind, id: c.id, title: c.title.slice(0, 200) })), true);
+      return;
+    }
     const old = await bb.storage.kv.get<string>(threadKey(c.id));
     if (old && old !== threadId) await loadFocus(old);
     await bb.storage.kv.set(threadKey(c.id), threadId);

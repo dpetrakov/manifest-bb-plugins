@@ -1,7 +1,7 @@
 // Реестр потенциальных поставщиков — компактный список для левого сайдбара
 // (список «Потенциальные поставщики» в сайдбаре) и для корня страницы «Аутрич».
-import { useEffect, useMemo, useState } from "react";
-import { useOpenCompany } from "./workspace/state";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useOpenCompany, useOpenPinned } from "./workspace/state";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { FilterSelect, type Option } from "./FilterSelect";
@@ -50,6 +50,10 @@ export function RegistryList({ onNavigate }: { onNavigate?: () => void }) {
   const reg = useRegistry();
   const tool = useTool();
   const openCompany = useOpenCompany();
+  const openPinned = useOpenPinned();
+  const listRef = useRef<HTMLUListElement | null>(null);
+  // Cmd/Ctrl-click or a row dragged out of the list (towards the panel): a separate tab.
+  const pin = (it: ListItem) => openPinned({ kind: "company", id: it.id, title: it.display_name });
   const [facets, setFacets] = useState<Facets | null>(null);
   const [search, setSearch] = useState(reg.filters.q);
 
@@ -122,12 +126,25 @@ export function RegistryList({ onNavigate }: { onNavigate?: () => void }) {
         </span>
       </div>
       {reg.error && <Note>Не удалось загрузить: {reg.error}</Note>}
-      <ul className="min-h-0 flex-1 overflow-y-auto px-1">
+      <ul ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-1">
         {reg.items.map((it) => (
           <li key={it.id}>
             <button
               type="button"
-              onClick={() => open(it)}
+              title="Cmd/Ctrl-клик или перетащить в сторону — отдельной вкладкой"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "copy";
+                e.dataTransfer.setData("text/plain", it.display_name);
+              }}
+              onDragEnd={(e) => {
+                const r = listRef.current?.getBoundingClientRect();
+                if (r && e.clientX > r.right + 24) pin(it);
+              }}
+              onAuxClick={(e) => {
+                if (e.button === 1) pin(it);
+              }}
+              onClick={(e) => (e.metaKey || e.ctrlKey ? pin(it) : open(it))}
               className={cn(
                 "flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-state-hover",
                 reg.selectedId === it.id && "bg-state-active",

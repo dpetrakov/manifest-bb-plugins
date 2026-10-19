@@ -19,14 +19,58 @@ import { MailingView } from "../mail/MailingView";
 import { TemplateEditor } from "../mail/TemplateEditor";
 import { InboundView } from "./InboundView";
 import { KindLabel } from "../manifest";
-import { KIND_LABEL, useFocus, useOpenObjectPanel, useStartChat, type FocusRef } from "./state";
+import { KIND_LABEL, useFocus, useOpenObject, useOpenObjectPanel, useStartChat, type FocusKind, type FocusRef } from "./state";
+import { MailHub } from "../mail/MailPage";
 import { useRealtime } from "@get-bb/plugin-sdk/app";
 import { FOCUS_CHANGED } from "./state";
 import { rememberThread } from "./intent";
 
 const NewThreadComposer = experimental_NewThreadComposer;
 
-export function ObjectPanel({ threadId }: PluginThreadPanelProps) {
+export function ObjectPanel({ threadId, params }: PluginThreadPanelProps) {
+  const pin = pinOf(params);
+  if (pin) return <PinnedObject pin={pin} threadId={threadId} />;
+  return <FocusedObject threadId={threadId} />;
+}
+
+const PIN_KINDS: FocusKind[] = ["company", "mailing", "template", "topic", "inbound", "mail"];
+
+/** A pinned object of a separate panel tab (params.pin), or null. */
+export function pinOf(params: unknown): FocusRef | null {
+  const p = params && typeof params === "object" && !Array.isArray(params) ? (params as { pin?: unknown }).pin : null;
+  if (!p || typeof p !== "object") return null;
+  const r = p as { kind?: unknown; id?: unknown; title?: unknown };
+  if (typeof r.kind !== "string" || !PIN_KINDS.includes(r.kind as FocusKind) || typeof r.id !== "string") return null;
+  return { kind: r.kind as FocusKind, id: r.id, title: typeof r.title === "string" ? r.title : "" };
+}
+
+/**
+ * A second object beside the chat (its own tab): shown for reference; «Сделать объектом
+ * чата» moves the thread's focus to it (then the agent may work with it).
+ */
+export function PinnedObject({ pin, threadId }: { pin: FocusRef; threadId?: string }) {
+  const { setFocus } = useFocus(threadId ?? "");
+  return (
+    <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
+      <header className="mf-surface flex items-center gap-2 border-b border-border px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <KindLabel>{KIND_LABEL[pin.kind]}</KindLabel>
+          <div className="truncate text-base font-bold leading-snug">{pin.title || KIND_LABEL[pin.kind]}</div>
+        </div>
+        {threadId ? (
+          <Button size="sm" variant="ghost" className="h-8" onClick={() => void setFocus(pin)}>
+            Сделать объектом чата
+          </Button>
+        ) : null}
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <ObjectBody focus={pin} threadId={threadId} />
+      </div>
+    </div>
+  );
+}
+
+function FocusedObject({ threadId }: { threadId: string }) {
   const { focus, trail, error, setFocus, back, forget } = useFocus(threadId);
   const [chatsOpen, setChatsOpen] = useState(false);
   if (focus === undefined) return <PanelNote>{error ?? "Открываем…"}</PanelNote>;
@@ -71,8 +115,16 @@ function PanelNote({ children }: { children: React.ReactNode }) {
   );
 }
 
-function FocusBody({ focus, threadId, onOpen, onBack }: { focus: FocusRef; threadId: string; onOpen: (ref: FocusRef) => void; onBack: () => void }) {
+/** The widget of an object outside the thread's focus: links open the object's own chat. */
+export function ObjectBody({ focus, threadId }: { focus: FocusRef; threadId?: string }) {
+  const openObject = useOpenObject();
+  return <FocusBody focus={focus} threadId={threadId} onOpen={(ref) => void openObject(ref)} onBack={() => undefined} />;
+}
+
+function FocusBody({ focus, threadId, onOpen, onBack }: { focus: FocusRef; threadId?: string; onOpen: (ref: FocusRef) => void; onBack: () => void }) {
   switch (focus.kind) {
+    case "mail":
+      return <MailHub />;
     case "company":
       return <CardView key={focus.id} companyId={focus.id} embedded />;
     case "mailing":
@@ -90,7 +142,7 @@ function FocusBody({ focus, threadId, onOpen, onBack }: { focus: FocusRef; threa
     case "template":
       return <TemplateEditor key={focus.id} templateId={focus.id.startsWith("new-") ? null : focus.id} threadId={threadId} embedded />;
     case "topic":
-      return <DashboardBody topicId={focus.id || threadId} onOpenCompany={(id) => onOpen({ kind: "company", id, title: "" })} />;
+      return <DashboardBody topicId={focus.id || threadId || null} onOpenCompany={(id) => onOpen({ kind: "company", id, title: "" })} />;
     case "inbound":
       return <InboundView key={focus.id} id={focus.id} embedded onLinked={(c) => onOpen({ kind: "company", id: c.id, title: c.name })} />;
   }
@@ -152,7 +204,10 @@ const OPENED = "manifest:panel-opened:";
 export function FocusHeader({ threadId, isCompactViewport }: PluginThreadHeaderActionProps) {
   const { focus } = useFocus(threadId);
   const openPanel = useOpenObjectPanel();
-  useEffect(() => rememberThread(threadId, focus?.kind === "topic"), [threadId, focus?.kind]);
+  useEffect(
+    () => rememberThread(threadId, focus?.kind === "topic", !!focus && ["mail", "mailing", "template", "inbound"].includes(focus.kind)),
+    [threadId, focus],
+  );
   useEffect(() => {
     // On a phone the panel is a sheet over the chat: it opens by the button only.
     if (!focus || isCompactViewport) return;

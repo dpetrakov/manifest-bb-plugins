@@ -13,7 +13,7 @@ export const FOCUS_CHANGED = "manifest-focus-changed";
 /** The threadPanelAction that shows the object of a thread. */
 export const OBJECT_PANEL = "object";
 
-export type FocusKind = "company" | "mailing" | "template" | "topic" | "inbound";
+export type FocusKind = "company" | "mailing" | "template" | "topic" | "inbound" | "mail";
 export interface FocusRef {
   kind: FocusKind;
   id: string;
@@ -24,16 +24,18 @@ export const KIND_LABEL: Record<FocusKind, string> = {
   company: "Организация",
   mailing: "Рассылка",
   template: "Шаблон",
-  topic: "Тема дашборда",
+  topic: "Дашборд аутрича",
   inbound: "Входящее письмо",
+  mail: "Почта аутрича",
 };
 
 const THREAD_TITLE: Record<FocusKind, string> = {
   company: "Аутрич",
   mailing: "Рассылка",
   template: "Шаблон",
-  topic: "Тема",
+  topic: "Дашборд",
   inbound: "Письмо",
+  mail: "Почта",
 };
 
 /** The focus and chain of a thread, live. */
@@ -118,6 +120,8 @@ export function fullPagePath(ref: FocusRef, threadId: string): { path: string; s
       return { path: DASHBOARD_PATH, subPath: ref.id || threadId };
     case "inbound":
       return { path: MAIL_PATH, subPath: `inbound/${ref.id}` };
+    case "mail":
+      return { path: MAIL_PATH, subPath: "" };
   }
 }
 
@@ -150,38 +154,66 @@ export function useStartChat() {
 }
 
 /**
- * Opens an organisation from a page or the list: its latest chat with the card on the
- * right, or — without chats — BB's New thread screen with the card in its side panel
- * (compose.tsx): the same layout either way.
+ * Opens an object (organisation, mailing, template, inbound message, mail hub) the same
+ * way everywhere: its latest chat with the object on the right, or — without chats —
+ * BB's New thread screen with the object in its side panel (compose.tsx).
  */
-export function useOpenCompany() {
+export function useOpenObject() {
   const rpc = useRpc<typeof rpcContract>();
   const navigate = useBbNavigate();
+  return useCallback(
+    async (ref: FocusRef) => {
+      const { chats } = ref.id ? await rpc.call("chats_list", { kind: ref.kind, id: ref.id }).catch(() => ({ chats: [] })) : { chats: [] };
+      const last = chats[0];
+      if (last) {
+        await rpc.call("focus_set", { threadId: last.threadId, focus: { ...ref, title: ref.title.slice(0, 200) } });
+        navigate.toThread(last.threadId);
+        return;
+      }
+      setComposeIntent(ref.kind, ref.id, ref.title);
+      const { sectionId } = await rpc.call("section_ensure", null).catch(() => ({ sectionId: null }));
+      navigate.toCompose({ focusPrompt: true, ...(sectionId ? { placement: { sectionId, pinned: false } } : {}) });
+    },
+    [navigate, rpc],
+  );
+}
+
+/** An organisation: its latest chat or BB's New thread screen with the card on the right. */
+export function useOpenCompany() {
+  const open = useOpenObject();
   const tool = useTool();
   return useCallback(
     (companyId: string, title = "") => {
-      void rpc
-        .call("chats_list", { kind: "company", id: companyId })
-        .then(async ({ chats }) => {
-          const last = chats[0];
-          if (!last) {
-            let name = title;
-            if (!name) {
-              name = await tool<{ company?: { display_name?: string } }>("outreach_get_company", { id: companyId }).then(
-                (c) => c.company?.display_name ?? "",
-                () => "",
-              );
-            }
-            setComposeIntent("company", companyId, name);
-            const { sectionId } = await rpc.call("section_ensure", null).catch(() => ({ sectionId: null }));
-            navigate.toCompose({ focusPrompt: true, ...(sectionId ? { placement: { sectionId, pinned: false } } : {}) });
-            return;
-          }
-          await rpc.call("focus_set", { threadId: last.threadId, focus: { kind: "company", id: companyId, title: title.slice(0, 200) } });
-          navigate.toThread(last.threadId);
-        })
-        .catch(() => navigate.toPluginPanel(PANEL_PATH, { subPath: companyId }));
+      void (async () => {
+        let name = title;
+        if (!name) {
+          name = await tool<{ company?: { display_name?: string } }>("outreach_get_company", { id: companyId }).then(
+            (c) => c?.company?.display_name ?? "",
+            () => "",
+          );
+        }
+        await open({ kind: "company", id: companyId, title: name });
+      })();
     },
-    [navigate, rpc],
+    [open, tool],
+  );
+}
+
+/**
+ * A second object beside the chat: a separate tab of the side panel (Cmd/Ctrl-click or
+ * dragging a row out of the list). The thread's own object stays as it is.
+ */
+export function useOpenPinned() {
+  const navigate = useBbNavigate();
+  return useCallback(
+    (ref: FocusRef) => {
+      const params = { v: 1, pin: { kind: ref.kind, id: ref.id, title: ref.title.slice(0, 200) } };
+      const title = (ref.title || KIND_LABEL[ref.kind]).slice(0, 60);
+      // In a thread — its panel; on the New thread screen — that screen's panel.
+      if (!navigate.openThreadPanel({ actionId: OBJECT_PANEL, title, params })) {
+        navigate.openThreadPanel({ actionId: "company-new", title, params });
+      }
+    },
+    [navigate],
   );
 }

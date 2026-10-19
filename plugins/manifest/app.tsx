@@ -72,7 +72,7 @@ export default definePluginApp((app) => {
   app.slots.experimental_threadHeaderAction({ id: "focus", title: "Объект Manifest", component: FocusHeader });
   // Организация без чата открывается экраном нового треда BB: карточка — в его боковой
   // панели, над полем — баннер; первое сообщение создаёт тред, привязанный к организации.
-  app.slots.experimental_newThreadPanelAction({ id: NEW_COMPANY_PANEL, title: "Организация Manifest", icon: "manifest/id-card", layout: "flush", component: NewCompanyPanel });
+  app.slots.experimental_newThreadPanelAction({ id: NEW_COMPANY_PANEL, title: "Manifest", icon: "manifest/id-card", layout: "flush", component: NewCompanyPanel });
   app.composer.customize({ id: "company-intent", scopes: ["new-thread"], banners: [{ id: "company", chrome: "bare", component: ComposeBanner }] });
   app.slots.settingsSection({
     id: "connect",

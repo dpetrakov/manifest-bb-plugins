@@ -10,12 +10,13 @@ import { BatchDirective, filterFromAttributes } from "../ui/directives";
 import { DashboardBody } from "../ui/dashboard/DashboardPage";
 import { useOpenCompany } from "../ui/workspace/state";
 import { Feed } from "../ui/dashboard/Widgets";
-import { MailPage } from "../ui/mail/MailPage";
+import { MailHub, MailPage } from "../ui/mail/MailPage";
+import { TemplateEditor } from "../ui/mail/TemplateEditor";
 import { CompanyMail } from "../ui/mail/CompanyMail";
 import { LetterDirective } from "../ui/mail/LetterView";
 import { MailingDirective } from "../ui/mail/MailingView";
 import { SUPPLIERS_LIST, switchSuppliersList } from "../ui/SuppliersList";
-import { FocusHeader, ObjectPanel } from "../ui/workspace/ObjectPanel";
+import { FocusHeader, ObjectBody, ObjectPanel } from "../ui/workspace/ObjectPanel";
 import { LetterChip, MailingChip } from "../ui/workspace/Chips";
 import { MailingSendBar } from "../ui/mail/send";
 
@@ -286,20 +287,25 @@ describe("mail (W-16)", () => {
   const preview = { subject: "Cooperation with Example Ltd", text: "Dear Sir or Madam", html: "<p>Dear Sir or Madam</p>", missing: [], unknown: [], to: "", from: "", from_name: "", problems: [], sample: true };
 
   it("lists templates and opens the editor", async () => {
-    const r = renderSlot({ component: MailPage }, { subPath: "templates" }, {
+    window.sessionStorage.clear();
+    const r = renderSlot({ component: () => <MailHub initial="templates" /> }, {}, {
       rpc: {
         status: () => status({ canMail: true }),
+        chats_list: () => ({ chats: [] }),
+        section_ensure: () => ({ sectionId: null }),
         tool: ({ name }: { name: string }) => ({ result: name === "mail_templates" ? { items: [tpl] } : null }),
       } as never,
     });
     expect(await screen.findByText("First letter")).toBeTruthy();
+    // No chat about the template yet: BB's New thread screen with the editor on the right.
     fireEvent.click(screen.getByText("First letter"));
-    expect(JSON.stringify(r.inspection)).toContain("tpl/t1");
+    await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toCompose" }));
+    expect(window.sessionStorage.getItem("manifest:compose-intent")).toContain('"id":"t1"');
   });
 
   it("saves a template as a new one", async () => {
     const saves: Record<string, unknown>[] = [];
-    renderSlot({ component: MailPage }, { subPath: "tpl/t1" }, {
+    renderSlot({ component: () => <TemplateEditor templateId="t1" /> }, {}, {
       rpc: {
         status: () => status({ canMail: true }),
         template_thread_get: () => ({ threadId: null }),
@@ -602,21 +608,20 @@ describe("workspace: object on the right of a thread (W-18)", () => {
     await waitFor(() => expect(calls).toHaveLength(2));
   });
 
-  it("shows a mailing and an inbound message on the whole screen with their chats", async () => {
+  it("opens an old mailing link in the mailing's chat, the mailing on the right", async () => {
     const r = renderSlot({ component: MailPage }, { subPath: `mailing/${MID}` }, {
       rpc: {
         status: () => status({ canMail: true }),
         chats_list: ({ kind }: { kind: string }) => ({ chats: kind === "mailing" ? [{ threadId: "th-m", title: "Рассылка: STIHL" }] : [] }),
-        tool: ({ name }: { name: string }) => ({ result: name === "mail_mailing_get" ? { ...mailingSummary, partial: false } : { items: [] } }),
+        focus_set: () => ({ focus: { kind: "mailing", id: MID, title: "" }, trail: [] }),
+        tool: () => ({ result: { items: [] } }),
       } as never,
     });
-    expect(await screen.findByText("Уйдёт: 2")).toBeTruthy();
-    fireEvent.click(await screen.findByRole("button", { name: "Рассылка: STIHL" }));
-    expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toThread", threadId: "th-m" });
+    await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toThread", threadId: "th-m" }));
   });
 
   it("opens an inbound message with a link-to-organisation form", async () => {
-    renderSlot({ component: MailPage }, { subPath: "inbound/i1" }, {
+    renderSlot({ component: () => <ObjectBody focus={{ kind: "inbound", id: "i1", title: "" }} /> }, {}, {
       rpc: {
         status: () => status({ canMail: true }),
         chats_list: () => ({ chats: [] }),
@@ -628,7 +633,6 @@ describe("workspace: object on the right of a thread (W-18)", () => {
     });
     expect(await screen.findByText("Send the price list")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Привязать" })).toBeTruthy();
-    expect(screen.getByText("Чатов пока нет.")).toBeTruthy();
   });
 });
 
@@ -800,5 +804,40 @@ describe("dashboard rail", () => {
     });
     await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toCompose" }));
     expect(window.sessionStorage.getItem("manifest:compose-intent")).toContain('"kind":"topic"');
+  });
+});
+
+describe("objects beside the chat", () => {
+  it("opens an organisation in a separate panel tab on Cmd-click", async () => {
+    const r = renderSlot({ component: OutreachPage }, { subPath: "" }, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status(),
+        tool: ({ name }: { name: string }) =>
+          name === "outreach_facets" ? { result: { regions: [], countries } } : { result: { items: [item("c2", "THK", "SG")], total: 1, limit: 50, offset: 0 } },
+      } as never,
+    });
+    const row = await screen.findByText("THK");
+    fireEvent.click(row, { metaKey: true });
+    await waitFor(() => expect(r.inspection.navigateCalls.some((c) => c.method === "openThreadPanel")).toBe(true));
+    expect(JSON.stringify(r.inspection.navigateCalls.find((c) => c.method === "openThreadPanel"))).toContain('"pin"');
+  });
+
+  it("lists mailings with their state and result", async () => {
+    const sending = {
+      id: "m1", name: "STIHL — first letter", template_id: null, template_version: null, template_name: "First", audience: "", subject: "s", body: "b",
+      edited: false, state: "sending", total: 4, ready: 4, skipped: 0, reasons: {}, recipients: [], partial: false, updated_at: "2026-10-19T10:00:00Z",
+      updated_by: "op", mode: "sandbox",
+      progress: { letters: 4, in_channel: 1, sent: 3, failed: 0, suppressed: 0, cancelled: 0, replies: 2, auto_replies: 0, unsubscribes: 0, senders: [], estimated_done_at: null, sandbox: true, sent_at: null, sent_by: "op", stopped_at: null, stopped_by: "" },
+    };
+    renderSlot({ component: () => <MailHub initial="mailings" /> }, {}, {
+      rpc: { status: () => status({ canMail: true }), tool: () => ({ result: { items: [sending] } }) } as never,
+    });
+    expect(await screen.findByText("STIHL — first letter")).toBeTruthy();
+    expect(screen.getByText("Идёт")).toBeTruthy();
+    expect(screen.getByText("песочница")).toBeTruthy();
+    const row = screen.getByText("STIHL — first letter").closest("tr")!;
+    expect(within(row).getByText("3")).toBeTruthy(); // ушло
+    expect(within(row).getByText("2")).toBeTruthy(); // ответы
   });
 });

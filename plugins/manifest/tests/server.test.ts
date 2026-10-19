@@ -592,6 +592,13 @@ describe("focus of a thread (W-18)", () => {
     await h.behavior.emitThreadEvent("thread.created", { thread: makeThreadResponse({ id: "th-dash" }) });
     expect((await focusOf(h, "th-dash")).focus).toMatchObject({ kind: "topic", id: "th-dash" });
     expect(meta["th-dash"]).toMatchObject({ kind: "dashboard" });
+    // A chat about the mail hub and about a mailing.
+    await h.behavior.callRpc("compose_submitted", { kind: "mail", id: "", title: "" });
+    await h.behavior.emitThreadEvent("thread.created", { thread: makeThreadResponse({ id: "th-mail" }) });
+    expect((await focusOf(h, "th-mail")).focus).toMatchObject({ kind: "mail" });
+    await h.behavior.callRpc("compose_submitted", { kind: "mailing", id: MID, title: "STIHL" });
+    await h.behavior.emitThreadEvent("thread.created", { thread: makeThreadResponse({ id: "th-mlg" }) });
+    expect((await focusOf(h, "th-mlg")).focus).toMatchObject({ kind: "mailing", id: MID });
     // A thread nobody asked for is not linked.
     await h.behavior.emitThreadEvent("thread.created", { thread: makeThreadResponse({ id: "th-other" }) });
     expect((await focusOf(h, "th-other")).focus).toBeNull();

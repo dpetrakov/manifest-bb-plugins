@@ -1,8 +1,8 @@
-// Страница «Почта» плагина (W-16, EP-085, docs/outreach/mail.md): шаблоны,
-// рассылки (W-17), юрлица и отправители, неразобранные входящие. subPath: "" |
-// "templates" | "mailings" | "entities" | "inbound" | "tpl/<id>" | "tpl/new" |
-// "mailing/<id>". Токены шлюза задаются только в
-// вебе Manifest. Отправка писем — следующая волна.
+// «Почта аутрича» (W-16, EP-085, docs/outreach/mail.md; по приёмке W-20 — по модели
+// рабочего места): почта — объект справа от чата, как дашборд и карточка. MailHub —
+// вкладки шаблонов, рассылок, юрлиц и неразобранных входящих; клик по рассылке, шаблону
+// открывает его чат (или экран нового треда BB) с объектом справа. Рейл открывает
+// последний чат по почте или новый. Токены шлюза задаются только в вебе Manifest.
 import { useCallback, useEffect, useState } from "react";
 import { useBbNavigate, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
@@ -16,19 +16,16 @@ import {
   CompanyPicker,
   INBOUND_KIND_LABEL,
   KIND_LABEL,
-  MAIL_PATH,
   selectCls,
   type Inbound,
   type LegalEntity,
   type Template,
 } from "./common";
-import { TemplateEditor } from "./TemplateEditor";
-import { ChatsList } from "../workspace/ObjectPanel";
-import { InboundView } from "../workspace/InboundView";
-import { useOpenCompany, type FocusRef } from "../workspace/state";
-import { MailingView } from "./MailingView";
+import { useOpenObject } from "../workspace/state";
+import { railTarget } from "../workspace/intent";
 import type { Mailing } from "./common";
-import { ModeBadge, Status } from "../manifest";
+import { mailingLine } from "./send";
+import { ModeBadge, Status, StatusDot } from "../manifest";
 
 const TABS: [string, string][] = [
   ["templates", "Шаблоны"],
@@ -37,61 +34,13 @@ const TABS: [string, string][] = [
   ["inbound", "Неразобранные входящие"],
 ];
 
-/** Объект почты на всю ширину (W-18): сам объект и его чаты. */
-function ObjectPage({ back, backLabel, focus, children }: { back: string; backLabel: string; focus: FocusRef; children: React.ReactNode }) {
-  const navigate = useBbNavigate();
-  return (
-    <div className="@container mf-root mf-island mf-paper h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-6xl flex-col gap-3 p-3">
-        <button type="button" className="self-start text-xs text-muted-foreground hover:underline" onClick={() => navigate.toPluginPanel(MAIL_PATH, { subPath: back })}>
-          {backLabel}
-        </button>
-        <div className="flex flex-col gap-4 @4xl:flex-row">
-          <div className="min-w-0 flex-1">{children}</div>
-          <aside className="mf-card flex w-full flex-col gap-2 self-start p-3 @4xl:w-96 @4xl:flex-none">
-            <h3 className="text-[13px] font-bold">Чаты</h3>
-            <ChatsList focus={focus} />
-          </aside>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function MailPage({ subPath }: PluginNavPanelProps) {
+/** The mail hub: in a chat's side panel or, as a fallback, on the whole page. */
+export function MailHub({ initial = "mailings" }: { initial?: string }) {
   const { status } = useStatus();
-  const navigate = useBbNavigate();
-  const openCompany = useOpenCompany();
-  const [head, rest] = [subPath.split("/")[0] || "templates", subPath.split("/")[1] ?? ""];
+  const [tab, setTab] = useState(initial);
   if (!status) return <Note>Подключаемся к Manifest…</Note>;
   if (!status.connected) return <Note>{status.message}</Note>;
   if (!status.canMail) return <Note>Почта появится после обновления Manifest: на сервере ещё нет почтового слоя.</Note>;
-  if (head === "tpl") {
-    return (
-      <div className="@container mf-root mf-island mf-paper h-full">
-        <TemplateEditor key={rest} templateId={rest && rest !== "new" ? rest : null} />
-      </div>
-    );
-  }
-  if (head === "mailing" && rest) {
-    return (
-      <ObjectPage back="mailings" backLabel="← Рассылки" focus={{ kind: "mailing", id: rest, title: "" }}>
-        <MailingView
-          key={rest}
-          id={rest}
-          onOpenCompany={(id) => openCompany(id)}
-          onDeleted={() => navigate.toPluginPanel(MAIL_PATH, { subPath: "mailings" })}
-        />
-      </ObjectPage>
-    );
-  }
-  if (head === "inbound" && rest) {
-    return (
-      <ObjectPage back="inbound" backLabel="← Входящие" focus={{ kind: "inbound", id: rest, title: "" }}>
-        <InboundView key={rest} id={rest} onLinked={(c) => openCompany(c.id, c.name)} />
-      </ObjectPage>
-    );
-  }
   return (
     <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
       <div className="mf-surface flex gap-1 overflow-x-auto border-b border-border px-3">
@@ -99,25 +48,48 @@ export function MailPage({ subPath }: PluginNavPanelProps) {
           <button
             key={k}
             type="button"
-            onClick={() => navigate.toPluginPanel(MAIL_PATH, { subPath: k })}
-            className={cn("px-3 py-2 text-xs", head === k ? "border-b-2 border-foreground font-semibold" : "text-muted-foreground hover:text-foreground")}
+            onClick={() => setTab(k)}
+            className={cn("whitespace-nowrap px-3 py-2 text-xs", tab === k ? "border-b-2 border-foreground font-semibold" : "text-muted-foreground hover:text-foreground")}
           >
             {label}
           </button>
         ))}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {head === "entities" ? <Entities /> : head === "inbound" ? <InboundList /> : head === "mailings" ? <Mailings /> : <Templates />}
+        {tab === "entities" ? <Entities /> : tab === "inbound" ? <InboundList /> : tab === "mailings" ? <Mailings /> : <Templates />}
       </div>
     </div>
   );
+}
+
+/**
+ * The «Почта аутрича» rail: the last mail chat or BB's New thread screen with the hub on
+ * the right. Old links to an object (mailing/<id>, tpl/<id>, inbound/<id>) open its chat.
+ * After «back» (a redirect a moment ago) the hub stays here.
+ */
+export function MailPage({ subPath }: PluginNavPanelProps) {
+  const navigate = useBbNavigate();
+  const openObject = useOpenObject();
+  const [stay, setStay] = useState(false);
+  const [head, rest] = [subPath.split("/")[0] || "", subPath.split("/")[1] ?? ""];
+  useEffect(() => {
+    if (head === "mailing" && rest) return void openObject({ kind: "mailing", id: rest, title: "" });
+    if (head === "inbound" && rest) return void openObject({ kind: "inbound", id: rest, title: "" });
+    if (head === "tpl") return void openObject({ kind: "template", id: rest && rest !== "new" ? rest : "", title: "" });
+    const target = railTarget("mail");
+    if (target === undefined) setStay(true);
+    else if (target) navigate.toThread(target);
+    else void openObject({ kind: "mail", id: "", title: "" });
+  }, [head, navigate, openObject, rest]);
+  if (!stay) return <Note>Открываем почту…</Note>;
+  return <MailHub initial={TABS.some(([k]) => k === head) ? head : "mailings"} />;
 }
 
 // ---- templates ----
 
 function Templates() {
   const tool = useTool();
-  const navigate = useBbNavigate();
+  const openObject = useOpenObject();
   const { status } = useStatus();
   const [audience, setAudience] = useState("");
   const [items, setItems] = useState<Template[] | null>(null);
@@ -139,7 +111,7 @@ function Templates() {
         </select>
         <span className="flex-1" />
         {status?.canManage ? (
-          <Button size="sm" className="h-8" onClick={() => navigate.toPluginPanel(MAIL_PATH, { subPath: "tpl/new" })}>
+          <Button size="sm" className="h-8" onClick={() => void openObject({ kind: "template", id: "", title: "" })}>
             Новый шаблон
           </Button>
         ) : null}
@@ -155,7 +127,7 @@ function Templates() {
             <li key={t.id}>
               <button
                 type="button"
-                onClick={() => navigate.toPluginPanel(MAIL_PATH, { subPath: `tpl/${t.id}` })}
+                onClick={() => void openObject({ kind: "template", id: t.id, title: t.name })}
                 className="flex w-full flex-col gap-0.5 px-3 py-2 text-left hover:bg-state-hover"
               >
                 <span className="flex items-baseline justify-between gap-2">
@@ -176,9 +148,11 @@ function Templates() {
 
 // ---- mailings ----
 
+const MAILING_STATE: Record<string, string> = { draft: "Черновик", sending: "Идёт", done: "Завершена", stopped: "Остановлена", sent: "Отправлена" };
+
 function Mailings() {
   const tool = useTool();
-  const navigate = useBbNavigate();
+  const openObject = useOpenObject();
   const [items, setItems] = useState<Mailing[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -188,33 +162,51 @@ function Mailings() {
     );
   }, [tool]);
   if (!items) return <Note>{error ?? "Загружаем…"}</Note>;
-  if (items.length === 0) {
-    return (
-      <Note>
-        Рассылок нет. Согласуйте письмо организации в её чате и попросите агента «разослать это письмо ещё» — или нажмите «Разослать и другим» в
-        карточке.
-      </Note>
-    );
-  }
+  if (items.length === 0) return <Note>Рассылок нет.</Note>;
+  const n = (v: number | undefined) => (v ? v : <span className="text-muted-foreground">—</span>);
   return (
-    <ul className="flex flex-col divide-y divide-border mf-card overflow-hidden text-sm">
-      {items.map((m) => (
-        <li key={m.id}>
-          <button
-            type="button"
-            onClick={() => navigate.toPluginPanel(MAIL_PATH, { subPath: `mailing/${m.id}` })}
-            className="flex w-full items-baseline justify-between gap-2 px-3 py-2 text-left hover:bg-state-hover"
-          >
-            <Status tone={m.skipped ? "warning" : m.total ? "ok" : "muted"} className="font-medium">
-              {m.name}
-            </Status>
-            <span className="text-[11px] text-muted-foreground">
-              {m.total} получ. · {m.template_name || "без шаблона"} · {formatDateTime(m.updated_at)}
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
+    <div className="mf-card overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead className="bg-[var(--mf-surface-strong,#eef3f1)] text-left text-muted-foreground">
+          <tr>
+            <th className="px-3 py-2 font-semibold">Рассылка</th>
+            <th className="px-2 py-2 font-semibold">Состояние</th>
+            <th className="px-2 py-2 text-right font-semibold" title="Получателей / готовых писем">Получ.</th>
+            <th className="px-2 py-2 text-right font-semibold">Ушло</th>
+            <th className="px-2 py-2 text-right font-semibold" title="В очереди шлюза">Очередь</th>
+            <th className="px-2 py-2 text-right font-semibold" title="Недоставка, ошибка, дубль">Недост.</th>
+            <th className="px-2 py-2 text-right font-semibold">Ответы</th>
+            <th className="hidden px-3 py-2 font-semibold @2xl:table-cell">Обновлена</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((m) => {
+            const p = m.progress;
+            const line = mailingLine(m);
+            return (
+              <tr key={m.id} className="cursor-pointer border-t border-border hover:bg-state-hover" onClick={() => void openObject({ kind: "mailing", id: m.id, title: m.name })}>
+                <td className="max-w-[18rem] px-3 py-2">
+                  <div className="truncate font-medium">{m.name}</div>
+                  <div className="truncate text-[11px] text-muted-foreground">{m.template_name || "без шаблона"}</div>
+                </td>
+                <td className="whitespace-nowrap px-2 py-2">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Status tone={line.tone}>{MAILING_STATE[m.state] ?? m.state}</Status>
+                    {m.mode ? <ModeBadge sandbox={m.mode === "sandbox"} /> : null}
+                  </span>
+                </td>
+                <td className="px-2 py-2 text-right tabular-nums">{p ? p.letters : m.total}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{n(p?.sent)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{n(p?.in_channel)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{p?.failed ? <span className="inline-flex items-center gap-1"><StatusDot tone="error" />{p.failed}</span> : n(0)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{p?.replies ? <span className="mf-badge mf-badge--volt">{p.replies}</span> : n(0)}</td>
+                <td className="hidden whitespace-nowrap px-3 py-2 text-muted-foreground @2xl:table-cell">{formatDateTime(m.updated_at)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
