@@ -19,7 +19,7 @@ import { MailingView } from "../mail/MailingView";
 import { TemplateEditor } from "../mail/TemplateEditor";
 import { InboundView } from "./InboundView";
 import { KindLabel } from "../manifest";
-import { KIND_LABEL, useFocus, useOpenObject, useOpenObjectPanel, useStartChat, type FocusKind, type FocusRef } from "./state";
+import { KIND_LABEL, useBesideHost, useFocus, useOpenObject, useOpenObjectPanel, useStartChat, type FocusKind, type FocusRef } from "./state";
 import { MailHub } from "../mail/MailPage";
 import { useRealtime } from "@get-bb/plugin-sdk/app";
 import { FOCUS_CHANGED } from "./state";
@@ -203,6 +203,7 @@ const OPENED = "manifest:panel-opened:";
  */
 export function FocusHeader({ threadId, isCompactViewport }: PluginThreadHeaderActionProps) {
   const { focus } = useFocus(threadId);
+  useBesideHost(threadId);
   const openPanel = useOpenObjectPanel();
   useEffect(
     () => rememberThread(threadId, focus?.kind === "topic", !!focus && ["mail", "mailing", "template", "inbound"].includes(focus.kind)),

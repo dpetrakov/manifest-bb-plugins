@@ -10,7 +10,7 @@ import type { rpcContract } from "../../server";
 import { ManifestMark } from "../manifest";
 import { INTENT_EVENT, clearComposeIntent, readComposeIntent, type ComposeIntent } from "./intent";
 import { ObjectBody, PinnedObject, pinOf } from "./ObjectPanel";
-import { KIND_LABEL } from "./state";
+import { KIND_LABEL, useBesideHost } from "./state";
 
 export const NEW_COMPANY_PANEL = "company-new";
 
@@ -35,6 +35,7 @@ export function ComposeBanner() {
   const navigate = useBbNavigate();
   const composer = useComposer();
   const [intent, setIntent] = useIntent();
+  useBesideHost(null);
   const shown = useRef("");
   useEffect(() => {
     if (!intent) return;

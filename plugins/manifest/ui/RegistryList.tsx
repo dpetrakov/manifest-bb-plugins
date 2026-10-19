@@ -57,7 +57,7 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
   // The list knows the surface: a thread's panel, or the New thread screen's one. Where there is
   // no side panel (a plugin page) — the organisation's chat, so a click never does nothing.
   const pin = (it: ListItem) => {
-    if (!openPinned({ kind: "company", id: it.id, title: it.display_name }, activeThreadId !== null)) open(it);
+    if (!openPinned({ kind: "company", id: it.id, title: it.display_name }, activeThreadId)) open(it);
   };
   const peek = usePeek();
   const [facets, setFacets] = useState<Facets | null>(null);

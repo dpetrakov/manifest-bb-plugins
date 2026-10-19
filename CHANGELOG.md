@@ -4,6 +4,14 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.7.7
+
+- Fix «Рядом» from the left list: bb declines side-panel opens from the sidebar (it has no
+  panel of its own), and the fallback opened the organisation's chat instead. The list now
+  asks the open thread (its header action) or the New thread screen (its composer banner)
+  to open the «Manifest · рядом» tab in their own panel; the chat is only the fallback where
+  there is no panel at all.
+
 ## manifest 0.7.6
 
 - «Рядом», a click in a dashboard selection and Cmd/Ctrl-click open the organisation in its

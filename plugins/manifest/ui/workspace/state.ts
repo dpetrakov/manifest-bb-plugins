@@ -210,17 +210,48 @@ export function useOpenCompany() {
  * A second object beside the chat: a separate tab of the side panel (Cmd/Ctrl-click or
  * dragging a row out of the list). The thread's own object stays as it is.
  */
+type Navigate = ReturnType<typeof useBbNavigate>;
+const BESIDE_EVENT = "manifest:open-beside";
+
+function openBeside(navigate: Navigate, ref: FocusRef, order: string[]): boolean {
+  const params = { v: 1, pin: { kind: ref.kind, id: ref.id, title: ref.title.slice(0, 200) } };
+  const title = (ref.title || KIND_LABEL[ref.kind]).slice(0, 60);
+  for (const actionId of order) if (navigate.openThreadPanel({ actionId, title, params })) return true;
+  return false;
+}
+
+/**
+ * The surface that can open a «рядом» tab (по приёмке W-20): BB declines panel opens from
+ * the sidebar list — it has no side panel of its own. A thread's header (`threadId`) and the
+ * New thread screen's banner (null) listen and open the tab in their own panel.
+ */
+export function useBesideHost(threadId: string | null) {
+  const navigate = useBbNavigate();
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ ref: FocusRef; threadId: string | null }>).detail;
+      if (e.defaultPrevented || !d || d.threadId !== threadId) return;
+      if (openBeside(navigate, d.ref, threadId ? [BESIDE_PANEL] : [BESIDE_NEW_PANEL])) e.preventDefault();
+    };
+    window.addEventListener(BESIDE_EVENT, on);
+    return () => window.removeEventListener(BESIDE_EVENT, on);
+  }, [navigate, threadId]);
+}
+
 export function useOpenPinned() {
   const navigate = useBbNavigate();
   return useCallback(
-    /** `inThread` — the caller knows the surface (the sidebar list): its panel action goes first. */
-    (ref: FocusRef, inThread?: boolean) => {
-      const params = { v: 1, pin: { kind: ref.kind, id: ref.id, title: ref.title.slice(0, 200) } };
-      const title = (ref.title || KIND_LABEL[ref.kind]).slice(0, 60);
-      // In a thread — its panel; on the New thread screen — that screen's panel.
-      const order = inThread === false ? [BESIDE_NEW_PANEL, BESIDE_PANEL] : [BESIDE_PANEL, BESIDE_NEW_PANEL];
-      for (const actionId of order) if (navigate.openThreadPanel({ actionId, title, params })) return true;
-      return false;
+    /**
+     * `threadId` — the window's open thread as the caller knows it (the sidebar list; null —
+     * the New thread screen): its surface opens the tab. Inside a panel — directly.
+     */
+    (ref: FocusRef, threadId?: string | null) => {
+      if (threadId !== undefined) {
+        const e = new CustomEvent(BESIDE_EVENT, { cancelable: true, detail: { ref, threadId } });
+        window.dispatchEvent(e);
+        if (e.defaultPrevented) return true;
+      }
+      return openBeside(navigate, ref, threadId === null ? [BESIDE_NEW_PANEL, BESIDE_PANEL] : [BESIDE_PANEL, BESIDE_NEW_PANEL]);
     },
     [navigate],
   );

@@ -8,7 +8,7 @@ import { OutreachPage } from "../ui/OutreachPage";
 import { DashboardPage } from "../ui/dashboard/DashboardPage";
 import { BatchDirective, filterFromAttributes } from "../ui/directives";
 import { DashboardBody } from "../ui/dashboard/DashboardPage";
-import { useOpenCompany } from "../ui/workspace/state";
+import { useBesideHost, useOpenCompany, useOpenPinned } from "../ui/workspace/state";
 import { Feed } from "../ui/dashboard/Widgets";
 import { MailHub, MailPage } from "../ui/mail/MailPage";
 import { TemplateEditor } from "../ui/mail/TemplateEditor";
@@ -915,7 +915,8 @@ describe("organisation on hover", () => {
     window.matchMedia = ((q: string) => ({ matches: q.includes("hover"), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false })) as never;
     (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
     try {
-      const due = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10);
+      const past = new Date(Date.now() - 3 * 86_400_000);
+      const due = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, "0")}-${String(past.getDate()).padStart(2, "0")}`;
       const row = {
         ...item("c7", "Agro Tools", "IN"), status: "contacted", owner: "op@example.com", touches_count: 4,
         last_touch_at: "2026-10-14T09:00:00Z", last_outbound_at: "2026-10-12T09:00:00Z", last_inbound_at: "2026-10-14T09:00:00Z",
@@ -965,6 +966,33 @@ describe("organisation on hover", () => {
       window.matchMedia = mm;
       (globalThis as { ResizeObserver?: unknown }).ResizeObserver = ro;
     }
+  });
+});
+
+describe("«рядом» from the sidebar", () => {
+  it("asks the open thread's header to open the tab: the sidebar has no side panel", async () => {
+    // The sidebar's own opener is declined by BB; the thread header (th-1) opens the tab.
+    let fromHost = false;
+    function Host({ threadId }: { threadId: string | null }) {
+      useBesideHost(threadId);
+      return null;
+    }
+    function List() {
+      const pin = useOpenPinned();
+      return (
+        <>
+          <Host threadId="th-other" />
+          <Host threadId="th-1" />
+          <button type="button" onClick={() => (fromHost = pin({ kind: "company", id: "c7", title: "Agro" }, "th-1"))}>Рядом</button>
+        </>
+      );
+    }
+    const r = renderSlot({ component: List }, {} as never, { pluginId: "manifest", rpc: {} as never, openThreadPanel: () => true });
+    fireEvent.click(screen.getByText("Рядом"));
+    expect(fromHost).toBe(true);
+    const opens = r.inspection.navigateCalls.filter((c) => c.method === "openThreadPanel");
+    expect(opens).toHaveLength(1);
+    expect(opens[0]).toMatchObject({ options: { actionId: "object-beside" } });
   });
 });
 
