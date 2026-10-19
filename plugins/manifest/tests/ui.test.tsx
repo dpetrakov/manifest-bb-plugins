@@ -908,6 +908,60 @@ describe("dashboard selection in the list", () => {
   });
 });
 
+describe("organisation on hover", () => {
+  it("shows the state of an organisation beside its row, with «Рядом» and «Чат»", async () => {
+    const mm = window.matchMedia;
+    const ro = (globalThis as { ResizeObserver?: unknown }).ResizeObserver;
+    window.matchMedia = ((q: string) => ({ matches: q.includes("hover"), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false })) as never;
+    (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+    try {
+      const due = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10);
+      const row = {
+        ...item("c7", "Agro Tools", "IN"), status: "contacted", owner: "op@example.com", touches_count: 2,
+        last_touch_at: "2026-10-14T09:00:00Z", last_outbound_at: "2026-10-12T09:00:00Z", last_inbound_at: "2026-10-14T09:00:00Z",
+        next_action: { action: "follow_up", note: "", due_on: due, auto: true }, updated_at: "2026-10-18T10:00:00Z",
+      };
+      const r = renderSlot({ component: RegistryList }, { activeThreadId: "th-1" } as never, {
+        pluginId: "manifest",
+        rpc: {
+          status: () => status({ canMail: true }),
+          chats_list: () => ({ chats: [{ threadId: "th-agro", title: "Аутрич: Agro Tools" }] }),
+          focus_set: () => ({ focus: { kind: "company", id: "c7", title: "Agro Tools" }, trail: [] }),
+          tool: ({ name }: { name: string }) => {
+            if (name === "outreach_facets") return { result: { regions: [], countries } };
+            if (name === "outreach_list_companies") return { result: { items: [row], total: 1, limit: 50, offset: 0 } };
+            if (name === "outreach_get_company") {
+              return { result: { ...card(), interactions: [
+                { id: "i1", channel: "email", direction: "in", kind: "reply", outcome: "interested", occurred_at: "2026-10-14T09:00:00Z", summary: "Готовы обсудить", ingest: "mail", created_by: "x" },
+              ] } };
+            }
+            if (name === "mail_messages") {
+              return { result: { items: [{ id: "m1", status_text: "доставлено", tone: "ok", subject: "STIHL parts", sent_at: "2026-10-12T09:00:00Z", created_at: "2026-10-12T09:00:00Z", replies: [{}], sandbox: false }] } };
+            }
+            return { result: null };
+          },
+        } as never,
+      });
+      fireEvent.mouseEnter(await screen.findByText("Agro Tools"));
+      const peek = await screen.findByRole("dialog", { name: "Организация: Agro Tools" });
+      expect(within(peek).getByText("Написали")).toBeTruthy();
+      expect(within(peek).getByText(/просрочено на 3 дн/)).toBeTruthy();
+      expect(within(peek).getByText(/ответ 14\.10/)).toBeTruthy();
+      expect(await within(peek).findByText("Готовы обсудить")).toBeTruthy();
+      expect(await within(peek).findByText("доставлено")).toBeTruthy();
+      expect(within(peek).getByText(/интерес/)).toBeTruthy();
+      fireEvent.click(within(peek).getByRole("button", { name: /Рядом/ }));
+      await waitFor(() => expect(JSON.stringify(r.inspection.navigateCalls.find((c) => c.method === "openThreadPanel"))).toContain('"pin"'));
+      fireEvent.mouseEnter(screen.getByText("Agro Tools"));
+      fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: /Чат/ }));
+      await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toThread", threadId: "th-agro" }));
+    } finally {
+      window.matchMedia = mm;
+      (globalThis as { ResizeObserver?: unknown }).ResizeObserver = ro;
+    }
+  });
+});
+
 describe("objects beside the chat", () => {
   it("opens an organisation in a separate panel tab on Cmd-click", async () => {
     const r = renderSlot({ component: OutreachPage }, { subPath: "" }, {

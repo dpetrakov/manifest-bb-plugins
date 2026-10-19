@@ -206,13 +206,14 @@ export function useOpenCompany() {
 export function useOpenPinned() {
   const navigate = useBbNavigate();
   return useCallback(
-    (ref: FocusRef) => {
+    /** `inThread` — the caller knows the surface (the sidebar list): its panel action goes first. */
+    (ref: FocusRef, inThread?: boolean) => {
       const params = { v: 1, pin: { kind: ref.kind, id: ref.id, title: ref.title.slice(0, 200) } };
       const title = (ref.title || KIND_LABEL[ref.kind]).slice(0, 60);
       // In a thread — its panel; on the New thread screen — that screen's panel.
-      if (!navigate.openThreadPanel({ actionId: OBJECT_PANEL, title, params })) {
-        navigate.openThreadPanel({ actionId: "company-new", title, params });
-      }
+      const order = inThread === false ? ["company-new", OBJECT_PANEL] : [OBJECT_PANEL, "company-new"];
+      for (const actionId of order) if (navigate.openThreadPanel({ actionId, title, params })) return true;
+      return false;
     },
     [navigate],
   );

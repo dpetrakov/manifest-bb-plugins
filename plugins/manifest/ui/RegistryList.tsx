@@ -4,10 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useOpenCompany, useOpenPinned } from "./workspace/state";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
+import { CompanyPeek, usePeek } from "./CompanyPeek";
 import { FilterSelect, type Option } from "./FilterSelect";
 import { errorText, useCompanyChanged, useRegistry, useStatus, useTool } from "./hooks";
 import { STATUS_LABEL, STATUS_ORDER, countryName, regionLabel } from "./labels";
-import type { Facets, ListItem } from "./types";
+import type { Facets, ListItem, WorkListItem } from "./types";
 
 export function PriorityBadge({ priority, manual }: { priority: number; manual?: boolean }) {
   return (
@@ -53,7 +54,12 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
   const openPinned = useOpenPinned();
   const listRef = useRef<HTMLUListElement | null>(null);
   // Cmd/Ctrl-click or a row dragged out of the list (towards the panel): a separate tab.
-  const pin = (it: ListItem) => openPinned({ kind: "company", id: it.id, title: it.display_name });
+  // The list knows the surface: a thread's panel, or the New thread screen's one. Where there is
+  // no side panel (a plugin page) — the organisation's chat, so a click never does nothing.
+  const pin = (it: ListItem) => {
+    if (!openPinned({ kind: "company", id: it.id, title: it.display_name }, activeThreadId !== null)) open(it);
+  };
+  const peek = usePeek();
   const [facets, setFacets] = useState<Facets | null>(null);
   const [search, setSearch] = useState(reg.filters.q);
 
@@ -100,14 +106,15 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
 
   // W-18: an organisation opens in its latest chat (the card on the right); without
   // chats — its page with the card and «Новый чат».
-  const open = (it: ListItem) => {
+  function open(it: ListItem) {
     reg.select(it.id);
     onNavigate?.();
     openCompany(it.id, it.display_name);
-  };
+  }
   // In a dashboard chat the card opens next to the dashboard; Cmd/Ctrl-click — its chat.
   const sel = reg.selection;
   const click = (it: ListItem, mod: boolean) => {
+    peek.close();
     if (sel && !mod) {
       reg.select(it.id);
       pin(it);
@@ -156,14 +163,16 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
         </span>
       </div>
       {reg.error && <Note>Не удалось загрузить: {reg.error}</Note>}
-      <ul ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-1">
+      <ul ref={listRef} onScroll={peek.close} className="min-h-0 flex-1 overflow-y-auto px-1">
         {reg.items.map((it) => (
           <li key={it.id}>
             <button
               type="button"
-              title={sel ? "Карточка рядом с дашбордом; Cmd/Ctrl-клик — чат организации" : "Cmd/Ctrl-клик или перетащить в сторону — отдельной вкладкой"}
               draggable
+              onMouseEnter={(e) => peek.enter(it as WorkListItem, e.currentTarget)}
+              onMouseLeave={peek.leave}
               onDragStart={(e) => {
+                peek.close();
                 e.dataTransfer.effectAllowed = "copy";
                 e.dataTransfer.setData("text/plain", it.display_name);
               }}
@@ -207,6 +216,23 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
           </li>
         )}
       </ul>
+      {peek.peek ? (
+        <CompanyPeek
+          peek={peek.peek}
+          onKeep={peek.keep}
+          onLeave={peek.leave}
+          onClose={peek.close}
+          onBeside={(it) => {
+            peek.close();
+            reg.select(it.id);
+            pin(it);
+          }}
+          onChat={(it) => {
+            peek.close();
+            open(it);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -4,6 +4,17 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.7.5
+
+- Hovering an organisation in the left list shows a compact card beside the row: priority,
+  status, countries, the next step (overdue in red), touches with a «ответ» badge, owner,
+  tags, then the last touch and the last letter with its status (loaded on show, cached
+  until the organisation changes). Actions: «Рядом» (card in a separate panel tab) and
+  «Чат» (the organisation's chat). Pointer devices only.
+- Fix: in a dashboard chat on bb's New thread screen a click in the list did not open the
+  card — the list now picks the panel of the screen it is on, and falls back to the
+  organisation's chat where there is no side panel.
+
 ## manifest 0.7.4
 
 - The dashboard filter drives the organisation list on the left: while a dashboard chat is
