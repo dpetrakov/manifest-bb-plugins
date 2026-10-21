@@ -99,6 +99,10 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
   const priorityOptions: Option[] = [{ value: "", label: "Все приоритеты" }, ...[1, 2, 3, 4, 5].map((p) => ({ value: String(p), label: `P${p}` }))];
   const statusOptions: Option[] = [{ value: "", label: "Все статусы" }, ...STATUS_ORDER.map((s) => ({ value: s, label: STATUS_LABEL[s] }))];
   const roleOptions: Option[] = [{ value: "", label: "Все роли" }, ...ROLE_ORDER.map((r) => ({ value: r, label: ROLE_LABEL[r] }))];
+  const sortOptions: Option[] = [
+    { value: "", label: "По приоритету" },
+    { value: "coverage", label: "По покрытию листа" },
+  ];
 
   if (statusError) return <Note>Плагин недоступен: {statusError}</Note>;
   if (!status) return <Note>Подключаемся к Manifest…</Note>;
@@ -157,6 +161,7 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
               <FilterSelect label="Приоритет" value={reg.filters.priority} options={priorityOptions} onChange={(v) => reg.setFilter("priority", v)} />
               <FilterSelect label="Статус" value={reg.filters.status} options={statusOptions} onChange={(v) => reg.setFilter("status", v)} />
               <FilterSelect label="Роль" value={reg.filters.role} options={roleOptions} onChange={(v) => reg.setFilter("role", v)} />
+              <FilterSelect label="Порядок" value={reg.filters.sort} options={sortOptions} onChange={(v) => reg.setFilter("sort", v)} />
             </div>
           </>
         )}
@@ -205,7 +210,17 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
                   {countryName(it.country_code)}
                   {it.countries.length > 1 ? ` +${it.countries.length - 1}` : ""} · {STATUS_LABEL[it.status] ?? it.status}
                 </span>
-                <Channels it={it} />
+                <span className="flex flex-none items-center gap-1.5">
+                  {it.coverage ? (
+                    <span
+                      className="rounded bg-[color-mix(in_oklab,var(--diff-added,#16a34a)_14%,transparent)] px-1 font-medium tabular-nums text-foreground"
+                      title={`Покрытие закупочного листа: ${it.coverage.by_volume}% по объёму, ${it.coverage.by_positions}% по позициям (сайт STIHL ${it.coverage.country})${it.coverage.unchecked ? ` · ${it.coverage.unchecked} выборов проверить` : ""}`}
+                    >
+                      {Math.round(it.coverage.by_volume)}%
+                    </span>
+                  ) : null}
+                  <Channels it={it} />
+                </span>
               </span>
             </button>
           </li>

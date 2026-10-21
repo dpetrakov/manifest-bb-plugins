@@ -20,6 +20,8 @@ export interface ListItem {
   comments: number;
   /** ADR-051: potential_supplier, supplier. */
   roles?: string[];
+  /** EP-108: coverage of the procurement sheet — the best of the organisation's countries. */
+  coverage?: { by_volume: number; by_positions: number; country: string; unchecked: number } | null;
   updated_at: string;
 }
 

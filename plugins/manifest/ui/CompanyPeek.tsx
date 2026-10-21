@@ -248,6 +248,17 @@ export function CompanyPeek({
             <Row label="Шаг">
               <Step item={it} />
             </Row>
+            <Row label="Покрытие">
+              {it.coverage ? (
+                <span>
+                  <b className="tabular-nums">{it.coverage.by_volume}%</b> по объёму · {it.coverage.by_positions}% позиций
+                  <span className="text-muted-foreground"> · сайт STIHL {countryName(it.coverage.country)}</span>
+                  {it.coverage.unchecked ? <span className="text-[var(--mf-amber)]"> · проверить {it.coverage.unchecked}</span> : null}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">нет данных по стране</span>
+              )}
+            </Row>
             {it.owner ? <Row label="Ответств.">{it.owner}</Row> : null}
             {it.tags?.length ? <Row label="Метки">{it.tags.join(", ")}</Row> : null}
             <Row label="Касания">

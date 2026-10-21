@@ -4,6 +4,21 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.10.0
+
+- Coverage of the procurement sheet (EP-108): every organisation gets the share of the sheet
+  its countries' STIHL assortment covers (by volume — quantity × reference price — and by
+  positions; the best of its countries). The left list shows it as a badge and sorts by it
+  («Порядок → По покрытию листа»); the hover card explains it.
+- «Сверка» — a tab of the «Закупочный лист» object: countries with their coverage, the
+  sheet against a country (the product chosen for each position, full / partial with a
+  reason / none) and «Проверить» — doubtful automatic choices of all countries. «Тот же
+  товар», «Частично», «Не то», «Выбрать» another product of the model, «Вернуть
+  автоматический»; a decision by the global product id applies in every country and the
+  rating is recomputed at once.
+- The agent reads `assortment_coverage`, `assortment_choices`, `assortment_queue`; decisions
+  are a person's buttons.
+
 ## manifest 0.9.0
 
 - «Ассортимент стран» — a tab of the «Закупочный лист» object (EP-107): the national STIHL

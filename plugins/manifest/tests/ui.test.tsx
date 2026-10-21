@@ -1237,3 +1237,56 @@ describe("assortment of countries (EP-107)", () => {
     expect(screen.getByText("5 196 ZAR")).toBeTruthy();
   });
 });
+
+describe("matching and coverage (EP-108)", () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    need_id: "n2", level: 0.5, reason: "generation", via: "family", sku: "45210113540", global_id: "9", name: "HSA 50 hedge trimmer",
+    review: true, decided: false, country: "IN", position_no: 2, model_key: "HSA 50.1", kit: false, qty: 10, category: "Мотоножницы",
+    url: "https://x", alternatives: [{ global_id: "10", sku: "HA060113534", name: "HSA 60.1", model_key: "HSA 50.1", kit: false, url: "" }], ...over,
+  });
+
+  it("decides on a doubtful choice and picks another product", async () => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    renderSlot({ component: NeedSheet }, {} as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status({ canProcurement: true, canProcurementManage: true, canAssortment: true }),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          calls.push({ name, args });
+          if (name === "procurement_needs") return { result: { items: [], total: 0 } };
+          if (name === "assortment_coverage") return { result: { items: [{ country: "IN", by_volume: 62.5, by_positions: 50, full: 1, partial: 1, none: 1, unchecked: 1, positions: 3 }] } };
+          if (name === "assortment_queue") return { result: { items: [row()] } };
+          if (name === "assortment_choices") return { result: { items: [row(), row({ need_id: "n1", level: 1, reason: "", via: "model", review: false, model_key: "MSA 60 C-B", kit: true, position_no: 1, sku: "MA040115806", global_id: "164117", name: "MSA 60 set" })] } };
+          return { result: {} };
+        },
+      } as never,
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Сверка" }));
+    expect(await screen.findByText(/62.5%/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Проверить 1/ })).toBeTruthy();
+    fireEvent.click(await screen.findByText("HSA 50.1"));
+    fireEvent.click(await screen.findByRole("button", { name: "Тот же товар" }));
+    await waitFor(() => expect(calls.find((c) => c.name === "assortment_decide")?.args).toMatchObject({ need_id: "n2", level: 1, key_kind: "global_id", key: "9" }));
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать" }));
+    await waitFor(() => expect(calls.filter((c) => c.name === "assortment_decide").at(-1)?.args).toMatchObject({ key: "10", level: 1 }));
+  });
+
+  it("sorts the list by coverage and shows it in a row", async () => {
+    const calls: Record<string, unknown>[] = [];
+    renderSlot({ component: RegistryList }, {} as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status(),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          if (name === "outreach_list_companies") calls.push(args);
+          if (name === "outreach_facets") return { result: { regions: [], countries } };
+          return { result: { items: [{ ...item("c1", "THK"), coverage: { by_volume: 57.9, by_positions: 54.8, country: "NZ", unchecked: 3 } }], total: 1, limit: 50, offset: 0 } };
+        },
+      } as never,
+    });
+    expect(await screen.findByText("58%")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Фильтр: Порядок" }));
+    fireEvent.click(await screen.findByRole("option", { name: "По покрытию листа" }));
+    await waitFor(() => expect(calls.at(-1)).toMatchObject({ sort: "coverage", desc: true }));
+  });
+});

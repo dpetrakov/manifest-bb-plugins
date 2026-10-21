@@ -28,6 +28,7 @@ export const filterSchema = z.object({
   ids: opt(z.array(z.string()), "конкретные организации"),
   role: opt(z.string(), "роль: potential_supplier — потенциальный поставщик, supplier — поставщик закупок"),
 });
+// sort=coverage with desc=true puts the best coverage of the procurement sheet first.
 export type Filter = z.infer<typeof filterSchema>;
 
 const nextActionSchema = z.object({
@@ -114,6 +115,26 @@ export const AGENT_TOOLS = {
     scopes: ["company", "dashboard", "mailing", "template", "inbound"],
     description:
       "Источники ассортимента — сайты STIHL по странам: текущий снимок (дата, товаров, моделей) и идущая загрузка. Загружает и применяет человек в панели «Закупочный лист» → «Ассортимент стран».",
+    parameters: z.object({}),
+  },
+  assortment_coverage: {
+    write: false,
+    scopes: ["company", "dashboard", "mailing", "template", "inbound"],
+    description:
+      "Рейтинг покрытия закупочного листа по странам: по объёму и по позициям, совпало полностью / частично / нет, сколько выборов стоит проверить. Рейтинг организации — лучшая из её стран (поле coverage в outreach_list_companies, сортировка sort=coverage, desc=true).",
+    parameters: z.object({}),
+  },
+  assortment_choices: {
+    write: false,
+    scopes: ["company", "dashboard", "mailing", "template", "inbound"],
+    description:
+      "Сверка листа со страной: по каждой позиции — товар страны, уровень 1 / 0.5 / 0, причина (kit, generation, mains, trim), нужна ли проверка, решение человека, другие товары той же модели.",
+    parameters: z.object({ country: z.string().describe("ISO-код страны") }),
+  },
+  assortment_queue: {
+    write: false,
+    scopes: ["company", "dashboard", "mailing", "template", "inbound"],
+    description: "Очередь «Проверить»: сомнительные автоматические выборы всех стран. Решает человек кнопками во вкладке «Сверка».",
     parameters: z.object({}),
   },
   assortment_items: {
@@ -473,7 +494,7 @@ export const MAIL_TOOLS = new Set<string>([
 /** Tools that need the procurement sheet on the server (capability "procurement.sheet"). */
 export const PROC_TOOLS = new Set<string>(["procurement_needs"]);
 /** Tools that need the assortment on the server (capability "outreach.assortment"). */
-export const ASSORT_TOOLS = new Set<string>(["assortment_sources", "assortment_items"]);
+export const ASSORT_TOOLS = new Set<string>(["assortment_sources", "assortment_items", "assortment_coverage", "assortment_choices", "assortment_queue"]);
 
 /** Agent tools of a thread kind; work and mail tools only when Manifest has them. */
 export function toolsFor(scope: ToolScope, work: boolean, mail = false, proc = false): AgentToolName[] {
@@ -510,6 +531,7 @@ export const READ_TOOLS = new Set([
   "mail_message_get", "mail_messages", "mail_changes", "mail_blocked_countries",
   "procurement_needs", "procurement_import_preview",
   "assortment_sources", "assortment_items",
+  "assortment_coverage", "assortment_choices", "assortment_queue", "assortment_decisions",
 ]);
 
 /** Tools the panels may call through the plugin backend (contract v1). */
@@ -597,6 +619,13 @@ export const PANEL_TOOLS = new Set([
   "assortment_items",
   "assortment_refresh",
   "assortment_apply",
+  // EP-108: coverage and a person's decisions.
+  "assortment_coverage",
+  "assortment_choices",
+  "assortment_queue",
+  "assortment_decisions",
+  "assortment_decide",
+  "assortment_decision_revoke",
 ]);
 
 /** Company id touched by a tool call, for the «card changed» signal. */

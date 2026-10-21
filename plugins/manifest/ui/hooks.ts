@@ -62,6 +62,8 @@ export interface Filters {
   status: string;
   /** ADR-051: potential_supplier | supplier */
   role: string;
+  /** "" — by priority; "coverage" — the best coverage first (EP-108). */
+  sort: string;
 }
 
 /**
@@ -91,7 +93,7 @@ interface ListState {
 
 const PAGE = 50;
 let state: ListState = {
-  filters: { q: "", region: "", country: "", priority: "", status: "", role: "" },
+  filters: { q: "", region: "", country: "", priority: "", status: "", role: "", sort: "" },
   scope: "",
   selections: {},
   dismissed: {},
@@ -152,6 +154,8 @@ export function useRegistryLoad() {
                 priorities: f.priority ? [Number(f.priority)] : undefined,
                 status: f.status || undefined,
                 role: f.role || undefined,
+                sort: f.sort || undefined,
+                desc: f.sort === "coverage" ? true : undefined,
                 ...page,
               },
         );

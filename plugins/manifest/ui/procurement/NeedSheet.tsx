@@ -16,6 +16,7 @@ import { railTarget } from "../workspace/intent";
 import { useOpenObject } from "../workspace/state";
 import { NEEDS_HUB } from "./paths";
 import { Countries } from "./Countries";
+import { Matching } from "./Matching";
 
 const CURRENCY_SIGN: Record<string, string> = { KZT: "₸", INR: "₹", USD: "$", RUB: "₽", EUR: "€", AED: "AED", CNY: "¥" };
 /** A reference price for a table cell: whole units and the currency sign. */
@@ -70,7 +71,7 @@ function toBase64(buf: ArrayBuffer): string {
 /** The «Закупочный лист» object: the sheet and the assortment of countries. */
 export function NeedSheet() {
   const { status } = useStatus();
-  const [tab, setTab] = useState<"sheet" | "countries">("sheet");
+  const [tab, setTab] = useState<"sheet" | "matching" | "countries">("sheet");
   if (!status?.canAssortment) return <SheetTab />;
   return (
     <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
@@ -78,6 +79,7 @@ export function NeedSheet() {
         {(
           [
             ["sheet", "Лист"],
+            ["matching", "Сверка"],
             ["countries", "Ассортимент стран"],
           ] as const
         ).map(([k, label]) => (
@@ -95,9 +97,7 @@ export function NeedSheet() {
         {tab === "sheet" ? (
           <SheetTab />
         ) : (
-          <div className="h-full overflow-y-auto">
-            <Countries />
-          </div>
+          <div className="h-full overflow-y-auto">{tab === "matching" ? <Matching /> : <Countries />}</div>
         )}
       </div>
     </div>
