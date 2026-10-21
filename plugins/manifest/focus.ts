@@ -8,7 +8,7 @@
 import { z } from "zod";
 import type { ToolScope } from "./lib/tools";
 
-export const FOCUS_KINDS = ["company", "mailing", "template", "topic", "inbound", "mail"] as const;
+export const FOCUS_KINDS = ["company", "mailing", "template", "topic", "inbound", "mail", "needs"] as const;
 export type FocusKind = (typeof FOCUS_KINDS)[number];
 
 export const focusRefSchema = z.object({
@@ -35,7 +35,8 @@ const MAX_CHATS = 50;
 export function scopeOfKind(kind: FocusKind): ToolScope {
   // «Почта аутрича» (the hub of templates, mailings, inbound) works like a dashboard chat:
   // reads and mail preparation, no direct changes of organisations.
-  return kind === "topic" || kind === "mail" ? "dashboard" : kind;
+  // The procurement sheet (ADR-051) — the same: reads; saving is a person's button.
+  return kind === "topic" || kind === "mail" || kind === "needs" ? "dashboard" : kind;
 }
 
 export const refKey = (r: { kind: string; id: string }) => `${r.kind}:${r.id}`;
@@ -85,6 +86,7 @@ export const KIND_TITLE: Record<FocusKind, string> = {
   topic: "тема дашборда",
   inbound: "входящее письмо",
   mail: "почта аутрича",
+  needs: "закупочный лист",
 };
 
 /**
@@ -139,6 +141,13 @@ export function rulesFor(ref: FocusRef, opts: { work: boolean; mail: boolean }):
         "Справа — почта аутрича: шаблоны, рассылки, юрлица и неразобранные входящие.",
         "Читай mail_templates, mail_mailings, mail_inbound_list, mail_entities. Рассылку готовь mail_mailing_create {template_id, filter} — она откроется справа, и тред продолжит работу с ней.",
         "Шаблон меняет человек в его чате; письма отправляет человек кнопкой.",
+      ].join("\n");
+    case "needs":
+      return [
+        "Справа — закупочный лист: всё, что нам нужно закупить (модель, набор, категория, артикулы-синонимы, кол-во, ориентир цены).",
+        "Читай procurement_needs. Сохраняет, отменяет и загружает позиции человек в панели справа: предложи изменения таблицей (позиция, что поменять), " +
+          "а список из файла или письма — таблицей с колонками name, articles, qty, price, kit, чтобы пользователь загрузил её кнопкой «Загрузить файл».",
+        "Не говори, что сохранил: у тебя нет инструментов записи в лист.",
       ].join("\n");
     case "inbound":
       return [

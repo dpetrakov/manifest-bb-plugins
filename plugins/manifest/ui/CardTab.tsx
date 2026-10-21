@@ -23,6 +23,8 @@ import {
   countryName,
   formatDateTime,
   regionLabel,
+  ROLE_LABEL,
+  ROLE_ORDER,
 } from "./labels";
 import { Note, PriorityBadge } from "./RegistryList";
 import type { Card } from "./types";
@@ -98,6 +100,7 @@ export function CardView({ companyId, header, embedded }: { companyId: string; h
         )}
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <Badge tone={COMPANY_STATUS_TONE[c.status] ?? "muted"}>{STATUS_LABEL[c.status] ?? c.status}</Badge>
+          {c.roles?.includes("supplier") ? <Badge tone={c.supplier_active === false ? "muted" : "ok"}>поставщик{c.supplier_active === false ? " · неактивен" : ""}</Badge> : null}
           <span>
             {KIND_LABEL[c.kind] ?? c.kind} · {countryName(c.country_code)} · {regionLabel(c.region)}
           </span>
@@ -147,6 +150,10 @@ export function CardView({ companyId, header, embedded }: { companyId: string; h
             {STATUS_LABEL[c.status] ?? c.status}
           </p>
         )}
+        {canEdit && c.roles ? (
+          <RolesEditor roles={c.roles} currency={c.supplier_currency ?? "INR"} active={c.supplier_active !== false} busy={busy}
+            onSave={(patch) => run("outreach_update_company", { id: c.id, ...patch, expected_updated_at: c.updated_at })} />
+        ) : null}
         {c.status_reason && <p className="text-xs text-muted-foreground">Причина: {c.status_reason}</p>}
         {c.do_not_contact && <p className="text-xs text-destructive">Не связываться{c.do_not_contact_reason ? `: ${c.do_not_contact_reason}` : ""}</p>}
       </Section>
@@ -249,6 +256,49 @@ export function CardView({ companyId, header, embedded }: { companyId: string; h
 }
 
 const selectCls = "h-8 rounded-md border border-input bg-background px-2 text-xs";
+
+/**
+ * Roles (ADR-051): one card for the whole funnel — a candidate becomes a supplier of
+ * procurement by a role; supplier fields (currency, active) show with the role.
+ */
+function RolesEditor({ roles, currency, active, busy, onSave }: {
+  roles: string[];
+  currency: string;
+  active: boolean;
+  busy: boolean;
+  onSave: (patch: Record<string, unknown>) => unknown;
+}) {
+  const toggle = (r: string) => {
+    const next = roles.includes(r) ? roles.filter((x) => x !== r) : [...roles, r];
+    if (next.length > 0) void onSave({ roles: next });
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" aria-label="Роли организации">
+      {ROLE_ORDER.map((r) => (
+        <label key={r} className="flex items-center gap-1.5">
+          <input type="checkbox" checked={roles.includes(r)} disabled={busy || (roles.length === 1 && roles.includes(r))} onChange={() => toggle(r)} />
+          {ROLE_LABEL[r]}
+        </label>
+      ))}
+      {roles.includes("supplier") ? (
+        <>
+          <label className="flex items-center gap-1.5">
+            Валюта
+            <select className={selectCls} value={currency} disabled={busy} onChange={(e) => void onSave({ supplier_currency: e.target.value })}>
+              {["INR", "USD", "EUR", "AED", "CNY", "KZT", "RUB"].map((x) => (
+                <option key={x} value={x}>{x}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5" title="Неактивный поставщик не получает новых позиций; его ссылки на портал отключаются">
+            <input type="checkbox" checked={active} disabled={busy} onChange={() => void onSave({ supplier_active: !active })} />
+            активен
+          </label>
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 /** Следующий шаг, ответственный и касания (W-15). Правка — при outreach.manage. */
 function WorkBlock({

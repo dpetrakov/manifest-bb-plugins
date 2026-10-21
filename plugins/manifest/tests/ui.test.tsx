@@ -21,6 +21,7 @@ import { useState } from "react";
 import { FocusHeader, ObjectBody, ObjectPanel } from "../ui/workspace/ObjectPanel";
 import { LetterChip, MailingChip } from "../ui/workspace/Chips";
 import { MailingSendBar } from "../ui/mail/send";
+import { NeedSheet } from "../ui/procurement/NeedSheet";
 
 const status = (over: Record<string, unknown> = {}) => ({
   connected: true,
@@ -1014,6 +1015,43 @@ describe("the «рядом» tab", () => {
   });
 });
 
+describe("«Почта аутрича» hub", () => {
+  it("the rail opens the hub's chat, not the last mailing's", async () => {
+    window.sessionStorage.clear();
+    // A mailing's chat remembered by an older build must not win.
+    window.sessionStorage.setItem("manifest:last-mail-thread", "th-mailing");
+    const asked: unknown[] = [];
+    const r = renderSlot({ component: MailPage }, { subPath: "" }, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status({ canMail: true }),
+        chats_list: (a: unknown) => {
+          asked.push(a);
+          return { chats: [{ threadId: "th-hub", title: "Почта аутрича" }] };
+        },
+        focus_set: () => ({ focus: { kind: "mail", id: "hub", title: "Почта аутрича" }, trail: [] }),
+      } as never,
+    });
+    await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toThread", threadId: "th-hub" }));
+    expect(asked[0]).toEqual({ kind: "mail", id: "hub" });
+  });
+
+  it("a mailing's panel leads back to the hub", async () => {
+    const r = renderSlot({ component: ObjectPanel }, { threadId: "th-m", params: null } as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status({ canMail: true }),
+        focus_get: () => ({ focus: { kind: "mailing", id: "m1", title: "STIHL — first letter" }, trail: [] }),
+        chats_list: ({ kind }: { kind: string }) => ({ chats: kind === "mail" ? [{ threadId: "th-hub", title: "Почта аутрича" }] : [] }),
+        focus_set: () => ({ focus: { kind: "mail", id: "hub", title: "Почта аутрича" }, trail: [] }),
+        tool: () => ({ result: null }),
+      } as never,
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "← Почта аутрича" }));
+    await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toThread", threadId: "th-hub" }));
+  });
+});
+
 describe("objects beside the chat", () => {
   it("opens an organisation in a separate panel tab on Cmd-click", async () => {
     const r = renderSlot({ component: OutreachPage }, { subPath: "" }, {
@@ -1046,5 +1084,116 @@ describe("objects beside the chat", () => {
     const row = screen.getByText("STIHL — first letter").closest("tr")!;
     expect(within(row).getByText("3")).toBeTruthy(); // ушло
     expect(within(row).getByText("2")).toBeTruthy(); // ответы
+  });
+});
+
+describe("procurement sheet (ADR-051, W-19)", () => {
+  const need = (over: Record<string, unknown> = {}) => ({
+    id: "n1", public_id: "p1", position_no: 1, status: "draft", brand: "STIHL", part_no: "MA040115814",
+    description_en: "STIHL MSA 60 C-B set (with battery and charger)", unit: "pcs", commercial_terms: "", specification_en: "",
+    internal_comment: "", target_qty: 10, current_revision_no: 0, response_deadline: null,
+    coverage: { ordered_qty: 0, planned_qty: 0, remaining_qty: 10, status: "open" },
+    model_key: "MSA 60 C-B", kit: true, category: "Цепная пила", article_aliases: ["MA040115814", "MA040115815"],
+    ref_price: 217931.03, ref_currency: "KZT", ...over,
+  });
+
+  it("lists positions, imports a file with the preview's fingerprint, edits and cancels", async () => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    renderSlot({ component: NeedSheet }, {} as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status({ canProcurement: true, canProcurementManage: true }),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          calls.push({ name, args });
+          if (name === "procurement_needs") return { result: { items: [need()], total: 1 } };
+          if (name === "procurement_import_preview") {
+            return { result: { rows: 2, fingerprint: "fp1", counts: { create: 1, same: 1 }, actions: [
+              { kind: "create", key: "AK 30 S", kit: false, name: "AK 30 S", category: "Аккумулятор", articles: ["45204006545"], qty: 50, ref_price: null, ref_currency: "", lines: [2] },
+              { kind: "same", key: "MSA 60 C-B", kit: true, name: "MSA 60", category: "", articles: [], qty: 10, ref_price: null, ref_currency: "", lines: [3] },
+            ] } };
+          }
+          return { result: need() };
+        },
+      } as never,
+    });
+    expect(await screen.findByText("MSA 60 C-B")).toBeTruthy();
+    expect(screen.getByText("набор")).toBeTruthy();
+    // Import: preview, then apply with the same fingerprint.
+    const file = new File(["name,qty\nAK 30 S,50\n"], "need.csv", { type: "text/csv" });
+    fireEvent.change(screen.getByLabelText("Файл с позициями"), { target: { files: [file] } });
+    const apply = await screen.findByRole("button", { name: /Применить: новых 1/ });
+    expect(screen.getByText(/новая: 1/)).toBeTruthy();
+    fireEvent.click(apply);
+    await waitFor(() => expect(calls.find((c) => c.name === "procurement_import_apply")?.args).toMatchObject({ filename: "need.csv", fingerprint: "fp1" }));
+    expect(await screen.findByText(/Загружено: новых 1/)).toBeTruthy();
+    // Edit: the matching fields go with the save.
+    fireEvent.click(screen.getByText("MSA 60 C-B"));
+    const qty = await screen.findByDisplayValue("10");
+    fireEvent.change(qty, { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.name === "procurement_need_save")?.args).toMatchObject({
+        id: "n1", target_qty: 12, model_key: "MSA 60 C-B", kit: true, article_aliases: ["MA040115814", "MA040115815"], ref_price: 217931.03, ref_currency: "KZT",
+      }),
+    );
+    // Cancel asks first.
+    fireEvent.click(screen.getByRole("button", { name: "Отменить позицию" }));
+    const confirm = await screen.findAllByRole("button", { name: "Отменить позицию" });
+    fireEvent.click(confirm[confirm.length - 1]);
+    await waitFor(() => expect(calls.some((c) => c.name === "procurement_need_cancel" && c.args.id === "n1")).toBe(true));
+  });
+
+  it("is read-only without procurement.manage", async () => {
+    renderSlot({ component: NeedSheet }, {} as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status({ canProcurement: true, canProcurementManage: false }),
+        tool: () => ({ result: { items: [need()], total: 1 } }),
+      } as never,
+    });
+    expect(await screen.findByText("MSA 60 C-B")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Загрузить файл" })).toBeNull();
+    fireEvent.click(screen.getByText("MSA 60 C-B"));
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
+  });
+});
+
+describe("organisation roles (ADR-051)", () => {
+  it("makes a candidate a supplier from its card", async () => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    renderSlot({ component: CardTab }, { subPath: "c1" }, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status(),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          calls.push({ name, args });
+          return { result: card({ roles: ["potential_supplier"], supplier_currency: "INR", supplier_active: true }) };
+        },
+      } as never,
+    });
+    const box = await screen.findByRole("checkbox", { name: "Поставщик" });
+    fireEvent.click(box);
+    await waitFor(() =>
+      expect(calls.find((c) => c.name === "outreach_update_company")?.args).toMatchObject({ id: "c1", roles: ["potential_supplier", "supplier"] }),
+    );
+  });
+
+  it("filters the list by role", async () => {
+    const calls: Record<string, unknown>[] = [];
+    renderSlot({ component: RegistryList }, {} as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status(),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          if (name === "outreach_list_companies") calls.push(args);
+          if (name === "outreach_facets") return { result: { regions: [], countries } };
+          return { result: { items: [{ ...item("c1", "Woermann"), roles: ["potential_supplier", "supplier"] }], total: 1, limit: 50, offset: 0 } };
+        },
+      } as never,
+    });
+    expect(await screen.findByText("поставщик")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Фильтр: Роль" }));
+    fireEvent.click(await screen.findByRole("option", { name: /^Поставщик$/ }));
+    await waitFor(() => expect(calls.at(-1)?.role).toBe("supplier"));
   });
 });

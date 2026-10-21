@@ -12,6 +12,13 @@ export const STATUS_LABEL: Record<string, string> = {
   do_not_contact: "Не связываться",
 };
 export const STATUS_ORDER = Object.keys(STATUS_LABEL);
+
+/** Roles of an organisation (ADR-051). */
+export const ROLE_LABEL: Record<string, string> = {
+  potential_supplier: "Потенциальный поставщик",
+  supplier: "Поставщик",
+};
+export const ROLE_ORDER = Object.keys(ROLE_LABEL);
 export const STATUS_NEEDS_REASON = ["rejected", "do_not_contact"];
 
 export const KIND_LABEL: Record<string, string> = {

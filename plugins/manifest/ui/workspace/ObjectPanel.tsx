@@ -20,7 +20,8 @@ import { TemplateEditor } from "../mail/TemplateEditor";
 import { InboundView } from "./InboundView";
 import { KindLabel } from "../manifest";
 import { KIND_LABEL, useBesideHost, useFocus, useOpenObject, useOpenObjectPanel, useStartChat, type FocusKind, type FocusRef } from "./state";
-import { MailHub } from "../mail/MailPage";
+import { MAIL_HUB, MailHub } from "../mail/MailPage";
+import { NeedSheet } from "../procurement/NeedSheet";
 import { useRealtime } from "@get-bb/plugin-sdk/app";
 import { FOCUS_CHANGED } from "./state";
 import { rememberThread } from "./intent";
@@ -79,12 +80,20 @@ export function PinnedObject({ pin, threadId, mainTitle }: { pin: FocusRef; thre
 function FocusedObject({ threadId }: { threadId: string }) {
   const { focus, trail, error, setFocus, back, forget } = useFocus(threadId);
   const [chatsOpen, setChatsOpen] = useState(false);
+  const openObject = useOpenObject();
   if (focus === undefined) return <PanelNote>{error ?? "Открываем…"}</PanelNote>;
   if (!focus) return <PanelNote>Этот чат не привязан к объекту Manifest. Объекты открываются из разделов «Аутрич», «Дашборд аутрича», «Почта аутрича».</PanelNote>;
   const open = (ref: FocusRef) => void setFocus(ref);
   return (
     <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
       <header className="mf-surface flex flex-col gap-1 border-b border-border px-3 py-2">
+        {trail.length === 0 && ["mailing", "template", "inbound"].includes(focus.kind) ? (
+          <nav aria-label="Цепочка объектов" className="flex text-[11px] text-muted-foreground">
+            <button type="button" className="rounded px-1 py-0.5 hover:bg-state-hover" onClick={() => void openObject(MAIL_HUB)}>
+              ← Почта аутрича
+            </button>
+          </nav>
+        ) : null}
         {trail.length > 0 ? (
           <nav aria-label="Цепочка объектов" className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
             {trail.slice(-3).map((r) => (
@@ -131,6 +140,8 @@ function FocusBody({ focus, threadId, onOpen, onBack }: { focus: FocusRef; threa
   switch (focus.kind) {
     case "mail":
       return <MailHub />;
+    case "needs":
+      return <NeedSheet />;
     case "company":
       return <CardView key={focus.id} companyId={focus.id} embedded />;
     case "mailing":
@@ -212,7 +223,8 @@ export function FocusHeader({ threadId, isCompactViewport }: PluginThreadHeaderA
   useBesideHost(threadId);
   const openPanel = useOpenObjectPanel();
   useEffect(
-    () => rememberThread(threadId, focus?.kind === "topic", !!focus && ["mail", "mailing", "template", "inbound"].includes(focus.kind)),
+    // Only the hub's chats are «mail» for the rail: a mailing's chat is the mailing's.
+    () => rememberThread(threadId, focus?.kind === "topic", focus?.kind === "mail", focus?.kind === "needs"),
     [threadId, focus],
   );
   useEffect(() => {

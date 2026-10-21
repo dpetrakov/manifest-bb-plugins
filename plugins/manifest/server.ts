@@ -79,6 +79,16 @@ export const CAPABILITY_WORK = "outreach.work";
 /** Name of the bb thread section that holds the dashboard topics. */
 export const SECTION_NAME = "Аутрич";
 
+/** The procurement sheet rights: the server has the tools and the user the feature. */
+export function procurementRights(capabilities: unknown, features: unknown): { canProcurement: boolean; canProcurementManage: boolean } {
+  const caps = Array.isArray(capabilities) ? capabilities : [];
+  const feats = Array.isArray(features) ? features : [];
+  if (!caps.includes(CAPABILITY_PROCUREMENT)) return { canProcurement: false, canProcurementManage: false };
+  const manage = feats.includes("procurement.manage");
+  return { canProcurement: manage || feats.includes("procurement.view"), canProcurementManage: manage };
+}
+const CAPABILITY_PROCUREMENT = "procurement.sheet";
+
 const statusSchema = z.object({
   connected: z.boolean(),
   url: z.string(),
@@ -92,6 +102,9 @@ const statusSchema = z.object({
   canMailSettings: z.boolean(),
   /** May send letters (outreach.send, W-20). */
   canSend: z.boolean(),
+  /** The procurement sheet (ADR-051): Manifest has it and the user may read / change it. */
+  canProcurement: z.boolean(),
+  canProcurementManage: z.boolean(),
   /** unauthorized | unavailable | contract | null */
   problem: z.string().nullable(),
   message: z.string(),
@@ -230,6 +243,8 @@ export default async function plugin(bb: BbPluginApi) {
   let workCapability = (await bb.storage.kv.get<boolean>(WORK_CAP)) ?? false;
   const MAIL_CAP = "mail-capability";
   let mailCapability = (await bb.storage.kv.get<boolean>(MAIL_CAP)) ?? false;
+  const PROC_CAP = "procurement-capability";
+  let procCapability = (await bb.storage.kv.get<boolean>(PROC_CAP)) ?? false;
 
   const TOPICS = "topics";
   const SECTION = "section-id";
@@ -284,7 +299,7 @@ export default async function plugin(bb: BbPluginApi) {
     const c = await connection();
     const base: Status = {
       connected: false, url: c.url, email: c.email, canView: false, canManage: false, canWork: false, canMail: false,
-      canMailSettings: false, canSend: false, problem: null, message: "",
+      canMailSettings: false, canSend: false, canProcurement: false, canProcurementManage: false, problem: null, message: "",
     };
     if (!c.url || !c.token) return { ...base, problem: "unauthorized", message: "Плагин не подключён: войдите в настройках плагина." };
     try {
@@ -297,6 +312,7 @@ export default async function plugin(bb: BbPluginApi) {
         capabilities?: string[];
         can_mail_settings?: boolean;
         can_send?: boolean;
+        features?: string[];
       };
       if (who.contract !== CONTRACT_VERSION) {
         return { ...base, problem: "contract", message: `Версия Manifest не совпадает с плагином (контракт ${who.contract ?? "?"}, нужен ${CONTRACT_VERSION}). Обновите плагин.` };
@@ -311,6 +327,11 @@ export default async function plugin(bb: BbPluginApi) {
         mailCapability = canMail;
         await bb.storage.kv.set(MAIL_CAP, canMail);
       }
+      const canProc = Array.isArray(who.capabilities) && who.capabilities.includes(CAPABILITY_PROCUREMENT);
+      if (canProc !== procCapability) {
+        procCapability = canProc;
+        await bb.storage.kv.set(PROC_CAP, canProc);
+      }
       return {
         ...base,
         connected: true,
@@ -321,6 +342,7 @@ export default async function plugin(bb: BbPluginApi) {
         canMail,
         canMailSettings: !!who.can_mail_settings,
         canSend: !!who.can_send,
+        ...procurementRights(who.capabilities, who.features),
       };
     } catch (error) {
       if (error instanceof ManifestError) return { ...base, problem: error.code === "unauthorized" ? "unauthorized" : "unavailable", message: error.message };
@@ -347,6 +369,10 @@ export default async function plugin(bb: BbPluginApi) {
     }
     if (c.kind === "mail") {
       await saveFocus(threadId, pushFocus(await loadFocus(threadId), { kind: "mail", id: "hub", title: "Почта аутрича" }), true);
+      return;
+    }
+    if (c.kind === "needs") {
+      await saveFocus(threadId, pushFocus(await loadFocus(threadId), { kind: "needs", id: "sheet", title: "Закупочный лист" }), true);
       return;
     }
     if (c.kind === "template") {
@@ -892,7 +918,7 @@ export default async function plugin(bb: BbPluginApi) {
     // One tool set for every focus: BB fixes the tools for the session, and the focus
     // changes inside it. What a call may change is checked per call (execute).
     const tools: string[] = [
-      ...outreachTools(workCapability, mailCapability),
+      ...outreachTools(workCapability, mailCapability, procCapability),
       "manifest_focus_get",
       "manifest_focus_open",
       "manifest_template_draft",

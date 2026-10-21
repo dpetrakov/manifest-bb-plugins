@@ -240,6 +240,7 @@ export function CompanyPeek({
             <div className="flex flex-wrap items-center gap-1">
               <Badge tone={COMPANY_STATUS_TONE[it.status] ?? "muted"}>{STATUS_LABEL[it.status] ?? it.status}</Badge>
               {it.do_not_contact && it.status !== "do_not_contact" ? <Badge tone="err">не связываться</Badge> : null}
+              {it.roles?.includes("supplier") ? <Badge tone="ok">поставщик</Badge> : null}
               <span className="text-muted-foreground">
                 {countries} · {regionLabel(it.region)}
               </span>

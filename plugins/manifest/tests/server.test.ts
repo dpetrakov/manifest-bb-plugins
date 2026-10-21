@@ -668,3 +668,24 @@ describe("sending (W-20)", () => {
     expect(ch).toEqual(expect.arrayContaining(["manifest-letter-changed", "manifest-mailing-changed", "manifest-inbound-changed", "manifest-company-changed"]));
   });
 });
+
+describe("procurement sheet rights (ADR-051)", () => {
+  it("needs the server capability and a procurement feature", async () => {
+    const { procurementRights } = await import("../server");
+    expect(procurementRights(["outreach.work"], ["procurement.manage"])).toEqual({ canProcurement: false, canProcurementManage: false });
+    expect(procurementRights(["procurement.sheet"], ["outreach.view"])).toEqual({ canProcurement: false, canProcurementManage: false });
+    expect(procurementRights(["procurement.sheet"], ["procurement.view"])).toEqual({ canProcurement: true, canProcurementManage: false });
+    expect(procurementRights(["procurement.sheet"], ["procurement.manage"])).toEqual({ canProcurement: true, canProcurementManage: true });
+  });
+
+  it("gives the agent the sheet only when Manifest has it; saving is never the agent's", async () => {
+    const { outreachTools, PANEL_TOOLS } = await import("../lib/tools");
+    expect(outreachTools(true, true, false)).not.toContain("procurement_needs");
+    const tools = outreachTools(true, true, true);
+    expect(tools).toContain("procurement_needs");
+    for (const t of ["procurement_need_save", "procurement_need_cancel", "procurement_import_apply"]) {
+      expect(tools as string[]).not.toContain(t);
+      expect(PANEL_TOOLS.has(t)).toBe(true);
+    }
+  });
+});

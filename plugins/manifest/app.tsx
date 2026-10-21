@@ -22,6 +22,8 @@ import { BatchDirective, CompaniesDirective } from "./ui/directives";
 import { MailPage } from "./ui/mail/MailPage";
 import { LetterChip, MailingChip } from "./ui/workspace/Chips";
 import { MAIL_ID, MAIL_PATH } from "./ui/mail/common";
+import { NeedsPage } from "./ui/procurement/NeedSheet";
+import { NEEDS_ID, NEEDS_PATH } from "./ui/procurement/paths";
 import { FocusHeader, ObjectPanel } from "./ui/workspace/ObjectPanel";
 import { BESIDE_NEW_PANEL, BESIDE_PANEL, OBJECT_PANEL } from "./ui/workspace/state";
 import { ComposeBanner, NEW_COMPANY_PANEL, NewCompanyPanel } from "./ui/workspace/compose";
@@ -45,6 +47,8 @@ export default definePluginApp((app) => {
   });
   // W-16: почта — шаблоны (с чатом по шаблону), юрлица и отправители, неразобранные входящие.
   app.slots.navPanel({ id: MAIL_ID, title: "Почта аутрича", icon: "Mail", path: MAIL_PATH, component: MailPage });
+  // ADR-051 (W-19): what we need — the procurement sheet, as an object beside a chat.
+  app.slots.navPanel({ id: NEEDS_ID, title: "Закупочный лист", icon: "ClipboardList", path: NEEDS_PATH, component: NeedsPage });
   app.slots.messageDirective({ id: "manifest-companies", component: CompaniesDirective });
   app.slots.messageDirective({ id: "manifest-batch", component: BatchDirective });
   // W-17: письмо организации «как уйдёт» — черновик из Manifest, обновляется после правки агента.

@@ -26,6 +26,7 @@ export const filterSchema = z.object({
   brand_only: opt(z.boolean(), "true — только email бренда, false — без них (как в ответах Manifest)"),
   segment_id: opt(z.string(), "сохранённый сегмент"),
   ids: opt(z.array(z.string()), "конкретные организации"),
+  role: opt(z.string(), "роль: potential_supplier — потенциальный поставщик, supplier — поставщик закупок"),
 });
 export type Filter = z.infer<typeof filterSchema>;
 
@@ -95,8 +96,18 @@ export const AGENT_TOOLS = {
       owner: opt(z.string(), "ответственный: email, me или пусто — снять"),
       priority_manual: opt(z.number().int().min(1).max(5), "ручной приоритет"),
       clear_priority_manual: opt(z.boolean(), "вернуть автоматический приоритет"),
+      roles: opt(z.array(z.string()), "роли целиком: potential_supplier, supplier (поставщик закупок)"),
+      supplier_currency: opt(z.string(), "валюта поставщика: INR, USD…"),
+      supplier_active: opt(z.boolean(), "поставщик активен"),
       expected_updated_at: opt(z.string(), "updated_at из карточки — защита от затирания чужой правки"),
     }),
+  },
+  procurement_needs: {
+    write: false,
+    scopes: ["company", "dashboard", "mailing", "template", "inbound"],
+    description:
+      "Закупочный лист — что нам нужно закупить: позиции (модель, набор, категория, артикулы-синонимы, кол-во, ориентир цены, статус). Только чтение: позиции сохраняет человек в панели «Закупочный лист».",
+    parameters: z.object({ include_cancelled: opt(z.boolean(), "показать и отменённые") }),
   },
   outreach_save_contact: {
     write: true,
@@ -441,13 +452,17 @@ export const MAIL_TOOLS = new Set<string>([
   "mail_message_get", "mail_messages",
 ]);
 
+/** Tools that need the procurement sheet on the server (capability "procurement.sheet"). */
+export const PROC_TOOLS = new Set<string>(["procurement_needs"]);
+
 /** Agent tools of a thread kind; work and mail tools only when Manifest has them. */
-export function toolsFor(scope: ToolScope, work: boolean, mail = false): AgentToolName[] {
+export function toolsFor(scope: ToolScope, work: boolean, mail = false, proc = false): AgentToolName[] {
   return AGENT_TOOL_NAMES.filter(
     (n) =>
       (AGENT_TOOLS[n].scopes as readonly ToolScope[]).includes(scope) &&
       (work || !WORK_TOOLS.has(n)) &&
-      (mail || !MAIL_TOOLS.has(n)),
+      (mail || !MAIL_TOOLS.has(n)) &&
+      (proc || !PROC_TOOLS.has(n)),
   );
 }
 
@@ -457,8 +472,8 @@ export function toolsFor(scope: ToolScope, work: boolean, mail = false): AgentTo
  * (organisation → its mailing), so the plugin checks per call what the current focus
  * allows instead of narrowing the set.
  */
-export function outreachTools(work: boolean, mail: boolean): AgentToolName[] {
-  return AGENT_TOOL_NAMES.filter((n) => (work || !WORK_TOOLS.has(n)) && (mail || !MAIL_TOOLS.has(n)));
+export function outreachTools(work: boolean, mail: boolean, proc = false): AgentToolName[] {
+  return AGENT_TOOL_NAMES.filter((n) => (work || !WORK_TOOLS.has(n)) && (mail || !MAIL_TOOLS.has(n)) && (proc || !PROC_TOOLS.has(n)));
 }
 
 /** Tools that only read: no «changed» signal after them. */
@@ -470,6 +485,7 @@ export const READ_TOOLS = new Set([
   "mail_company_sender", "mail_inbound_list", "mail_inbound_get", "mail_entity_health", "mail_draft_get",
   "mail_mailings", "mail_mailing_get", "mail_mailing_letter",
   "mail_message_get", "mail_messages", "mail_changes", "mail_blocked_countries",
+  "procurement_needs", "procurement_import_preview",
 ]);
 
 /** Tools the panels may call through the plugin backend (contract v1). */
@@ -544,6 +560,14 @@ export const PANEL_TOOLS = new Set([
   "mail_messages",
   "mail_reply_draft_create",
   "mail_blocked_countries",
+  // ADR-051 (W-19): one organisation with roles; the procurement sheet — a person's buttons
+  // (Manifest refuses saving, cancelling and applying an import to the agent).
+  "outreach_create_company",
+  "procurement_needs",
+  "procurement_import_preview",
+  "procurement_import_apply",
+  "procurement_need_save",
+  "procurement_need_cancel",
 ]);
 
 /** Company id touched by a tool call, for the «card changed» signal. */

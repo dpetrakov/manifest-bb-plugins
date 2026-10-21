@@ -62,6 +62,9 @@ export function MailHub({ initial = "mailings" }: { initial?: string }) {
   );
 }
 
+/** The mail hub as an object: its chats are indexed under mail/hub (server, compose link). */
+export const MAIL_HUB = { kind: "mail" as const, id: "hub", title: "Почта аутрича" };
+
 /**
  * The «Почта аутрича» rail: the last mail chat or BB's New thread screen with the hub on
  * the right. Old links to an object (mailing/<id>, tpl/<id>, inbound/<id>) open its chat.
@@ -79,7 +82,8 @@ export function MailPage({ subPath }: PluginNavPanelProps) {
     const target = railTarget("mail");
     if (target === undefined) setStay(true);
     else if (target) navigate.toThread(target);
-    else void openObject({ kind: "mail", id: "", title: "" });
+    // No hub chat in this window: the hub's last chat (any window) or a new one.
+    else void openObject(MAIL_HUB);
   }, [head, navigate, openObject, rest]);
   if (!stay) return <Note>Открываем почту…</Note>;
   return <MailHub initial={TABS.some(([k]) => k === head) ? head : "mailings"} />;

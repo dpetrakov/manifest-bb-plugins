@@ -18,6 +18,8 @@ export interface ListItem {
   has_website: boolean;
   persons: number;
   comments: number;
+  /** ADR-051: potential_supplier, supplier. */
+  roles?: string[];
   updated_at: string;
 }
 
@@ -59,7 +61,61 @@ export interface Company {
   do_not_contact: boolean;
   do_not_contact_reason: string;
   manual_fields: string[];
+  /** ADR-051: roles and supplier fields. */
+  roles?: string[];
+  supplier_currency?: string;
+  supplier_active?: boolean;
   updated_at: string;
+}
+
+// ---- ADR-051: the procurement sheet ----
+
+export interface Need {
+  id: string;
+  public_id: string;
+  position_no: number;
+  status: string;
+  brand: string;
+  part_no: string;
+  description_en: string;
+  unit: string;
+  commercial_terms: string;
+  specification_en: string;
+  internal_comment: string;
+  target_qty: number;
+  current_revision_no: number;
+  response_deadline: string | null;
+  coverage: { ordered_qty: number; planned_qty: number; remaining_qty: number; status: string };
+  model_key: string;
+  kit: boolean;
+  category: string;
+  article_aliases: string[];
+  ref_price: number | null;
+  ref_currency: string;
+}
+
+export interface ImportAction {
+  kind: "create" | "update" | "same" | "error";
+  key: string;
+  kit: boolean;
+  name: string;
+  category: string;
+  articles: string[];
+  qty: number;
+  ref_price: number | null;
+  ref_currency: string;
+  need_id?: string;
+  position_no?: number;
+  changes?: string[];
+  error?: string;
+  lines: number[];
+}
+
+export interface ImportPreview {
+  rows: number;
+  actions: ImportAction[];
+  counts: Record<string, number>;
+  fingerprint: string;
 }
 
 export interface Contact {

@@ -7,6 +7,7 @@ import { DASHBOARD_PATH } from "../dashboard/state";
 import { PANEL_PATH, errorText, useTool } from "../hooks";
 import { setComposeIntent } from "./intent";
 import { MAIL_PATH } from "../mail/common";
+import { NEEDS_PATH } from "../procurement/paths";
 
 /** Same name as FOCUS_CHANGED in server.ts. */
 export const FOCUS_CHANGED = "manifest-focus-changed";
@@ -20,7 +21,7 @@ export const OBJECT_PANEL = "object";
 export const BESIDE_PANEL = "object-beside";
 export const BESIDE_NEW_PANEL = "company-beside";
 
-export type FocusKind = "company" | "mailing" | "template" | "topic" | "inbound" | "mail";
+export type FocusKind = "company" | "mailing" | "template" | "topic" | "inbound" | "mail" | "needs";
 export interface FocusRef {
   kind: FocusKind;
   id: string;
@@ -34,6 +35,7 @@ export const KIND_LABEL: Record<FocusKind, string> = {
   topic: "Дашборд аутрича",
   inbound: "Входящее письмо",
   mail: "Почта аутрича",
+  needs: "Закупочный лист",
 };
 
 const THREAD_TITLE: Record<FocusKind, string> = {
@@ -43,6 +45,7 @@ const THREAD_TITLE: Record<FocusKind, string> = {
   topic: "Дашборд",
   inbound: "Письмо",
   mail: "Почта",
+  needs: "Закупки",
 };
 
 /** The focus and chain of a thread, live. */
@@ -129,6 +132,8 @@ export function fullPagePath(ref: FocusRef, threadId: string): { path: string; s
       return { path: MAIL_PATH, subPath: `inbound/${ref.id}` };
     case "mail":
       return { path: MAIL_PATH, subPath: "" };
+    case "needs":
+      return { path: NEEDS_PATH, subPath: "" };
   }
 }
 

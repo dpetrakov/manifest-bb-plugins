@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { CompanyPeek, usePeek } from "./CompanyPeek";
 import { FilterSelect, type Option } from "./FilterSelect";
 import { errorText, useCompanyChanged, useRegistry, useStatus, useTool } from "./hooks";
-import { STATUS_LABEL, STATUS_ORDER, countryName, regionLabel } from "./labels";
+import { ROLE_LABEL, ROLE_ORDER, STATUS_LABEL, STATUS_ORDER, countryName, regionLabel } from "./labels";
 import type { Facets, ListItem, WorkListItem } from "./types";
 
 export function PriorityBadge({ priority, manual }: { priority: number; manual?: boolean }) {
@@ -98,6 +98,7 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
   );
   const priorityOptions: Option[] = [{ value: "", label: "Все приоритеты" }, ...[1, 2, 3, 4, 5].map((p) => ({ value: String(p), label: `P${p}` }))];
   const statusOptions: Option[] = [{ value: "", label: "Все статусы" }, ...STATUS_ORDER.map((s) => ({ value: s, label: STATUS_LABEL[s] }))];
+  const roleOptions: Option[] = [{ value: "", label: "Все роли" }, ...ROLE_ORDER.map((r) => ({ value: r, label: ROLE_LABEL[r] }))];
 
   if (statusError) return <Note>Плагин недоступен: {statusError}</Note>;
   if (!status) return <Note>Подключаемся к Manifest…</Note>;
@@ -155,6 +156,7 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
               <FilterSelect label="Страна" value={reg.filters.country} options={countryOptions} onChange={(v) => reg.setFilter("country", v)} />
               <FilterSelect label="Приоритет" value={reg.filters.priority} options={priorityOptions} onChange={(v) => reg.setFilter("priority", v)} />
               <FilterSelect label="Статус" value={reg.filters.status} options={statusOptions} onChange={(v) => reg.setFilter("status", v)} />
+              <FilterSelect label="Роль" value={reg.filters.role} options={roleOptions} onChange={(v) => reg.setFilter("role", v)} />
             </div>
           </>
         )}
@@ -192,6 +194,11 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
               <span className="flex items-center gap-1.5">
                 <PriorityBadge priority={it.priority} manual={it.priority_manual} />
                 <span className="truncate text-sm font-medium">{it.display_name}</span>
+                {it.roles?.includes("supplier") ? (
+                  <span className="flex-none rounded-full border border-emerald-500/40 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-300" title="Поставщик закупок">
+                    поставщик
+                  </span>
+                ) : null}
               </span>
               <span className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
                 <span className="truncate">

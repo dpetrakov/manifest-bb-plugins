@@ -60,6 +60,8 @@ export interface Filters {
   country: string;
   priority: string;
   status: string;
+  /** ADR-051: potential_supplier | supplier */
+  role: string;
 }
 
 /**
@@ -89,7 +91,7 @@ interface ListState {
 
 const PAGE = 50;
 let state: ListState = {
-  filters: { q: "", region: "", country: "", priority: "", status: "" },
+  filters: { q: "", region: "", country: "", priority: "", status: "", role: "" },
   scope: "",
   selections: {},
   dismissed: {},
@@ -149,6 +151,7 @@ export function useRegistryLoad() {
                 country: f.country || undefined,
                 priorities: f.priority ? [Number(f.priority)] : undefined,
                 status: f.status || undefined,
+                role: f.role || undefined,
                 ...page,
               },
         );

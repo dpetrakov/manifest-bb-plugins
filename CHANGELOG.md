@@ -4,6 +4,26 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.8.0
+
+- One organisation with roles (ADR-051): a potential supplier and a supplier of
+  procurement are one card. Roles «Потенциальный поставщик» / «Поставщик», the supplier's
+  currency and «active» are set in the card; the list filters by role and marks suppliers;
+  the hover card shows the role.
+- «Закупочный лист» — a new rail and an object beside a chat: everything we need to buy
+  (model, kit, category, every known article, quantity, reference price). Edit and cancel a
+  position, add one, and load a CSV/XLSX file: a preview (new / changed / unchanged /
+  errors) and «Применить» with the fingerprint of what you saw. Saving is a person's button;
+  the agent reads the sheet (`procurement_needs`) and proposes a table to load.
+- Needs Manifest with `procurement.sheet` and the rights «Закупки: просмотр/управление».
+
+## manifest 0.7.9
+
+- Fix: the «Почта аутрича» rail opened the last mailing's or template's chat instead of the
+  mail hub (templates, mailings, legal entities, unmatched). Only the hub's chats count now;
+  without one in this window the rail opens the hub's last chat or a new one.
+- A mailing's, template's or inbound message's panel has «← Почта аутрича» back to the hub.
+
 ## manifest 0.7.8
 
 - The «Manifest · рядом» tab looks different from the chat's own object: warm paper instead

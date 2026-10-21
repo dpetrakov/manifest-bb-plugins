@@ -26,7 +26,7 @@ function useIntent(): [ComposeIntent | null, (v: ComposeIntent | null) => void] 
 }
 
 function intentTitle(i: ComposeIntent): string {
-  return (i.kind === "topic" || i.kind === "mail" ? KIND_LABEL[i.kind] : i.title || KIND_LABEL[i.kind]).slice(0, 60);
+  return (i.kind === "topic" || i.kind === "mail" || i.kind === "needs" ? KIND_LABEL[i.kind] : i.title || KIND_LABEL[i.kind]).slice(0, 60);
 }
 
 /** Banner of the New thread composer: which object the chat will be about. */
@@ -54,7 +54,7 @@ export function ComposeBanner() {
     });
   }, [composer, intent, rpc, setIntent]);
   if (!intent) return null;
-  const what = intent.kind === "topic" || intent.kind === "mail" ? KIND_LABEL[intent.kind].toLowerCase() : intent.title || KIND_LABEL[intent.kind].toLowerCase();
+  const what = intent.kind === "topic" || intent.kind === "mail" || intent.kind === "needs" ? KIND_LABEL[intent.kind].toLowerCase() : intent.title || KIND_LABEL[intent.kind].toLowerCase();
   return (
     <div className="mf-island flex items-center gap-2 px-2 py-1 text-xs">
       <ManifestMark />
