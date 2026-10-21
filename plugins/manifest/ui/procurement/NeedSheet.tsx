@@ -17,11 +17,7 @@ import { useOpenObject } from "../workspace/state";
 import { NEEDS_HUB } from "./paths";
 import { Countries } from "./Countries";
 import { Matching } from "./Matching";
-
-const CURRENCY_SIGN: Record<string, string> = { KZT: "₸", INR: "₹", USD: "$", RUB: "₽", EUR: "€", AED: "AED", CNY: "¥" };
-/** A reference price for a table cell: whole units and the currency sign. */
-const money = (v: number | null, cur: string) =>
-  v === null || v === undefined ? "—" : `${Math.round(v).toLocaleString("ru-RU")} ${CURRENCY_SIGN[cur] ?? cur}`.trim();
+import { GroupRow, KitMark, money, th } from "./grid";
 
 /** Positions grouped by category, in sheet order inside a group. */
 function byCategory(items: Need[]): { category: string; items: Need[]; qty: number }[] {
@@ -34,8 +30,6 @@ function byCategory(items: Need[]): { category: string; items: Need[]; qty: numb
     .sort(([a], [b]) => a.localeCompare(b, "ru"))
     .map(([category, list]) => ({ category, items: list, qty: list.reduce((sum, n) => sum + n.target_qty, 0) }));
 }
-
-const th = "py-1.5 px-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground";
 
 /** The «Закупочный лист» rail: the last sheet chat or a new one, the sheet on the right. */
 export function NeedsPage(_: PluginNavPanelProps) {
@@ -199,14 +193,7 @@ function CategoryRows({ group, open, setOpen, canEdit, onChanged }: {
 }) {
   return (
     <>
-      <tr className="bg-[var(--mf-surface-strong)]">
-        <td colSpan={5} className="px-3 py-1 text-[11px] font-semibold">
-          {group.category}
-          <span className="ml-1.5 font-normal text-muted-foreground">
-            {group.items.length} поз. · {group.qty.toLocaleString("ru-RU")} шт
-          </span>
-        </td>
-      </tr>
+      <GroupRow colSpan={5} title={group.category} note={`${group.items.length} поз. · ${group.qty.toLocaleString("ru-RU")} шт`} />
       {group.items.map((n) => {
         const isOpen = open === n.id;
         const arts = n.article_aliases;
@@ -221,11 +208,7 @@ function CategoryRows({ group, open, setOpen, canEdit, onChanged }: {
               <td className="max-w-0 px-2 py-1">
                 <span className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate font-medium">{n.model_key || n.description_en || n.part_no}</span>
-                  {n.kit ? (
-                    <span className="flex-none rounded bg-[color-mix(in_oklab,var(--mf-blue)_12%,white)] px-1 text-[10px] font-medium text-[var(--mf-blue)]" title="Набор с аккумулятором и зарядным">
-                      набор
-                    </span>
-                  ) : null}
+                  {n.kit ? <KitMark /> : null}
                 </span>
               </td>
               <td className="hidden max-w-0 truncate px-2 py-1 font-mono text-[11px] text-muted-foreground @[30rem]:table-cell" title={arts.join(" ")}>

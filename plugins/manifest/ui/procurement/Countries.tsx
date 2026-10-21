@@ -1,14 +1,15 @@
 // «Ассортимент стран» (EP-107, ADR-051): national STIHL sites as sources. A person
 // loads a country (a background job of Manifest, minutes) and applies the snapshot;
 // the progress refreshes while a load runs. A country row opens its assortment.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { errorText, useStatus, useTool } from "../hooks";
 import { countryName, formatDateTime } from "../labels";
 import { Note } from "../RegistryList";
-import { Badge, Progress } from "../manifest";
+import { Progress } from "../manifest";
+import { GroupRow, KitMark, money, th } from "./grid";
 
 interface Snapshot {
   id: string;
@@ -43,9 +44,14 @@ interface Item {
   price: number | null;
   currency: string;
   url: string;
+  category?: string; // Manifest before the field: the list is flat
 }
 
-const th = "py-1.5 px-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground";
+const plural = (n: number, one: string, few: string, many: string) => {
+  const t = n % 100;
+  const u = n % 10;
+  return t >= 11 && t <= 14 ? many : u === 1 ? one : u >= 2 && u <= 4 ? few : many;
+};
 
 export function Countries() {
   const { status } = useStatus();
@@ -91,8 +97,8 @@ export function Countries() {
         <thead className="sticky top-0 z-10 bg-[var(--mf-surface)] shadow-[inset_0_-1px_0_var(--mf-line-300)]">
           <tr>
             <th className={cn(th, "pl-3 text-left")}>Страна</th>
-            <th className={cn(th, "text-right")}>Моделей</th>
-            <th className={cn(th, "hidden text-left @[26rem]:table-cell")}>Снимок</th>
+            <th className={cn(th, "text-right")} title="Моделей и товаров (вариантов с отдельным артикулом) на сайте STIHL страны">На сайте</th>
+            <th className={cn(th, "hidden text-left @[26rem]:table-cell")}>Загружено</th>
             <th className={cn(th, "pr-3 text-right")} />
           </tr>
         </thead>
@@ -119,7 +125,16 @@ export function Countries() {
                     </span>
                   ) : null}
                 </td>
-                <td className="px-2 py-1.5 text-right tabular-nums">{cur ? cur.models : <span className="text-muted-foreground">нет данных</span>}</td>
+                <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">
+                  {cur ? (
+                    <>
+                      {cur.models} {plural(cur.models, "модель", "модели", "моделей")}
+                      <span className="text-muted-foreground"> · {cur.variants} тов.</span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">нет данных</span>
+                  )}
+                </td>
                 <td className="hidden px-2 py-1.5 text-muted-foreground @[26rem]:table-cell">{cur?.applied_at ? formatDateTime(cur.applied_at) : "—"}</td>
                 <td className="py-1.5 pl-2 pr-3 text-right" onClick={(e) => e.stopPropagation()}>
                   {canManage && pending ? (
@@ -161,41 +176,95 @@ function CountryRows({ source, isOpen, onToggle, children }: { source: Source; i
   );
 }
 
+/** Country products grouped like the sheet: by category, model order inside a group. */
+function byCategory(items: Item[]): { category: string; items: Item[] }[] | null {
+  if (!items.some((it) => it.category)) return null;
+  const groups = new Map<string, Item[]>();
+  for (const it of items) {
+    const k = it.category || "Принадлежности";
+    groups.set(k, [...(groups.get(k) ?? []), it]);
+  }
+  // Accessories go last: the sheet is about machines, batteries and chargers.
+  const rank = (c: string) => (c === "Принадлежности" ? 1 : 0);
+  return [...groups.entries()]
+    .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b, "ru"))
+    .map(([category, list]) => ({ category, items: list }));
+}
+
 function CountryItems({ country }: { country: string }) {
   const tool = useTool();
   const [q, setQ] = useState("");
   const [items, setItems] = useState<Item[] | null>(null);
   useEffect(() => {
     const t = setTimeout(() => {
-      tool<{ items: Item[] }>("assortment_items", { country, q: q || undefined, limit: 500 }).then(
+      tool<{ items: Item[] }>("assortment_items", { country, q: q || undefined, limit: 1000 }).then(
         (r) => setItems(r.items ?? []),
         () => setItems([]),
       );
     }, 250);
     return () => clearTimeout(t);
   }, [country, q, tool]);
+  const groups = useMemo(() => (items ? byCategory(items) : null), [items]);
+  const models = useMemo(() => new Set((items ?? []).map((it) => it.model_key).filter(Boolean)).size, [items]);
+  const row = (it: Item) => {
+    const name = it.variant_name || it.product_name;
+    return (
+      <tr key={`${it.global_id}-${it.sku}`} className="border-b border-[var(--mf-line-200)] hover:bg-state-hover">
+        <td className="max-w-0 py-1 pl-3 pr-2">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate font-medium" title={name}>
+              {it.model_key || <span className="font-normal">{name}</span>}
+            </span>
+            {it.kit ? <KitMark /> : null}
+          </span>
+        </td>
+        <td className="hidden max-w-0 px-2 py-1 @[30rem]:table-cell">
+          <a href={it.url} target="_blank" rel="noreferrer" className="block truncate text-muted-foreground hover:text-foreground hover:underline" title={name}>
+            {name}
+          </a>
+        </td>
+        <td className="hidden whitespace-nowrap px-2 py-1 font-mono text-[11px] text-muted-foreground @[22rem]:table-cell">{it.sku || "—"}</td>
+        <td className="whitespace-nowrap py-1 pl-2 pr-3 text-right tabular-nums text-muted-foreground">{money(it.price, it.currency)}</td>
+      </tr>
+    );
+  };
   return (
-    <div className="flex flex-col gap-1 p-2">
-      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Модель, артикул…" aria-label={`Поиск по ассортименту ${country}`} className="h-7 text-xs" />
-      <table className="w-full border-collapse text-[11px]">
-        <tbody>
-          {(items ?? []).map((it) => (
-            <tr key={`${it.global_id}-${it.sku}`} className="border-b border-[var(--mf-line-200)]">
-              <td className="max-w-0 py-0.5 pr-2">
-                <a href={it.url} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1.5 hover:underline" title={it.variant_name || it.product_name}>
-                  <span className="truncate font-medium">{it.model_key || it.variant_name || it.product_name}</span>
-                  {it.kit ? <Badge tone="info">набор</Badge> : null}
-                </a>
-              </td>
-              <td className="hidden py-0.5 pr-2 font-mono text-muted-foreground @[22rem]:table-cell">{it.sku}</td>
-              <td className="py-0.5 text-right tabular-nums text-muted-foreground">
-                {it.price !== null ? `${Math.round(it.price).toLocaleString("ru-RU")} ${it.currency}` : "—"}
-              </td>
+    <div className="flex flex-col">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Модель, название, артикул…" aria-label={`Поиск по ассортименту ${country}`} className="h-7 min-w-[9rem] flex-1 text-xs" />
+        <span className="text-muted-foreground">{items ? `${models} ${plural(models, "модель", "модели", "моделей")} · ${items.length} тов.` : "…"}</span>
+      </div>
+      {items && items.length ? (
+        <table className="w-full table-fixed border-collapse bg-[var(--mf-surface)] text-xs">
+          <thead className="shadow-[inset_0_-1px_0_var(--mf-line-300)]">
+            <tr>
+              <th className={cn(th, "pl-3 text-left")}>Модель</th>
+              <th className={cn(th, "hidden text-left @[30rem]:table-cell")}>Название на сайте</th>
+              <th className={cn(th, "hidden w-[7.5rem] text-left @[22rem]:table-cell")}>Артикул</th>
+              <th className={cn(th, "w-24 pr-3 text-right")}>Цена</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {groups
+              ? groups.map((g) => (
+                  <GroupRows key={g.category} title={g.category} count={g.items.length}>
+                    {g.items.map(row)}
+                  </GroupRows>
+                ))
+              : items.map(row)}
+          </tbody>
+        </table>
+      ) : null}
       {items && items.length === 0 ? <Note>Ничего не найдено.</Note> : null}
     </div>
+  );
+}
+
+function GroupRows({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
+  return (
+    <>
+      <GroupRow colSpan={4} title={title} note={`${count} тов.`} />
+      {children}
+    </>
   );
 }

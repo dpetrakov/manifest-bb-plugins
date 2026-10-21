@@ -132,7 +132,7 @@ describe("card tab", () => {
     expect(screen.getByText("sales@thk.example")).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("Статус"), { target: { value: "rejected" } });
-    const apply = screen.getByRole("button", { name: "Сменить статус" }) as HTMLButtonElement;
+    const apply = (await screen.findByRole("button", { name: "Сменить статус" })) as HTMLButtonElement;
     expect(apply.disabled).toBe(true);
     fireEvent.change(screen.getByPlaceholderText("Причина (обязательно)"), { target: { value: "не продаёт ЗИП" } });
     fireEvent.click(apply);
@@ -1219,7 +1219,7 @@ describe("assortment of countries (EP-107)", () => {
             ] } };
           }
           if (name === "assortment_items") {
-            return { result: { items: [{ global_id: "164117", product_name: "MSA 60", variant_name: "MSA 60 C-B with AK 20 and AL 101", sku: "MA040115804", model_key: "MSA 60 C-B", kit: true, price: 5196, currency: "ZAR", url: "https://x" }] } };
+            return { result: { items: [{ global_id: "164117", product_name: "MSA 60", variant_name: "MSA 60 C-B with AK 20 and AL 101", sku: "MA040115804", model_key: "MSA 60 C-B", kit: true, price: 5196, currency: "ZAR", url: "https://x", category: "Цепная пила" }] } };
           }
           return { result: snap({ status: "running" }) };
         },
@@ -1232,9 +1232,11 @@ describe("assortment of countries (EP-107)", () => {
     await waitFor(() => expect(calls.find((c) => c.name === "assortment_apply")?.args).toEqual({ id: "s1" }));
     fireEvent.click(screen.getByRole("button", { name: "Обновить" }));
     await waitFor(() => expect(calls.find((c) => c.name === "assortment_refresh")?.args).toEqual({ country: "ZA" }));
-    fireEvent.click(screen.getByText("61"));
+    fireEvent.click(screen.getByText("Южно-Африканская Республика"));
     expect(await screen.findByText("MSA 60 C-B")).toBeTruthy();
     expect(screen.getByText("5 196 ZAR")).toBeTruthy();
+    expect(screen.getByText("Цепная пила")).toBeTruthy();
+    expect(screen.getByText("Модель")).toBeTruthy();
   });
 });
 
@@ -1269,6 +1271,34 @@ describe("matching and coverage (EP-108)", () => {
     await waitFor(() => expect(calls.find((c) => c.name === "assortment_decide")?.args).toMatchObject({ need_id: "n2", level: 1, key_kind: "global_id", key: "9" }));
     fireEvent.click(screen.getByRole("button", { name: "Выбрать" }));
     await waitFor(() => expect(calls.filter((c) => c.name === "assortment_decide").at(-1)?.args).toMatchObject({ key: "10", level: 1 }));
+  });
+
+  it("shows countries on the map and explains a country without data", async () => {
+    renderSlot({ component: NeedSheet }, {} as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status({ canProcurement: true, canProcurementManage: true, canAssortment: true }),
+        tool: ({ name }: { name: string }) => {
+          if (name === "procurement_needs") return { result: { items: [], total: 0 } };
+          if (name === "assortment_coverage") return { result: { items: [{ country: "IN", by_volume: 62.5, by_positions: 50, full: 1, partial: 1, none: 1, unchecked: 0, positions: 3 }] } };
+          if (name === "assortment_sources") {
+            return { result: { items: [
+              { kind: "stihl_country", country_code: "IN", company_id: null, current: { id: "s1" } },
+              { kind: "stihl_country", country_code: "FR", company_id: null, current: null },
+            ] } };
+          }
+          if (name === "outreach_facets") return { result: { countries: [{ value: "KZ", count: 2 }, { value: "FR", count: 2 }, { value: "IN", count: 1 }] } };
+          return { result: { items: [] } };
+        },
+      } as never,
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Сверка" }));
+    expect(await screen.findByRole("img", { name: "Карта покрытия закупочного листа" })).toBeTruthy();
+    fireEvent.click(await screen.findByTestId("map-marker-KZ"));
+    expect(await screen.findByText(/Сайта STIHL на общей платформе у страны нет/)).toBeTruthy();
+    fireEvent.focus(screen.getByRole("textbox", { name: "Выбрать страну" }));
+    fireEvent.click(await screen.findByRole("option", { name: /Франция/ }));
+    expect(await screen.findByText(/загрузите его во вкладке «Ассортимент стран»/)).toBeTruthy();
   });
 
   it("sorts the list by coverage and shows it in a row", async () => {

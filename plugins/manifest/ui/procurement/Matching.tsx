@@ -2,13 +2,15 @@
 // automatic choice counts in the rating at once; doubtful ones are in «Проверить». A
 // person confirms, halves, rejects or picks another product of the same model — a
 // decision by the global id applies in every country; the rating is recomputed.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { errorText, useStatus, useTool } from "../hooks";
 import { countryName } from "../labels";
 import { Note } from "../RegistryList";
 import { Badge, StatusDot, type Tone } from "../manifest";
+import { CountryLookup, CoverageMap, describe, type MapCountry } from "../map/CoverageMap";
+import { KitMark, th } from "./grid";
 
 interface CountryCoverage {
   country: string;
@@ -19,6 +21,15 @@ interface CountryCoverage {
   none: number;
   unchecked: number;
   positions: number;
+}
+interface SourceRow {
+  kind: string;
+  country_code: string | null;
+  company_id: string | null;
+  current: { id: string } | null;
+}
+interface Facets {
+  countries?: { value: string; count: number }[];
 }
 interface Alternative {
   global_id: string;
@@ -62,7 +73,6 @@ function levelView(c: ChoiceRow): { tone: Tone; text: string } {
   return { tone: "muted", text: "нет" };
 }
 
-const th = "py-1.5 px-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground";
 
 export function Matching() {
   const { status } = useStatus();
@@ -75,6 +85,12 @@ export function Matching() {
   const [open, setOpen] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [sources, setSources] = useState<SourceRow[]>([]);
+  const [facets, setFacets] = useState<Facets>({});
+  useEffect(() => {
+    tool<{ items: SourceRow[] }>("assortment_sources", {}).then((r) => setSources(r.items ?? []), () => setSources([]));
+    tool<Facets>("outreach_facets", {}).then(setFacets, () => setFacets({}));
+  }, [tool]);
   const loadCovs = useCallback(() => {
     tool<{ items: CountryCoverage[] }>("assortment_coverage", {}).then(
       (r) => {
@@ -88,13 +104,15 @@ export function Matching() {
       () => setQueue([]),
     );
   }, [tool]);
+  const covered = !!covs?.some((c) => c.country === country);
   const loadRows = useCallback(() => {
-    if (!country) return;
+    setRows(null);
+    if (!country || !covered) return;
     tool<{ items: ChoiceRow[] }>("assortment_choices", { country }).then(
       (r) => setRows(r.items ?? []),
       (e: unknown) => setError(errorText(e)),
     );
-  }, [country, tool]);
+  }, [country, covered, tool]);
   useEffect(loadCovs, [loadCovs]);
   useEffect(loadRows, [loadRows]);
   const decide = async (c: ChoiceRow, level: number, alt?: Alternative) => {
@@ -126,46 +144,37 @@ export function Matching() {
       setBusy(false);
     }
   };
+  const mapCountries = useMemo(() => mergeCountries(covs ?? [], sources, facets), [covs, sources, facets]);
   if (!status?.canAssortment) return <Note>Сверка появится после обновления Manifest.</Note>;
   if (covs && covs.length === 0) return <Note>Нет загруженных стран: загрузите ассортимент во вкладке «Ассортимент стран».</Note>;
   const canDecide = !!status.canManage;
   const shown = onlyReview ? (queue ?? []) : (rows ?? []);
   return (
     <div className="flex flex-col">
-      <div className="mf-surface flex flex-wrap items-center gap-1 border-b border-border px-3 py-2">
-        {(covs ?? []).map((c) => (
-          <button
-            key={c.country}
-            type="button"
-            onClick={() => {
-              setCountry(c.country);
-              setOnlyReview(false);
-            }}
-            className={cn(
-              "rounded-full border px-2 py-0.5 text-[11px]",
-              !onlyReview && country === c.country ? "border-foreground bg-foreground text-background" : "border-border hover:bg-state-hover",
-            )}
-            title={`${c.by_positions}% позиций · полностью ${c.full}, частично ${c.partial}, нет ${c.none}`}
-          >
-            {countryName(c.country)} <b className="tabular-nums">{Math.round(c.by_volume)}%</b>
-          </button>
-        ))}
-        <span className="flex-1" />
+      <CoverageMap countries={mapCountries} selected={onlyReview ? "" : country} onSelect={(c) => { setCountry(c); setOnlyReview(false); }} />
+      <div className="mf-surface flex flex-wrap items-center gap-2 border-y border-border px-3 py-2">
+        <CountryLookup countries={mapCountries} selected={onlyReview ? "" : country} onSelect={(c) => { setCountry(c); setOnlyReview(false); }} />
         <button
           type="button"
           onClick={() => setOnlyReview(!onlyReview)}
           className={cn(
-            "rounded-full border px-2 py-0.5 text-[11px]",
+            "h-7 rounded-md border px-2 text-[11px]",
             onlyReview ? "border-[var(--mf-amber)] bg-[color-mix(in_oklab,var(--mf-amber)_18%,white)]" : "border-border hover:bg-state-hover",
           )}
+          title="Сомнительные автоматические выборы всех стран"
         >
           Проверить {queue ? queue.length : "…"}
         </button>
       </div>
       {error ? <p role="alert" className="px-3 py-2 text-xs text-destructive">{error}</p> : null}
       {!onlyReview && covs ? (
-        <CoverageLine c={covs.find((x) => x.country === country)} />
+        covered ? (
+          <CoverageLine c={covs.find((x) => x.country === country)} />
+        ) : country ? (
+          <NoData c={mapCountries.find((x) => x.code === country)} />
+        ) : null
       ) : null}
+      {onlyReview || covered ? (
       <table className="w-full border-collapse bg-[var(--mf-surface)] text-xs">
         <thead className="sticky top-0 z-10 bg-[var(--mf-surface)] shadow-[inset_0_-1px_0_var(--mf-line-300)]">
           <tr>
@@ -188,7 +197,7 @@ export function Matching() {
                     <td className="max-w-0 px-2 py-1">
                       <span className="flex min-w-0 items-center gap-1.5">
                         <span className="truncate font-medium">{c.model_key}</span>
-                        {c.kit ? <Badge tone="info">набор</Badge> : null}
+                        {c.kit ? <KitMark /> : null}
                         {onlyReview ? <span className="flex-none text-[10px] text-muted-foreground">{countryName(c.country)}</span> : null}
                       </span>
                     </td>
@@ -263,7 +272,41 @@ export function Matching() {
           })}
         </tbody>
       </table>
+      ) : null}
       {onlyReview && queue && queue.length === 0 ? <Note>Проверять нечего: все сомнительные выборы решены.</Note> : null}
+    </div>
+  );
+}
+
+/** Countries of the map: coverage, STIHL sites, organisations of the registry. */
+function mergeCountries(covs: CountryCoverage[], sources: SourceRow[], facets: Facets): MapCountry[] {
+  const m = new Map<string, MapCountry>();
+  const get = (code: string) => {
+    let c = m.get(code);
+    if (!c) m.set(code, (c = { code, coverage: null, byPositions: null, site: false, suppliers: 0, refined: 0 }));
+    return c;
+  };
+  for (const f of facets.countries ?? []) if (f.value) get(f.value).suppliers = f.count;
+  for (const s of sources) {
+    if (!s.country_code) continue;
+    if (s.kind === "stihl_country") get(s.country_code).site = true;
+    else if (s.company_id && s.current) get(s.country_code).refined += 1;
+  }
+  for (const c of covs) Object.assign(get(c.country), { coverage: c.by_volume, byPositions: c.by_positions });
+  return [...m.values()];
+}
+
+/** A country without its assortment: what would give the data. */
+function NoData({ c }: { c?: MapCountry }) {
+  if (!c) return null;
+  return (
+    <div className="px-3 py-2 text-xs">
+      <b>{countryName(c.code)}</b> <span className="text-muted-foreground">· {describe(c)}</span>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        {c.site
+          ? "Сайт STIHL страны есть — загрузите его во вкладке «Ассортимент стран», и покрытие посчитается."
+          : "Сайта STIHL на общей платформе у страны нет: покрытие даст прайс, каталог или сайт самой организации."}
+      </p>
     </div>
   );
 }

@@ -4,6 +4,20 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.11.0
+
+- «Сверка» opens with a world map instead of country chips: a country's fill is the
+  coverage of the procurement sheet by its STIHL assortment, a hatched country has a STIHL
+  site not loaded yet, a circle shows the organisations of the registry there (amber — one
+  of them has its own catalog). Zoom to Europe, Asia, Africa, the Americas or Oceania; a
+  lookup under the map selects any country. A country without data says what would give it
+  (load the site, or the organisation's own price list).
+- «Ассортимент стран»: the country's products look like the sheet — column headers, groups
+  by category (accessories last), the model in full, a narrow article column, the name on
+  the site as a link; the country row says «34 модели · 35 тов.» and when it was loaded.
+- 25 more countries with a STIHL site (Manifest update): France, Italy, Spain and the rest
+  of the EU sites, Ukraine, Japan, Mexico, Fiji — 34 in total.
+
 ## manifest 0.10.0
 
 - Coverage of the procurement sheet (EP-108): every organisation gets the share of the sheet
