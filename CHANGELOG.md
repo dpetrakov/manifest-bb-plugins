@@ -4,6 +4,29 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.12.0
+
+- An organisation's own assortment (EP-112): the card gets «Ассортимент» — what the
+  rating is counted by (its countries' STIHL sites or its own source), its price list or
+  site, and a draft with «Применить» / «Отклонить». «Загрузить прайс» takes XLSX/CSV.
+- The agent can read an organisation's site and save the products as a draft
+  (`assortment_company_draft`, only for the organisation of its chat); the preview says how
+  many products the sheet uses and the coverage by the draft. A person applies it; from
+  then on the organisation is rated by its own source instead of its countries.
+- «Сверка»: the organisations of the selected country next to the lookup, with «Рядом»,
+  «Чат» and the other countries each serves; the map stops growing on a wide page.
+- The cluster of the selected country: a halo around the markers of the other countries its
+  organisations serve — solid when they are all the organisations there, dashed when there
+  are others too; the tooltip says «организаций Казахстана: 1 из 2». The fill (coverage)
+  stays as it is.
+- More STIHL sites (Manifest update): Belgium, Switzerland, Canada, Peru — named only in
+  robots.txt; one page per product on multilingual sites.
+
+## manifest 0.11.1
+
+- The map tooltip stays inside the map: in its lower half it opens above the cursor, near
+  the right edge — to the left of it (it went under the frame and was cut off).
+
 ## manifest 0.11.0
 
 - «Сверка» opens with a world map instead of country chips: a country's fill is the

@@ -29,6 +29,7 @@ import {
 import { Note, PriorityBadge } from "./RegistryList";
 import type { Card } from "./types";
 import { CompanyMail } from "./mail/CompanyMail";
+import { CompanyAssortment } from "./procurement/CompanyAssortment";
 import { Badge, COMPANY_STATUS_TONE, ConfirmCard, KindLabel, ModeBadge } from "./manifest";
 
 export function CardTab({ subPath }: PluginNavPanelProps) {
@@ -167,6 +168,12 @@ export function CardView({ companyId, header, embedded }: { companyId: string; h
       {status?.canMail ? (
         <Section title="Почта">
           <CompanyMail key={c.id} companyId={c.id} />
+        </Section>
+      ) : null}
+
+      {status?.canAssortment ? (
+        <Section title="Ассортимент">
+          <CompanyAssortment key={c.id} companyId={c.id} canEdit={canEdit} website={card.contacts.find((x) => x.type === "website")?.value_raw} />
         </Section>
       ) : null}
 

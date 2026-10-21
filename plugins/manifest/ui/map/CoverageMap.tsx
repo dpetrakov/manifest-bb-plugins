@@ -22,6 +22,15 @@ export interface MapCountry {
   refined: number;
 }
 
+/**
+ * A country of the selected country's cluster: `n` of its organisations serve it; `full` —
+ * they are all the organisations there.
+ */
+export interface Cluster {
+  n: number;
+  full: boolean;
+}
+
 type View = { key: string; label: string; codes: string[] };
 const VIEWS: View[] = [
   { key: "world", label: "Мир", codes: [] },
@@ -56,7 +65,17 @@ function viewBox(v: View): [number, number, number, number] {
 /** Fill of a covered country: pale at 0 %, deep green at 100 %. */
 const coverageFill = (pct: number) => `color-mix(in oklab, var(--mf-green) ${Math.round(18 + Math.min(100, Math.max(0, pct)) * 0.72)}%, white)`;
 
-export function CoverageMap({ countries, selected, onSelect }: { countries: MapCountry[]; selected: string; onSelect: (code: string) => void }) {
+export function CoverageMap({
+  countries,
+  selected,
+  cluster = {},
+  onSelect,
+}: {
+  countries: MapCountry[];
+  selected: string;
+  cluster?: Record<string, Cluster>;
+  onSelect: (code: string) => void;
+}) {
   const byCode = useMemo(() => new Map(countries.map((c) => [c.code, c])), [countries]);
   const [view, setView] = useState<View>(VIEWS[0]);
   const [hover, setHover] = useState<{ code: string; x: number; y: number } | null>(null);
@@ -72,7 +91,8 @@ export function CoverageMap({ countries, selected, onSelect }: { countries: MapC
   const hc = hover ? byCode.get(hover.code) : undefined;
   return (
     <div className="flex flex-col">
-      <div ref={box} className="relative overflow-hidden bg-[var(--mf-paper)]" onMouseLeave={() => setHover(null)}>
+      {/* The map stops growing on a wide page: past ~46rem it only takes height from the sheet. */}
+      <div ref={box} className="relative mx-auto w-full max-w-[46rem] overflow-hidden bg-[var(--mf-paper)]" onMouseLeave={() => setHover(null)}>
         <svg viewBox={vb.join(" ")} className="block h-auto w-full" role="img" aria-label="Карта покрытия закупочного листа">
           <defs>
             <pattern id="mf-site-hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -96,6 +116,31 @@ export function CoverageMap({ countries, selected, onSelect }: { countries: MapC
               />
             );
           })}
+          {/* The cluster: a halo around the marker, the country's fill stays the coverage.
+              Solid — the selected country's organisations are all there are; dashed — others too. */}
+          {markers
+            .filter((c) => cluster[c.code])
+            .map((c) => {
+              const [x, y] = POINTS[c.code];
+              const s = Math.max(k, 0.35);
+              const r = (2.2 + Math.sqrt(c.suppliers) * 1.1) * s;
+              const full = cluster[c.code].full;
+              return (
+                <circle
+                  key={`halo-${c.code}`}
+                  cx={x}
+                  cy={y}
+                  r={r + 3.2 * s}
+                  fill="color-mix(in oklab, var(--mf-blue) 22%, transparent)"
+                  stroke="var(--mf-blue)"
+                  strokeWidth={(full ? 1.3 : 1) * s}
+                  strokeDasharray={full ? undefined : `${2 * s} ${1.4 * s}`}
+                  pointerEvents="none"
+                  data-testid={`map-halo-${c.code}`}
+                  data-full={full ? "1" : "0"}
+                />
+              );
+            })}
           {markers.map((c) => {
             const [x, y] = POINTS[c.code];
             const r = (2.2 + Math.sqrt(c.suppliers) * 1.1) * Math.max(k, 0.35);
@@ -120,10 +165,17 @@ export function CoverageMap({ countries, selected, onSelect }: { countries: MapC
         {hover && hc ? (
           <div
             className="pointer-events-none absolute z-10 min-w-[10rem] rounded-md border border-border bg-[var(--mf-surface)] px-2 py-1.5 text-[11px] shadow-md"
-            style={{ left: Math.min(hover.x + 12, (box.current?.clientWidth ?? 300) - 170), top: hover.y + 12 }}
+            style={tipPlace(hover, box.current)}
           >
             <div className="font-semibold">{countryName(hc.code)}</div>
             <div className="text-muted-foreground">{describe(hc)}</div>
+            {cluster[hc.code] && hc.code !== selected ? (
+              <div className="mt-0.5 text-[var(--mf-blue)]">
+                {cluster[hc.code].full
+                  ? `только организации ${countryName(selected)} (${cluster[hc.code].n})`
+                  : `организаций ${countryName(selected)}: ${cluster[hc.code].n} из ${hc.suppliers}`}
+              </div>
+            ) : null}
           </div>
         ) : null}
         <div className="absolute left-2 top-2 flex flex-wrap gap-0.5 rounded-md border border-border bg-[var(--mf-surface)]/90 p-0.5 text-[10px]">
@@ -139,9 +191,24 @@ export function CoverageMap({ countries, selected, onSelect }: { countries: MapC
           ))}
         </div>
       </div>
-      <Legend />
+      <Legend cluster={Object.keys(cluster).length > 1} />
     </div>
   );
+}
+
+/**
+ * Where the tooltip goes: below and right of the cursor, flipped above it in the lower half
+ * of the map and to its left near the right edge — the map clips what leaves its frame.
+ */
+function tipPlace(at: { x: number; y: number }, el: HTMLElement | null): React.CSSProperties {
+  const w = el?.clientWidth ?? 300;
+  const h = el?.clientHeight ?? 200;
+  const pos: React.CSSProperties = {};
+  if (at.x > w - 190) pos.right = Math.max(4, w - at.x + 12);
+  else pos.left = at.x + 12;
+  if (at.y > h / 2) pos.bottom = Math.max(4, h - at.y + 12);
+  else pos.top = at.y + 12;
+  return pos;
 }
 
 /** One line about a country for the tooltip and the lookup. */
@@ -154,7 +221,7 @@ export function describe(c: MapCountry): string {
   return parts.join(" · ");
 }
 
-function Legend() {
+function Legend({ cluster }: { cluster: boolean }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-3 py-1.5 text-[10px] text-muted-foreground">
       <span className="flex items-center gap-1">
@@ -175,6 +242,18 @@ function Legend() {
         <span className="h-2 w-2 rounded-full border border-[var(--mf-ink-700)] bg-[var(--mf-amber)]" />
         есть свой каталог
       </span>
+      {cluster ? (
+        <>
+          <span className="flex items-center gap-1">
+            <span className="h-2.5 w-2.5 rounded-full border border-[var(--mf-blue)] bg-[color-mix(in_oklab,var(--mf-blue)_22%,transparent)]" />
+            те же организации — других там нет
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="h-2.5 w-2.5 rounded-full border border-dashed border-[var(--mf-blue)] bg-[color-mix(in_oklab,var(--mf-blue)_22%,transparent)]" />
+            есть и другие
+          </span>
+        </>
+      ) : null}
     </div>
   );
 }

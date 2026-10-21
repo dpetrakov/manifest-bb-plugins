@@ -252,7 +252,10 @@ export function CompanyPeek({
               {it.coverage ? (
                 <span>
                   <b className="tabular-nums">{it.coverage.by_volume}%</b> по объёму · {it.coverage.by_positions}% позиций
-                  <span className="text-muted-foreground"> · сайт STIHL {countryName(it.coverage.country)}</span>
+                  <span className="text-muted-foreground">
+                    {" · "}
+                    {it.coverage.by === "pricelist" ? "прайс организации" : it.coverage.by === "distributor_site" ? "сайт организации" : `сайт STIHL ${countryName(it.coverage.country)}`}
+                  </span>
                   {it.coverage.unchecked ? <span className="text-[var(--mf-amber)]"> · проверить {it.coverage.unchecked}</span> : null}
                 </span>
               ) : (

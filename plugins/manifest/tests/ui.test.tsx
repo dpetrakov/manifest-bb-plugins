@@ -22,6 +22,7 @@ import { FocusHeader, ObjectBody, ObjectPanel } from "../ui/workspace/ObjectPane
 import { LetterChip, MailingChip } from "../ui/workspace/Chips";
 import { MailingSendBar } from "../ui/mail/send";
 import { NeedSheet } from "../ui/procurement/NeedSheet";
+import { CompanyAssortment } from "../ui/procurement/CompanyAssortment";
 
 const status = (over: Record<string, unknown> = {}) => ({
   connected: true,
@@ -1198,6 +1199,36 @@ describe("organisation roles (ADR-051)", () => {
   });
 });
 
+describe("organisation's own assortment (EP-112)", () => {
+  it("shows the rating source and a draft, applies it", async () => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    const snap = { id: "d1", status: "ready", products: 40, models: 12, applied_at: null, finished_at: "2026-10-22T10:00:00Z", created_by: "op@example.com · агент BB" };
+    renderSlot({ component: () => <CompanyAssortment companyId="k1" canEdit website="https://kazgarden.example" /> }, {} as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status({ canAssortment: true }),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          calls.push({ name, args });
+          if (name === "assortment_company") {
+            return { result: { sources: [{ id: "s1", kind: "distributor_site", base_url: "https://kazgarden.example/stihl", current: null, latest: snap }], coverage: null, by: "", country: "" } };
+          }
+          if (name === "assortment_preview") {
+            return { result: { snapshot: snap, kind: "distributor_site", origin: "https://kazgarden.example/stihl", recognized: 9, coverage: { by_volume: 64.2, by_positions: 40, unchecked: 2 }, current: null, current_by: "", unknown: ["Масло для цепи"] } };
+          }
+          return { result: {} };
+        },
+      } as never,
+    });
+    expect(await screen.findByText(/нет данных — сайта STIHL у её стран нет/)).toBeTruthy();
+    const draft = await screen.findByRole("group", { name: "Черновик ассортимента" });
+    expect(within(draft).getByText(/распознано для листа 9/)).toBeTruthy();
+    expect(within(draft).getByText("64%")).toBeTruthy();
+    expect(screen.getByText(/сайте kazgarden.example/)).toBeTruthy();
+    fireEvent.click(within(draft).getByRole("button", { name: "Применить" }));
+    await waitFor(() => expect(calls.find((c) => c.name === "assortment_apply")?.args).toEqual({ id: "d1" }));
+  });
+});
+
 describe("assortment of countries (EP-107)", () => {
   it("loads a country, applies a ready snapshot and shows the country's items", async () => {
     const calls: { name: string; args: Record<string, unknown> }[] = [];
@@ -1287,7 +1318,8 @@ describe("matching and coverage (EP-108)", () => {
               { kind: "stihl_country", country_code: "FR", company_id: null, current: null },
             ] } };
           }
-          if (name === "outreach_facets") return { result: { countries: [{ value: "KZ", count: 2 }, { value: "FR", count: 2 }, { value: "IN", count: 1 }] } };
+          if (name === "outreach_facets") return { result: { countries: [{ value: "KZ", count: 2 }, { value: "FR", count: 2 }, { value: "IN", count: 1 }, { value: "KG", count: 1 }, { value: "UZ", count: 2 }] } };
+          if (name === "outreach_list_companies") return { result: { items: [{ id: "k1", display_name: "Kaz Garden", priority: 1, country_code: "KZ", countries: ["KZ", "KG", "UZ"], coverage: null }], total: 1 } };
           return { result: { items: [] } };
         },
       } as never,
@@ -1296,6 +1328,12 @@ describe("matching and coverage (EP-108)", () => {
     expect(await screen.findByRole("img", { name: "Карта покрытия закупочного листа" })).toBeTruthy();
     fireEvent.click(await screen.findByTestId("map-marker-KZ"));
     expect(await screen.findByText(/Сайта STIHL на общей платформе у страны нет/)).toBeTruthy();
+    expect(await screen.findByText("Kaz Garden")).toBeTruthy();
+    expect(screen.getByText(/\+ Киргизия, Узбекистан/)).toBeTruthy();
+    expect(screen.getByTestId("map-halo-KG").getAttribute("data-full")).toBe("1");
+    expect(screen.getByTestId("map-halo-UZ").getAttribute("data-full")).toBe("0");
+    expect(screen.queryByTestId("map-halo-IN")).toBeNull();
+    expect(within(screen.getByRole("list", { name: "Организации страны" })).getByRole("button", { name: "Рядом" })).toBeTruthy();
     fireEvent.focus(screen.getByRole("textbox", { name: "Выбрать страну" }));
     fireEvent.click(await screen.findByRole("option", { name: /Франция/ }));
     expect(await screen.findByText(/загрузите его во вкладке «Ассортимент стран»/)).toBeTruthy();

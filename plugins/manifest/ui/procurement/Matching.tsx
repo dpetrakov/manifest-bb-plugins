@@ -9,7 +9,8 @@ import { errorText, useStatus, useTool } from "../hooks";
 import { countryName } from "../labels";
 import { Note } from "../RegistryList";
 import { Badge, StatusDot, type Tone } from "../manifest";
-import { CountryLookup, CoverageMap, describe, type MapCountry } from "../map/CoverageMap";
+import { useOpenObject, useOpenPinned } from "../workspace/state";
+import { CountryLookup, CoverageMap, describe, type Cluster, type MapCountry } from "../map/CoverageMap";
 import { KitMark, th } from "./grid";
 
 interface CountryCoverage {
@@ -145,15 +146,32 @@ export function Matching() {
     }
   };
   const mapCountries = useMemo(() => mergeCountries(covs ?? [], sources, facets), [covs, sources, facets]);
+  const [orgs, setOrgs] = useState<{ items: OrgRow[]; total: number } | null>(null);
+  useEffect(() => {
+    setOrgs(null);
+    if (!country || onlyReview) return;
+    let live = true;
+    tool<{ items: OrgRow[]; total: number }>("outreach_list_companies", { country, limit: 50 }).then(
+      (r) => live && setOrgs({ items: r.items ?? [], total: r.total ?? 0 }),
+      () => live && setOrgs({ items: [], total: 0 }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [country, onlyReview, tool]);
+  const cluster = useMemo(() => clusterOf(country, orgs?.items ?? [], mapCountries), [country, orgs, mapCountries]);
   if (!status?.canAssortment) return <Note>Сверка появится после обновления Manifest.</Note>;
   if (covs && covs.length === 0) return <Note>Нет загруженных стран: загрузите ассортимент во вкладке «Ассортимент стран».</Note>;
   const canDecide = !!status.canManage;
   const shown = onlyReview ? (queue ?? []) : (rows ?? []);
   return (
     <div className="flex flex-col">
-      <CoverageMap countries={mapCountries} selected={onlyReview ? "" : country} onSelect={(c) => { setCountry(c); setOnlyReview(false); }} />
-      <div className="mf-surface flex flex-wrap items-center gap-2 border-y border-border px-3 py-2">
-        <CountryLookup countries={mapCountries} selected={onlyReview ? "" : country} onSelect={(c) => { setCountry(c); setOnlyReview(false); }} />
+      <CoverageMap countries={mapCountries} selected={onlyReview ? "" : country} cluster={onlyReview ? {} : cluster} onSelect={(c) => { setCountry(c); setOnlyReview(false); }} />
+      <div className="mf-surface flex flex-wrap items-start gap-2 border-y border-border px-3 py-2">
+        <div className="w-44 flex-none">
+          <CountryLookup countries={mapCountries} selected={onlyReview ? "" : country} onSelect={(c) => { setCountry(c); setOnlyReview(false); }} />
+        </div>
+        {!onlyReview && country ? <CountryCompanies country={country} orgs={orgs} /> : <span className="flex-1" />}
         <button
           type="button"
           onClick={() => setOnlyReview(!onlyReview)}
@@ -294,6 +312,99 @@ function mergeCountries(covs: CountryCoverage[], sources: SourceRow[], facets: F
   }
   for (const c of covs) Object.assign(get(c.country), { coverage: c.by_volume, byPositions: c.by_positions });
   return [...m.values()];
+}
+
+interface OrgRow {
+  id: string;
+  display_name: string;
+  priority: number;
+  country_code: string;
+  countries?: string[];
+  coverage: { by_volume: number; country: string } | null;
+}
+
+/** Countries an organisation serves: its main one and its coverage countries. */
+const served = (o: OrgRow) => [...new Set([o.country_code, ...(o.countries ?? [])].filter(Boolean))];
+
+/**
+ * The cluster of the selected country: the other countries its organisations serve, how
+ * many of them serve each, and whether they are all the organisations there.
+ */
+function clusterOf(selected: string, orgs: OrgRow[], countries: MapCountry[]): Record<string, Cluster> {
+  if (!selected || !orgs.length) return {};
+  const total = new Map(countries.map((c) => [c.code, c.suppliers]));
+  const out: Record<string, Cluster> = {};
+  for (const o of orgs) {
+    for (const cc of served(o)) {
+      const c = (out[cc] ??= { n: 0, full: false });
+      c.n += 1;
+    }
+  }
+  for (const [cc, c] of Object.entries(out)) c.full = c.n >= (total.get(cc) ?? 0);
+  return out;
+}
+
+/**
+ * Organisations of the registry serving the selected country (main country or one of its
+ * coverage countries — one organisation can stand in several): «Рядом» opens its card as
+ * a tab beside, «Чат» — its own chat.
+ */
+function CountryCompanies({ country, orgs }: { country: string; orgs: { items: OrgRow[]; total: number } | null }) {
+  const openPinned = useOpenPinned();
+  const openObject = useOpenObject();
+  const [all, setAll] = useState(false);
+  const items = orgs ? (all ? orgs.items : orgs.items.slice(0, 6)) : null;
+  const total = orgs?.total ?? 0;
+  if (!items) return <span className="flex-1 py-1 text-[11px] text-muted-foreground">…</span>;
+  if (!items.length) return <span className="flex-1 py-1 text-[11px] text-muted-foreground">В реестре нет организаций этой страны.</span>;
+  const btn = "h-6 rounded-md px-1.5 text-[11px] text-muted-foreground hover:bg-state-hover hover:text-foreground";
+  return (
+    <ul className="flex min-w-[12rem] flex-1 flex-col gap-0.5" aria-label="Организации страны">
+      {items.map((o) => {
+        const ref = { kind: "company" as const, id: o.id, title: o.display_name };
+        return (
+          <li key={o.id} className="flex items-center gap-1.5 text-xs">
+            <span className="flex-none rounded-full border border-border px-1 text-[10px] font-semibold">P{o.priority}</span>
+            <span className="min-w-0 truncate font-medium" title={o.display_name}>{o.display_name}</span>
+            <OtherCountries codes={served(o).filter((c) => c !== country)} />
+            {o.coverage ? (
+              <span className="flex-none text-[11px] tabular-nums text-muted-foreground" title={`Покрытие листа: лучшая из стран организации (${countryName(o.coverage.country)})`}>
+                {Math.round(o.coverage.by_volume)}%
+              </span>
+            ) : null}
+            <span className="ml-auto flex flex-none">
+              <button type="button" className={btn} title="Карточка рядом — отдельной вкладкой панели" onClick={() => { if (!openPinned(ref)) void openObject(ref); }}>
+                Рядом
+              </button>
+              <button type="button" className={btn} title="Чат организации" onClick={() => void openObject(ref)}>
+                Чат
+              </button>
+            </span>
+          </li>
+        );
+      })}
+      {orgs && !all && orgs.items.length > items.length ? (
+        <li>
+          <button type="button" className="text-[11px] text-muted-foreground hover:underline" onClick={() => setAll(true)}>
+            и ещё {orgs.items.length - items.length}
+          </button>
+        </li>
+      ) : null}
+      {total > (orgs?.items.length ?? 0) ? <li className="text-[11px] text-muted-foreground">всего {total} — фильтр «Страна» в списке слева</li> : null}
+    </ul>
+  );
+}
+
+/** The other countries of an organisation, short: «+ Киргизия, Узбекистан +2». */
+function OtherCountries({ codes }: { codes: string[] }) {
+  if (!codes.length) return null;
+  const names = codes.map(countryName);
+  return (
+    <span className="min-w-0 flex-none truncate text-[10px] text-muted-foreground" title={`Также: ${names.join(", ")}`}>
+      + {names.slice(0, 2).join(", ")}
+      {names.length > 2 ? ` +${names.length - 2}` : ""}
+    </span>
+  );
 }
 
 /** A country without its assortment: what would give the data. */

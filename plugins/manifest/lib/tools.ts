@@ -148,6 +148,54 @@ export const AGENT_TOOLS = {
       limit: opt(z.number().int().min(1).max(1000), "сколько"),
     }),
   },
+  // ---- EP-112: an organisation's own assortment (its site or price list) ----
+  assortment_company: {
+    write: false,
+    scopes: ["company", "dashboard"],
+    description:
+      "Собственный ассортимент организации: её источники (прайс, сайт) с текущим снимком и черновиком, рейтинг покрытия листа и чем он посчитан (by: stihl_country — по стране, pricelist / distributor_site — по её источнику).",
+    parameters: z.object({ company_id: id }),
+  },
+  assortment_preview: {
+    write: false,
+    scopes: ["company", "dashboard"],
+    description: "Предпросмотр снимка организации: товаров распознано, покрытие листа по нему, текущий рейтинг для сравнения.",
+    parameters: z.object({ id: z.string().describe("id снимка") }),
+  },
+  assortment_snapshot_items: {
+    write: false,
+    scopes: ["company", "dashboard"],
+    description: "Товары одного снимка (черновика или текущего): название, артикул, распознанная модель, набор, цена.",
+    parameters: z.object({
+      id: z.string().describe("id снимка"),
+      q: opt(z.string(), "модель, название или артикул"),
+      limit: opt(z.number().int().min(1).max(3000), "сколько"),
+    }),
+  },
+  assortment_company_draft: {
+    write: true,
+    scopes: ["company"],
+    description:
+      "Сохранить товары с сайта (или из прайса) организации этого чата как ЧЕРНОВИК её ассортимента и получить предпросмотр: покрытие листа по черновику и текущий рейтинг. " +
+      "Собирай аккумуляторную линейку STIHL со страниц её сайта (каталог, раздел STIHL), без выдумок: только то, что на страницах. Применяет черновик человек кнопкой в карточке; новый черновик заменяет прежний.",
+    parameters: z.object({
+      company_id: id,
+      kind: z.enum(["distributor_site", "pricelist"]).describe("distributor_site — сайт организации; pricelist — прайс или каталог, присланный ею"),
+      origin: z.string().max(500).describe("откуда: адрес раздела сайта или имя файла"),
+      items: z
+        .array(
+          z.object({
+            name: z.string().max(300).describe("название товара как на сайте"),
+            sku: opt(z.string().max(60), "артикул, если указан"),
+            price: opt(z.number().positive(), "цена, если указана"),
+            currency: opt(z.string().max(8), "валюта ISO: KZT, USD, AED…"),
+            url: opt(z.string().max(500), "адрес страницы товара"),
+          }),
+        )
+        .min(1)
+        .max(3000),
+    }),
+  },
   outreach_save_contact: {
     write: true,
     scopes: ["company"],
@@ -494,7 +542,10 @@ export const MAIL_TOOLS = new Set<string>([
 /** Tools that need the procurement sheet on the server (capability "procurement.sheet"). */
 export const PROC_TOOLS = new Set<string>(["procurement_needs"]);
 /** Tools that need the assortment on the server (capability "outreach.assortment"). */
-export const ASSORT_TOOLS = new Set<string>(["assortment_sources", "assortment_items", "assortment_coverage", "assortment_choices", "assortment_queue"]);
+export const ASSORT_TOOLS = new Set<string>([
+  "assortment_sources", "assortment_items", "assortment_coverage", "assortment_choices", "assortment_queue",
+  "assortment_company", "assortment_preview", "assortment_snapshot_items", "assortment_company_draft",
+]);
 
 /** Agent tools of a thread kind; work and mail tools only when Manifest has them. */
 export function toolsFor(scope: ToolScope, work: boolean, mail = false, proc = false): AgentToolName[] {
@@ -532,6 +583,7 @@ export const READ_TOOLS = new Set([
   "procurement_needs", "procurement_import_preview",
   "assortment_sources", "assortment_items",
   "assortment_coverage", "assortment_choices", "assortment_queue", "assortment_decisions",
+  "assortment_company", "assortment_preview", "assortment_snapshot_items",
 ]);
 
 /** Tools the panels may call through the plugin backend (contract v1). */
@@ -626,6 +678,13 @@ export const PANEL_TOOLS = new Set([
   "assortment_decisions",
   "assortment_decide",
   "assortment_decision_revoke",
+  // EP-112: an organisation's own assortment — a draft from a file or the agent, applied by a person.
+  "assortment_company",
+  "assortment_preview",
+  "assortment_snapshot_items",
+  "assortment_company_draft",
+  "assortment_company_file",
+  "assortment_discard",
 ]);
 
 /** Company id touched by a tool call, for the «card changed» signal. */

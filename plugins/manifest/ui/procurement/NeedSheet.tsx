@@ -18,6 +18,7 @@ import { NEEDS_HUB } from "./paths";
 import { Countries } from "./Countries";
 import { Matching } from "./Matching";
 import { GroupRow, KitMark, money, th } from "./grid";
+import { readFile, toBase64 } from "./file";
 
 /** Positions grouped by category, in sheet order inside a group. */
 function byCategory(items: Need[]): { category: string; items: Need[]; qty: number }[] {
@@ -46,21 +47,6 @@ export function NeedsPage(_: PluginNavPanelProps) {
   return <NeedSheet />;
 }
 
-function readFile(f: File): Promise<ArrayBuffer> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result as ArrayBuffer);
-    r.onerror = () => reject(r.error ?? new Error("файл не прочитан"));
-    r.readAsArrayBuffer(f);
-  });
-}
-
-function toBase64(buf: ArrayBuffer): string {
-  let s = "";
-  const bytes = new Uint8Array(buf);
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-}
 
 /** The «Закупочный лист» object: the sheet and the assortment of countries. */
 export function NeedSheet() {
