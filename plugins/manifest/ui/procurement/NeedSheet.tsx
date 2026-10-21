@@ -15,9 +15,26 @@ import type { ImportPreview, Need } from "../types";
 import { railTarget } from "../workspace/intent";
 import { useOpenObject } from "../workspace/state";
 import { NEEDS_HUB } from "./paths";
+import { Countries } from "./Countries";
 
+const CURRENCY_SIGN: Record<string, string> = { KZT: "₸", INR: "₹", USD: "$", RUB: "₽", EUR: "€", AED: "AED", CNY: "¥" };
+/** A reference price for a table cell: whole units and the currency sign. */
 const money = (v: number | null, cur: string) =>
-  v === null || v === undefined ? "—" : `${v.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ${cur}`.trim();
+  v === null || v === undefined ? "—" : `${Math.round(v).toLocaleString("ru-RU")} ${CURRENCY_SIGN[cur] ?? cur}`.trim();
+
+/** Positions grouped by category, in sheet order inside a group. */
+function byCategory(items: Need[]): { category: string; items: Need[]; qty: number }[] {
+  const groups = new Map<string, Need[]>();
+  for (const n of items) {
+    const k = n.category || "Без категории";
+    groups.set(k, [...(groups.get(k) ?? []), n]);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, "ru"))
+    .map(([category, list]) => ({ category, items: list, qty: list.reduce((sum, n) => sum + n.target_qty, 0) }));
+}
+
+const th = "py-1.5 px-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground";
 
 /** The «Закупочный лист» rail: the last sheet chat or a new one, the sheet on the right. */
 export function NeedsPage(_: PluginNavPanelProps) {
@@ -50,8 +67,45 @@ function toBase64(buf: ArrayBuffer): string {
   return btoa(s);
 }
 
-/** The sheet: positions, edit, cancel, import. */
+/** The «Закупочный лист» object: the sheet and the assortment of countries. */
 export function NeedSheet() {
+  const { status } = useStatus();
+  const [tab, setTab] = useState<"sheet" | "countries">("sheet");
+  if (!status?.canAssortment) return <SheetTab />;
+  return (
+    <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
+      <div className="mf-surface flex gap-1 border-b border-border px-3">
+        {(
+          [
+            ["sheet", "Лист"],
+            ["countries", "Ассортимент стран"],
+          ] as const
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setTab(k)}
+            className={cn("whitespace-nowrap px-3 py-2 text-xs", tab === k ? "border-b-2 border-foreground font-semibold" : "text-muted-foreground hover:text-foreground")}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1">
+        {tab === "sheet" ? (
+          <SheetTab />
+        ) : (
+          <div className="h-full overflow-y-auto">
+            <Countries />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The sheet: positions, edit, cancel, import. */
+function SheetTab() {
   const { status } = useStatus();
   const tool = useTool();
   const [items, setItems] = useState<Need[] | null>(null);
@@ -87,63 +141,123 @@ export function NeedSheet() {
   return (
     <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
       <div className="mf-surface flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs">
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Модель, артикул, категория…" aria-label="Поиск по листу" className="h-8 w-48 flex-1 text-xs" />
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Модель, артикул, категория…" aria-label="Поиск по листу" className="h-7 min-w-[9rem] flex-1 text-xs" />
         <span className="text-muted-foreground">
           {items ? `${items.length} поз. · ${total.toLocaleString("ru-RU")} шт` : "…"}
         </span>
         {canEdit ? (
           <>
-            <Button size="sm" variant="outline" className="h-8" onClick={() => setCreating(!creating)}>
-              Новая позиция
+            <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setCreating(!creating)}>
+              + Позиция
             </Button>
             <ImportButton onApplied={load} />
           </>
         ) : null}
       </div>
       {error ? <p role="alert" className="px-3 py-2 text-xs text-destructive">{error}</p> : null}
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {creating ? (
-          <NeedForm
-            onDone={(changed) => {
-              setCreating(false);
-              if (changed) load();
-            }}
-          />
+          <div className="border-b border-border bg-[var(--mf-surface)] p-3">
+            <NeedForm
+              onDone={(changed) => {
+                setCreating(false);
+                if (changed) load();
+              }}
+            />
+          </div>
         ) : null}
         {items && items.length === 0 ? <Note>Лист пуст. Загрузите файл с позициями (CSV или XLSX).</Note> : null}
-        <ul className="flex flex-col gap-1">
-          {shown.map((n) => (
-            <li key={n.id} className="mf-card overflow-hidden">
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-state-hover"
-                onClick={() => setOpen(open === n.id ? null : n.id)}
-                aria-expanded={open === n.id}
-              >
-                <span className="w-7 flex-none tabular-nums text-muted-foreground">{n.position_no}</span>
-                <span className="min-w-0 flex-1 truncate font-medium">{n.model_key || n.description_en || n.part_no}</span>
-                {n.kit ? <Badge tone="info">набор</Badge> : null}
-                <span className="hidden w-32 truncate text-muted-foreground @md:inline">{n.category}</span>
-                <span className="w-14 flex-none text-right tabular-nums">{n.target_qty} шт</span>
-                <span className="hidden w-28 flex-none text-right tabular-nums text-muted-foreground @lg:inline">{money(n.ref_price, n.ref_currency)}</span>
-              </button>
-              {open === n.id ? (
-                <div className="border-t border-border p-2.5">
+        {shown.length ? (
+          <table className="w-full border-collapse bg-[var(--mf-surface)] text-xs">
+            <thead className="sticky top-0 z-10 bg-[var(--mf-surface)] shadow-[inset_0_-1px_0_var(--mf-line-300)]">
+              <tr>
+                <th className={cn(th, "w-9 pl-3 text-right")}>№</th>
+                <th className={cn(th, "text-left")}>Модель</th>
+                <th className={cn(th, "hidden text-left @[30rem]:table-cell")}>Артикулы</th>
+                <th className={cn(th, "w-14 text-right")}>Кол-во</th>
+                <th className={cn(th, "hidden w-24 pr-3 text-right @[22rem]:table-cell")}>Ориентир</th>
+              </tr>
+            </thead>
+            <tbody>
+              {byCategory(shown).map((g) => (
+                <CategoryRows key={g.category} group={g} open={open} setOpen={setOpen} canEdit={canEdit} onChanged={load} />
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function CategoryRows({ group, open, setOpen, canEdit, onChanged }: {
+  group: { category: string; items: Need[]; qty: number };
+  open: string | null;
+  setOpen: (id: string | null) => void;
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  return (
+    <>
+      <tr className="bg-[var(--mf-surface-strong)]">
+        <td colSpan={5} className="px-3 py-1 text-[11px] font-semibold">
+          {group.category}
+          <span className="ml-1.5 font-normal text-muted-foreground">
+            {group.items.length} поз. · {group.qty.toLocaleString("ru-RU")} шт
+          </span>
+        </td>
+      </tr>
+      {group.items.map((n) => {
+        const isOpen = open === n.id;
+        const arts = n.article_aliases;
+        return (
+          <FragmentRow key={n.id}>
+            <tr
+              className={cn("cursor-pointer border-b border-[var(--mf-line-200)] hover:bg-state-hover", isOpen && "bg-state-active")}
+              onClick={() => setOpen(isOpen ? null : n.id)}
+              aria-expanded={isOpen}
+            >
+              <td className="py-1 pl-3 pr-2 text-right tabular-nums text-muted-foreground">{n.position_no}</td>
+              <td className="max-w-0 px-2 py-1">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate font-medium">{n.model_key || n.description_en || n.part_no}</span>
+                  {n.kit ? (
+                    <span className="flex-none rounded bg-[color-mix(in_oklab,var(--mf-blue)_12%,white)] px-1 text-[10px] font-medium text-[var(--mf-blue)]" title="Набор с аккумулятором и зарядным">
+                      набор
+                    </span>
+                  ) : null}
+                </span>
+              </td>
+              <td className="hidden max-w-0 truncate px-2 py-1 font-mono text-[11px] text-muted-foreground @[30rem]:table-cell" title={arts.join(" ")}>
+                {arts[0] ?? "—"}
+                {arts.length > 1 ? ` +${arts.length - 1}` : ""}
+              </td>
+              <td className="px-2 py-1 text-right tabular-nums">{n.target_qty}</td>
+              <td className="hidden py-1 pl-2 pr-3 text-right tabular-nums text-muted-foreground @[22rem]:table-cell">{money(n.ref_price, n.ref_currency)}</td>
+            </tr>
+            {isOpen ? (
+              <tr className="border-b border-[var(--mf-line-300)]">
+                <td colSpan={5} className="bg-[var(--mf-paper)] p-2.5">
                   <NeedForm
                     need={n}
                     readOnly={!canEdit}
                     onDone={(changed) => {
-                      if (changed) load();
+                      if (changed) onChanged();
+                      else setOpen(null);
                     }}
                   />
-                </div>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
+                </td>
+              </tr>
+            ) : null}
+          </FragmentRow>
+        );
+      })}
+    </>
   );
+}
+
+function FragmentRow({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
 }
 
 const field = "h-8 text-xs";
@@ -344,7 +458,7 @@ function ImportButton({ onApplied }: { onApplied: () => void }) {
           if (f) void pick(f);
         }}
       />
-      <Button size="sm" variant="outline" className="h-8" disabled={busy} onClick={() => input.current?.click()}>
+      <Button size="sm" variant="outline" className="h-7 px-2" disabled={busy} onClick={() => input.current?.click()}>
         Загрузить файл
       </Button>
       {done ? <span className="w-full text-[var(--mf-green)]">{done}</span> : null}

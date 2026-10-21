@@ -48,7 +48,7 @@ export default definePluginApp((app) => {
   // W-16: почта — шаблоны (с чатом по шаблону), юрлица и отправители, неразобранные входящие.
   app.slots.navPanel({ id: MAIL_ID, title: "Почта аутрича", icon: "Mail", path: MAIL_PATH, component: MailPage });
   // ADR-051 (W-19): what we need — the procurement sheet, as an object beside a chat.
-  app.slots.navPanel({ id: NEEDS_ID, title: "Закупочный лист", icon: "ClipboardList", path: NEEDS_PATH, component: NeedsPage });
+  app.slots.navPanel({ id: NEEDS_ID, title: "Закупочный лист", icon: "manifest/procurement", path: NEEDS_PATH, component: NeedsPage });
   app.slots.messageDirective({ id: "manifest-companies", component: CompaniesDirective });
   app.slots.messageDirective({ id: "manifest-batch", component: BatchDirective });
   // W-17: письмо организации «как уйдёт» — черновик из Manifest, обновляется после правки агента.

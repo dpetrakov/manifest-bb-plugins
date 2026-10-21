@@ -105,6 +105,8 @@ const statusSchema = z.object({
   /** The procurement sheet (ADR-051): Manifest has it and the user may read / change it. */
   canProcurement: z.boolean(),
   canProcurementManage: z.boolean(),
+  /** Assortment of countries (EP-107): Manifest has it. */
+  canAssortment: z.boolean(),
   /** unauthorized | unavailable | contract | null */
   problem: z.string().nullable(),
   message: z.string(),
@@ -245,6 +247,8 @@ export default async function plugin(bb: BbPluginApi) {
   let mailCapability = (await bb.storage.kv.get<boolean>(MAIL_CAP)) ?? false;
   const PROC_CAP = "procurement-capability";
   let procCapability = (await bb.storage.kv.get<boolean>(PROC_CAP)) ?? false;
+  const ASSORT_CAP = "assortment-capability";
+  let assortCapability = (await bb.storage.kv.get<boolean>(ASSORT_CAP)) ?? false;
 
   const TOPICS = "topics";
   const SECTION = "section-id";
@@ -299,7 +303,7 @@ export default async function plugin(bb: BbPluginApi) {
     const c = await connection();
     const base: Status = {
       connected: false, url: c.url, email: c.email, canView: false, canManage: false, canWork: false, canMail: false,
-      canMailSettings: false, canSend: false, canProcurement: false, canProcurementManage: false, problem: null, message: "",
+      canMailSettings: false, canSend: false, canProcurement: false, canProcurementManage: false, canAssortment: false, problem: null, message: "",
     };
     if (!c.url || !c.token) return { ...base, problem: "unauthorized", message: "Плагин не подключён: войдите в настройках плагина." };
     try {
@@ -327,6 +331,11 @@ export default async function plugin(bb: BbPluginApi) {
         mailCapability = canMail;
         await bb.storage.kv.set(MAIL_CAP, canMail);
       }
+      const canAssort = Array.isArray(who.capabilities) && who.capabilities.includes("outreach.assortment");
+      if (canAssort !== assortCapability) {
+        assortCapability = canAssort;
+        await bb.storage.kv.set(ASSORT_CAP, canAssort);
+      }
       const canProc = Array.isArray(who.capabilities) && who.capabilities.includes(CAPABILITY_PROCUREMENT);
       if (canProc !== procCapability) {
         procCapability = canProc;
@@ -343,6 +352,7 @@ export default async function plugin(bb: BbPluginApi) {
         canMailSettings: !!who.can_mail_settings,
         canSend: !!who.can_send,
         ...procurementRights(who.capabilities, who.features),
+        canAssortment: canAssort,
       };
     } catch (error) {
       if (error instanceof ManifestError) return { ...base, problem: error.code === "unauthorized" ? "unauthorized" : "unavailable", message: error.message };
@@ -918,7 +928,7 @@ export default async function plugin(bb: BbPluginApi) {
     // One tool set for every focus: BB fixes the tools for the session, and the focus
     // changes inside it. What a call may change is checked per call (execute).
     const tools: string[] = [
-      ...outreachTools(workCapability, mailCapability, procCapability),
+      ...outreachTools(workCapability, mailCapability, procCapability, assortCapability),
       "manifest_focus_get",
       "manifest_focus_open",
       "manifest_template_draft",

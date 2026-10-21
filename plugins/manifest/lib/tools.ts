@@ -109,6 +109,24 @@ export const AGENT_TOOLS = {
       "Закупочный лист — что нам нужно закупить: позиции (модель, набор, категория, артикулы-синонимы, кол-во, ориентир цены, статус). Только чтение: позиции сохраняет человек в панели «Закупочный лист».",
     parameters: z.object({ include_cancelled: opt(z.boolean(), "показать и отменённые") }),
   },
+  assortment_sources: {
+    write: false,
+    scopes: ["company", "dashboard", "mailing", "template", "inbound"],
+    description:
+      "Источники ассортимента — сайты STIHL по странам: текущий снимок (дата, товаров, моделей) и идущая загрузка. Загружает и применяет человек в панели «Закупочный лист» → «Ассортимент стран».",
+    parameters: z.object({}),
+  },
+  assortment_items: {
+    write: false,
+    scopes: ["company", "dashboard", "mailing", "template", "inbound"],
+    description:
+      "Ассортимент страны по её сайту STIHL: товары (глобальный ID), варианты с артикулом страны, модель, набор, цена. Поиск по модели, названию, артикулу.",
+    parameters: z.object({
+      country: z.string().describe("ISO-код страны: IN, ZA, BR, AR, CO, AU, NZ, DE, GB"),
+      q: opt(z.string(), "модель, название или артикул"),
+      limit: opt(z.number().int().min(1).max(1000), "сколько"),
+    }),
+  },
   outreach_save_contact: {
     write: true,
     scopes: ["company"],
@@ -454,6 +472,8 @@ export const MAIL_TOOLS = new Set<string>([
 
 /** Tools that need the procurement sheet on the server (capability "procurement.sheet"). */
 export const PROC_TOOLS = new Set<string>(["procurement_needs"]);
+/** Tools that need the assortment on the server (capability "outreach.assortment"). */
+export const ASSORT_TOOLS = new Set<string>(["assortment_sources", "assortment_items"]);
 
 /** Agent tools of a thread kind; work and mail tools only when Manifest has them. */
 export function toolsFor(scope: ToolScope, work: boolean, mail = false, proc = false): AgentToolName[] {
@@ -462,7 +482,8 @@ export function toolsFor(scope: ToolScope, work: boolean, mail = false, proc = f
       (AGENT_TOOLS[n].scopes as readonly ToolScope[]).includes(scope) &&
       (work || !WORK_TOOLS.has(n)) &&
       (mail || !MAIL_TOOLS.has(n)) &&
-      (proc || !PROC_TOOLS.has(n)),
+      (proc || !PROC_TOOLS.has(n)) &&
+      !ASSORT_TOOLS.has(n),
   );
 }
 
@@ -472,8 +493,10 @@ export function toolsFor(scope: ToolScope, work: boolean, mail = false, proc = f
  * (organisation → its mailing), so the plugin checks per call what the current focus
  * allows instead of narrowing the set.
  */
-export function outreachTools(work: boolean, mail: boolean, proc = false): AgentToolName[] {
-  return AGENT_TOOL_NAMES.filter((n) => (work || !WORK_TOOLS.has(n)) && (mail || !MAIL_TOOLS.has(n)) && (proc || !PROC_TOOLS.has(n)));
+export function outreachTools(work: boolean, mail: boolean, proc = false, assort = false): AgentToolName[] {
+  return AGENT_TOOL_NAMES.filter(
+    (n) => (work || !WORK_TOOLS.has(n)) && (mail || !MAIL_TOOLS.has(n)) && (proc || !PROC_TOOLS.has(n)) && (assort || !ASSORT_TOOLS.has(n)),
+  );
 }
 
 /** Tools that only read: no «changed» signal after them. */
@@ -486,6 +509,7 @@ export const READ_TOOLS = new Set([
   "mail_mailings", "mail_mailing_get", "mail_mailing_letter",
   "mail_message_get", "mail_messages", "mail_changes", "mail_blocked_countries",
   "procurement_needs", "procurement_import_preview",
+  "assortment_sources", "assortment_items",
 ]);
 
 /** Tools the panels may call through the plugin backend (contract v1). */
@@ -568,6 +592,11 @@ export const PANEL_TOOLS = new Set([
   "procurement_import_apply",
   "procurement_need_save",
   "procurement_need_cancel",
+  // EP-107: assortment of countries — loading and applying are a person's buttons.
+  "assortment_sources",
+  "assortment_items",
+  "assortment_refresh",
+  "assortment_apply",
 ]);
 
 /** Company id touched by a tool call, for the «card changed» signal. */

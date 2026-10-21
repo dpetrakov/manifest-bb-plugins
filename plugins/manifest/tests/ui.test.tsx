@@ -1197,3 +1197,43 @@ describe("organisation roles (ADR-051)", () => {
     await waitFor(() => expect(calls.at(-1)?.role).toBe("supplier"));
   });
 });
+
+describe("assortment of countries (EP-107)", () => {
+  it("loads a country, applies a ready snapshot and shows the country's items", async () => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    const snap = (over: Record<string, unknown>) => ({
+      id: "s1", status: "ready", pages_total: 30, pages_done: 30, pages_failed: 0, products: 30, variants: 43, models: 30,
+      error: "", started_at: "2026-10-21T10:00:00Z", finished_at: "2026-10-21T10:01:00Z", applied_at: null, ...over,
+    });
+    renderSlot({ component: NeedSheet }, {} as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status({ canProcurement: true, canProcurementManage: true, canAssortment: true }),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          calls.push({ name, args });
+          if (name === "procurement_needs") return { result: { items: [], total: 0 } };
+          if (name === "assortment_sources") {
+            return { result: { items: [
+              { id: "in", kind: "stihl_country", country_code: "IN", title: "STIHL IN", base_url: "", current: null, latest: snap({}) },
+              { id: "za", kind: "stihl_country", country_code: "ZA", title: "STIHL ZA", base_url: "", current: snap({ id: "z1", status: "applied", applied_at: "2026-10-20T10:00:00Z", models: 61 }), latest: snap({ id: "z1", status: "applied", models: 61 }) },
+            ] } };
+          }
+          if (name === "assortment_items") {
+            return { result: { items: [{ global_id: "164117", product_name: "MSA 60", variant_name: "MSA 60 C-B with AK 20 and AL 101", sku: "MA040115804", model_key: "MSA 60 C-B", kit: true, price: 5196, currency: "ZAR", url: "https://x" }] } };
+          }
+          return { result: snap({ status: "running" }) };
+        },
+      } as never,
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Ассортимент стран" }));
+    expect(await screen.findByText(/готов новый снимок: 30 моделей/)).toBeTruthy();
+    expect(screen.getByText("нет данных")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Применить" }));
+    await waitFor(() => expect(calls.find((c) => c.name === "assortment_apply")?.args).toEqual({ id: "s1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Обновить" }));
+    await waitFor(() => expect(calls.find((c) => c.name === "assortment_refresh")?.args).toEqual({ country: "ZA" }));
+    fireEvent.click(screen.getByText("61"));
+    expect(await screen.findByText("MSA 60 C-B")).toBeTruthy();
+    expect(screen.getByText("5 196 ZAR")).toBeTruthy();
+  });
+});

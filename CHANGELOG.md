@@ -4,6 +4,24 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.9.0
+
+- «Ассортимент стран» — a tab of the «Закупочный лист» object (EP-107): the national STIHL
+  sites as sources. «Загрузить» starts a background load in Manifest (the cordless product
+  pages of the country, one page every 1.5 s) with live progress; «Применить» makes the
+  finished snapshot current. A country row opens its assortment: models, kit mark, the
+  country's article and price, a link to the product page.
+- The agent reads `assortment_sources` and `assortment_items`; loading and applying are a
+  person's buttons.
+- Needs Manifest with `outreach.assortment`.
+
+## manifest 0.8.1
+
+- «Закупочный лист» has its own rail icon (it fell back to the outreach one).
+- The sheet is a compact table with a sticky header: positions grouped by category with
+  counts and quantities; columns follow the panel width — narrow: number, model (with a
+  «набор» mark) and quantity; wider: the reference price; wide: articles.
+
 ## manifest 0.8.0
 
 - One organisation with roles (ADR-051): a potential supplier and a supplier of
