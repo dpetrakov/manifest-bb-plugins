@@ -4,6 +4,23 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.14.0
+
+- The procurement sheet object is laid out by jobs: «Лист», «Покрытие», «Источники»,
+  «Проверить N» (Manifest update, migration 00060).
+- «Покрытие»: the map colours a country by its best source — the STIHL site or an
+  organisation's own catalog (a draft gives the country a dashed amber border). «Сверка
+  по» switches the matching between the country's site and the catalogs of organisations
+  serving it; a draft catalog is confirmed or rejected right there. Each organisation of the
+  country has «Сверка» next to «Рядом» and «Чат». A failed load of organisations says so and
+  offers «Повторить» instead of «no organisations».
+- «Проверить N»: drafts of catalogs and doubtful choices of every source, each with its
+  source. A product without an article is decided by name, only in its catalog.
+- «Источники»: STIHL sites of countries and organisations' catalogs — status, coverage,
+  products, «Подтвердить / Отклонить», «Рядом».
+- Manifest got faster: the matching remembers parsed product names (a recompute over 37
+  countries parsed millions of names before).
+
 ## manifest 0.13.0
 
 - An organisation's draft assortment counts at once, like an automatic choice of the

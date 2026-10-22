@@ -148,6 +148,13 @@ export const AGENT_TOOLS = {
       limit: opt(z.number().int().min(1).max(1000), "сколько"),
     }),
   },
+  assortment_source_choices: {
+    write: false,
+    scopes: ["company", "dashboard", "mailing", "template", "inbound"],
+    description:
+      "Сверка листа с одним источником — сайтом STIHL страны или каталогом организации (source_id из assortment_coverage.sources): по каждой позиции товар, уровень 1 / 0.5 / 0, причина, нужна ли проверка, решение человека.",
+    parameters: z.object({ source_id: z.string().describe("id источника") }),
+  },
   // ---- EP-112: an organisation's own assortment (its site or price list) ----
   assortment_company: {
     write: false,
@@ -545,6 +552,7 @@ export const PROC_TOOLS = new Set<string>(["procurement_needs"]);
 export const ASSORT_TOOLS = new Set<string>([
   "assortment_sources", "assortment_items", "assortment_coverage", "assortment_choices", "assortment_queue",
   "assortment_company", "assortment_preview", "assortment_snapshot_items", "assortment_company_draft",
+  "assortment_source_choices",
 ]);
 
 /** Agent tools of a thread kind; work and mail tools only when Manifest has them. */
@@ -583,7 +591,7 @@ export const READ_TOOLS = new Set([
   "procurement_needs", "procurement_import_preview",
   "assortment_sources", "assortment_items",
   "assortment_coverage", "assortment_choices", "assortment_queue", "assortment_decisions",
-  "assortment_company", "assortment_preview", "assortment_snapshot_items",
+  "assortment_company", "assortment_preview", "assortment_snapshot_items", "assortment_source_choices",
 ]);
 
 /** Tools the panels may call through the plugin backend (contract v1). */
@@ -678,6 +686,7 @@ export const PANEL_TOOLS = new Set([
   "assortment_decisions",
   "assortment_decide",
   "assortment_decision_revoke",
+  "assortment_source_choices",
   // EP-112: an organisation's own assortment — a draft from a file or the agent, applied by a person.
   "assortment_company",
   "assortment_preview",

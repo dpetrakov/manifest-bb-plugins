@@ -14,6 +14,10 @@ export interface MapCountry {
   /** Coverage by volume, % — the country's assortment is loaded. */
   coverage: number | null;
   byPositions?: number | null;
+  /** What the coverage is by: the country's STIHL site or an organisation's own catalog. */
+  coverageBy?: "site" | "own";
+  coverageDraft?: boolean;
+  coverageOrg?: string;
   /** A STIHL site exists but its assortment is not loaded. */
   site: boolean;
   /** Organisations of the registry in the country. */
@@ -110,8 +114,10 @@ export function CoverageMap({
                 key={code}
                 d={d}
                 fill={fill}
-                stroke={selected === code ? "var(--mf-ink-900)" : "white"}
-                strokeWidth={(selected === code ? 1.4 : 0.5) * k}
+                stroke={selected === code ? "var(--mf-ink-900)" : c?.coverageDraft ? "var(--mf-amber)" : "white"}
+                strokeWidth={(selected === code ? 1.4 : c?.coverageDraft ? 1 : 0.5) * k}
+                strokeDasharray={selected !== code && c?.coverageDraft ? `${2 * k} ${1.5 * k}` : undefined}
+                data-draft={c?.coverageDraft ? "1" : undefined}
                 className={cn(clickable(c) && "cursor-pointer hover:brightness-95")}
                 onMouseMove={c ? move(code) : undefined}
                 onClick={clickable(c) ? () => onSelect(code) : undefined}
@@ -217,7 +223,11 @@ function tipPlace(at: { x: number; y: number }, el: HTMLElement | null): React.C
 /** One line about a country for the tooltip and the lookup. */
 export function describe(c: MapCountry): string {
   const parts: string[] = [];
-  if (c.coverage != null) parts.push(`покрытие ${Math.round(c.coverage)}% по объёму`);
+  if (c.coverage != null)
+    parts.push(
+      `покрытие ${Math.round(c.coverage)}% по объёму` +
+        (c.coverageBy === "own" ? ` (каталог ${c.coverageOrg ?? "организации"}${c.coverageDraft ? ", черновик" : ""})` : ""),
+    );
   else if (c.site) parts.push("сайт STIHL не загружен");
   else parts.push("нет источника ассортимента");
   if (c.suppliers)
@@ -248,7 +258,7 @@ function Legend({ cluster }: { cluster: boolean }) {
       </span>
       <span className="flex items-center gap-1">
         <span className="h-2 w-2 rounded-full border border-dashed border-[var(--mf-amber)] bg-[color-mix(in_oklab,var(--mf-amber)_35%,white)]" />
-        черновик каталога
+        черновик каталога (у страны — пунктирная граница)
       </span>
       {cluster ? (
         <>

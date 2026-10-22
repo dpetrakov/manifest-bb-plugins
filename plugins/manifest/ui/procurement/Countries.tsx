@@ -1,14 +1,17 @@
 // «Ассортимент стран» (EP-107, ADR-051): national STIHL sites as sources. A person
 // loads a country (a background job of Manifest, minutes) and applies the snapshot;
 // the progress refreshes while a load runs. A country row opens its assortment.
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { errorText, useStatus, useTool } from "../hooks";
 import { countryName, formatDateTime } from "../labels";
 import { Note } from "../RegistryList";
-import { Progress } from "../manifest";
+import { Badge, Progress } from "../manifest";
+import { useOpenObject, useOpenPinned } from "../workspace/state";
+import { assortmentChanged } from "./ChoiceTable";
+import { useAssortmentChanged, type SourceCoverage } from "./Matching";
 import { GroupRow, KitMark, money, th } from "./grid";
 
 interface Snapshot {
@@ -24,6 +27,7 @@ interface Snapshot {
   started_at: string;
   finished_at: string | null;
   applied_at: string | null;
+  confirmed_at?: string | null;
 }
 interface Source {
   id: string;
@@ -31,6 +35,7 @@ interface Source {
   country_code: string;
   title: string;
   base_url: string;
+  company_id?: string | null;
   current: Snapshot | null;
   latest: Snapshot | null;
 }
@@ -56,20 +61,23 @@ const plural = (n: number, one: string, few: string, many: string) => {
 export function Countries() {
   const { status } = useStatus();
   const tool = useTool();
-  const [sources, setSources] = useState<Source[] | null>(null);
+  const [all, setAll] = useState<Source[] | null>(null);
+  const [seg, setSeg] = useState<"countries" | "orgs">("countries");
+  const sources = useMemo(() => (all ? all.filter((s) => s.kind === "stihl_country") : null), [all]);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const load = useCallback(() => {
     tool<{ items: Source[] }>("assortment_sources", {}).then(
       (r) => {
-        setSources((r.items ?? []).filter((s) => s.kind === "stihl_country"));
+        setAll(r.items ?? []);
         setError(null);
       },
       (e: unknown) => setError(errorText(e)),
     );
   }, [tool]);
   useEffect(load, [load]);
+  useAssortmentChanged(load);
   const running = sources?.some((s) => s.latest?.status === "running");
   useEffect(() => {
     if (!running) return;
@@ -88,11 +96,29 @@ export function Countries() {
       setBusy(null);
     }
   };
-  if (!status?.canAssortment) return <Note>Ассортимент стран появится после обновления Manifest.</Note>;
+  if (!status?.canAssortment) return <Note>Источники появятся после обновления Manifest.</Note>;
   const canManage = !!status.canManage;
+  const own = (all ?? []).filter((s) => s.company_id && (s.current || s.latest));
+  const segBtn = (k: "countries" | "orgs", label: string) => (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={seg === k}
+      onClick={() => setSeg(k)}
+      className={cn("rounded-md border px-2 py-0.5 text-[11px]", seg === k ? "border-foreground bg-foreground text-background" : "border-border hover:bg-state-hover")}
+    >
+      {label}
+    </button>
+  );
   return (
     <div className="flex flex-col">
+      <div className="mf-surface flex items-center gap-1.5 border-b border-border px-3 py-2" role="tablist" aria-label="Источники">
+        {segBtn("countries", `Сайты STIHL стран${sources ? ` (${sources.filter((x) => x.current).length})` : ""}`)}
+        {segBtn("orgs", `Каталоги организаций (${own.length})`)}
+      </div>
       {error ? <p role="alert" className="px-3 py-2 text-xs text-destructive">{error}</p> : null}
+      {seg === "orgs" ? <OrgSources sources={own} canManage={canManage} /> : (
+      <>
       <table className="w-full border-collapse bg-[var(--mf-surface)] text-xs">
         <thead className="sticky top-0 z-10 bg-[var(--mf-surface)] shadow-[inset_0_-1px_0_var(--mf-line-300)]">
           <tr>
@@ -155,7 +181,118 @@ export function Countries() {
       <p className="px-3 py-2 text-[11px] text-muted-foreground">
         Сайт STIHL на общей платформе есть не во всех странах: для остальных ассортимент даст прайс или сайт дистрибьютора.
       </p>
+      </>
+      )}
     </div>
+  );
+}
+
+/**
+ * Organisations' own catalogs (EP-112): a site read by the agent or a price list; a draft
+ * already counts in the rating and waits for «Подтвердить» / «Отклонить».
+ */
+function OrgSources({ sources, canManage }: { sources: Source[]; canManage: boolean }) {
+  const tool = useTool();
+  const openPinned = useOpenPinned();
+  const openObject = useOpenObject();
+  const [covs, setCovs] = useState<Map<string, SourceCoverage>>(new Map());
+  const [open, setOpen] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const loadCovs = useCallback(() => {
+    tool<{ sources?: SourceCoverage[] }>("assortment_coverage", {}).then(
+      (r) => setCovs(new Map((r.sources ?? []).map((x) => [x.source_id, x]))),
+      () => setCovs(new Map()),
+    );
+  }, [tool]);
+  useEffect(loadCovs, [loadCovs]);
+  useAssortmentChanged(loadCovs);
+  const act = async (name: string, id: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await tool(name, { id });
+      assortmentChanged();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!sources.length) {
+    return <Note>Каталогов организаций пока нет: загрузите прайс в карточке организации или попросите агента в её чате разобрать её сайт.</Note>;
+  }
+  const rows = [...sources].sort((a, b) => (covs.get(b.id)?.by_volume ?? -1) - (covs.get(a.id)?.by_volume ?? -1));
+  return (
+    <>
+      {error ? <p role="alert" className="px-3 py-2 text-xs text-destructive">{error}</p> : null}
+      <table className="w-full border-collapse bg-[var(--mf-surface)] text-xs">
+        <thead className="sticky top-0 z-10 bg-[var(--mf-surface)] shadow-[inset_0_-1px_0_var(--mf-line-300)]">
+          <tr>
+            <th className={cn(th, "pl-3 text-left")}>Организация</th>
+            <th className={cn(th, "hidden text-left @[26rem]:table-cell")}>Источник</th>
+            <th className={cn(th, "text-right")}>Покрытие</th>
+            <th className={cn(th, "pr-3 text-right")} />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((s) => {
+            const cur = s.current;
+            const draft = !!cur && !cur.confirmed_at;
+            const cov = covs.get(s.id);
+            const isOpen = open === s.id;
+            const name = s.title.replace(/^(Сайт|Прайс) · /, "");
+            const ref = s.company_id ? { kind: "company" as const, id: s.company_id, title: name } : null;
+            return (
+              <Fragment key={s.id}>
+                <tr className={cn("cursor-pointer border-b border-[var(--mf-line-200)] align-top hover:bg-state-hover", isOpen && "bg-state-active")} onClick={() => setOpen(isOpen ? null : s.id)} aria-expanded={isOpen}>
+                  <td className="max-w-0 py-1.5 pl-3 pr-2">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate font-medium" title={name}>{name}</span>
+                      {draft ? <Badge tone="warn">черновик</Badge> : null}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {countryName(s.country_code)} · {cur ? `${cur.products} тов.` : "нет снимка"}
+                    </span>
+                  </td>
+                  <td className="hidden max-w-0 truncate px-2 py-1.5 text-muted-foreground @[26rem]:table-cell" title={s.base_url}>
+                    {s.kind === "pricelist" ? "прайс" : "сайт"}
+                    {s.base_url ? ` · ${s.base_url.replace(/^https?:\/\//, "")}` : ""}
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">{cov ? `${Math.round(cov.by_volume)}%` : "—"}</td>
+                  <td className="py-1.5 pl-2 pr-3 text-right" onClick={(e) => e.stopPropagation()}>
+                    <span className="flex justify-end gap-1">
+                      {ref ? (
+                        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { if (!openPinned(ref)) void openObject(ref); }}>
+                          Рядом
+                        </Button>
+                      ) : null}
+                      {canManage && draft && cur ? (
+                        <>
+                          <Button size="sm" className="h-7 px-2" disabled={busy} onClick={() => void act("assortment_confirm", cur.id)}>
+                            Подтвердить
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-7 px-2" disabled={busy} onClick={() => void act("assortment_discard", cur.id)}>
+                            Отклонить
+                          </Button>
+                        </>
+                      ) : null}
+                    </span>
+                  </td>
+                </tr>
+                {isOpen && cur ? (
+                  <tr className="border-b border-[var(--mf-line-300)]">
+                    <td colSpan={4} className="bg-[var(--mf-paper)] p-0">
+                      <CountryItems snapshotId={cur.id} />
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </>
   );
 }
 
@@ -191,19 +328,22 @@ function byCategory(items: Item[]): { category: string; items: Item[] }[] | null
     .map(([category, list]) => ({ category, items: list }));
 }
 
-function CountryItems({ country }: { country: string }) {
+function CountryItems({ country, snapshotId }: { country?: string; snapshotId?: string }) {
   const tool = useTool();
   const [q, setQ] = useState("");
   const [items, setItems] = useState<Item[] | null>(null);
   useEffect(() => {
     const t = setTimeout(() => {
-      tool<{ items: Item[] }>("assortment_items", { country, q: q || undefined, limit: 1000 }).then(
+      const call = snapshotId
+        ? tool<{ items: Item[] }>("assortment_snapshot_items", { id: snapshotId, q: q || undefined, limit: 3000 })
+        : tool<{ items: Item[] }>("assortment_items", { country, q: q || undefined, limit: 1000 });
+      call.then(
         (r) => setItems(r.items ?? []),
         () => setItems([]),
       );
     }, 250);
     return () => clearTimeout(t);
-  }, [country, q, tool]);
+  }, [country, snapshotId, q, tool]);
   const groups = useMemo(() => (items ? byCategory(items) : null), [items]);
   const models = useMemo(() => new Set((items ?? []).map((it) => it.model_key).filter(Boolean)).size, [items]);
   const row = (it: Item) => {

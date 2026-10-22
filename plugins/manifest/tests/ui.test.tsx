@@ -1248,6 +1248,7 @@ describe("assortment of countries (EP-107)", () => {
             return { result: { items: [
               { id: "in", kind: "stihl_country", country_code: "IN", title: "STIHL IN", base_url: "", current: null, latest: snap({}) },
               { id: "za", kind: "stihl_country", country_code: "ZA", title: "STIHL ZA", base_url: "", current: snap({ id: "z1", status: "applied", applied_at: "2026-10-20T10:00:00Z", models: 61 }), latest: snap({ id: "z1", status: "applied", models: 61 }) },
+              { id: "o1", kind: "distributor_site", country_code: "ID", title: "Сайт · Indokita", base_url: "https://indokita.co.id", company_id: "c9", current: snap({ id: "o1s", status: "applied", products: 15, confirmed_at: null }), latest: snap({ id: "o1s", status: "applied" }) },
             ] } };
           }
           if (name === "assortment_items") {
@@ -1257,7 +1258,7 @@ describe("assortment of countries (EP-107)", () => {
         },
       } as never,
     });
-    fireEvent.click(await screen.findByRole("button", { name: "Ассортимент стран" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Источники" }));
     expect(await screen.findByText(/готов новый снимок: 30 моделей/)).toBeTruthy();
     expect(screen.getByText("нет данных")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Применить" }));
@@ -1269,6 +1270,10 @@ describe("assortment of countries (EP-107)", () => {
     expect(screen.getByText("5 196 ZAR")).toBeTruthy();
     expect(screen.getByText("Цепная пила")).toBeTruthy();
     expect(screen.getByText("Модель")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Каталоги организаций (1)" }));
+    expect(await screen.findByText("Indokita")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
+    await waitFor(() => expect(calls.find((c) => c.name === "assortment_confirm")?.args).toEqual({ id: "o1s" }));
   });
 });
 
@@ -1279,8 +1284,11 @@ describe("matching and coverage (EP-108)", () => {
     url: "https://x", alternatives: [{ global_id: "10", sku: "HA060113534", name: "HSA 60.1", model_key: "HSA 50.1", kit: false, url: "" }], ...over,
   });
 
-  it("decides on a doubtful choice and picks another product", async () => {
+  it("matches a country and an organisation's catalog, decides, confirms a draft", async () => {
     const calls: { name: string; args: Record<string, unknown> }[] = [];
+    const site = { source_id: "s-in", source_kind: "stihl_country", country: "IN", title: "STIHL IN", snapshot_id: "sn1", draft: false };
+    const own = { source_id: "s-co", source_kind: "distributor_site", country: "IN", company_id: "c1", company_name: "Delhi Garden", title: "Сайт · Delhi Garden", snapshot_id: "sn2", draft: true };
+    const cov = { full: 1, partial: 1, none: 1, unchecked: 1, positions: 3 };
     renderSlot({ component: NeedSheet }, {} as never, {
       pluginId: "manifest",
       rpc: {
@@ -1288,21 +1296,43 @@ describe("matching and coverage (EP-108)", () => {
         tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
           calls.push({ name, args });
           if (name === "procurement_needs") return { result: { items: [], total: 0 } };
-          if (name === "assortment_coverage") return { result: { items: [{ country: "IN", by_volume: 62.5, by_positions: 50, full: 1, partial: 1, none: 1, unchecked: 1, positions: 3 }] } };
-          if (name === "assortment_queue") return { result: { items: [row()] } };
-          if (name === "assortment_choices") return { result: { items: [row(), row({ need_id: "n1", level: 1, reason: "", via: "model", review: false, model_key: "MSA 60 C-B", kit: true, position_no: 1, sku: "MA040115806", global_id: "164117", name: "MSA 60 set" })] } };
+          if (name === "assortment_coverage") {
+            return { result: { items: [{ country: "IN", by_volume: 62.5, by_positions: 50, ...cov }], sources: [{ ...site, by_volume: 62.5, by_positions: 50, ...cov }, { ...own, by_volume: 70, by_positions: 60, ...cov }] } };
+          }
+          if (name === "assortment_queue") return { result: { items: [row({ source: own })] } };
+          if (name === "assortment_source_choices" && args.source_id === "s-in") {
+            return { result: { items: [row({ source: site }), row({ need_id: "n1", level: 1, reason: "", via: "model", review: false, model_key: "MSA 60 C-B", kit: true, position_no: 1, sku: "MA040115806", global_id: "164117", name: "MSA 60 set", source: site })] } };
+          }
+          if (name === "assortment_source_choices") return { result: { items: [row({ source: own, global_id: "", sku: "", name: "Hedge trimmer HSA 50" })] } };
+          if (name === "outreach_list_companies") return { result: { items: [{ id: "c1", display_name: "Delhi Garden", priority: 1, country_code: "IN", countries: ["IN"], coverage: null }], total: 1 } };
           return { result: {} };
         },
       } as never,
     });
-    fireEvent.click(await screen.findByRole("button", { name: "Сверка" }));
-    expect(await screen.findByText(/62.5%/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Проверить 1/ })).toBeTruthy();
+    // The tab counts what waits for a person: one doubtful choice and one draft.
+    expect(await screen.findByRole("button", { name: "Проверить 2" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Покрытие" }));
+    const switcher = await screen.findByRole("tablist", { name: "Сверка по источнику" });
+    await waitFor(() => expect(within(switcher).getByRole("tab", { name: /Сайт STIHL страны/ }).getAttribute("aria-selected")).toBe("true"));
     fireEvent.click(await screen.findByText("HSA 50.1"));
     fireEvent.click(await screen.findByRole("button", { name: "Тот же товар" }));
     await waitFor(() => expect(calls.find((c) => c.name === "assortment_decide")?.args).toMatchObject({ need_id: "n2", level: 1, key_kind: "global_id", key: "9" }));
     fireEvent.click(screen.getByRole("button", { name: "Выбрать" }));
     await waitFor(() => expect(calls.filter((c) => c.name === "assortment_decide").at(-1)?.args).toMatchObject({ key: "10", level: 1 }));
+    // The organisation's catalog: a product without an article is decided by name in its catalog.
+    fireEvent.click(within(switcher).getByRole("tab", { name: /Delhi Garden/ }));
+    fireEvent.click(await screen.findByText("Hedge trimmer HSA 50"));
+    fireEvent.click(await screen.findByRole("button", { name: "Тот же товар" }));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.name === "assortment_decide").at(-1)?.args).toMatchObject({ key_kind: "name", key: "Hedge trimmer HSA 50", source_id: "s-co" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
+    await waitFor(() => expect(calls.find((c) => c.name === "assortment_confirm")?.args).toEqual({ id: "sn2" }));
+    // «Проверить»: the draft and the doubtful choice with its source.
+    fireEvent.click(screen.getByRole("button", { name: "Проверить 2" }));
+    expect(await screen.findByText("Черновики каталогов (1)")).toBeTruthy();
+    expect(screen.getByText("Сомнительные выборы (1)")).toBeTruthy();
+    expect(screen.getAllByText(/Delhi Garden · сайт/).length).toBeGreaterThan(0);
   });
 
   it("shows countries on the map and explains a country without data", async () => {
@@ -1325,7 +1355,7 @@ describe("matching and coverage (EP-108)", () => {
         },
       } as never,
     });
-    fireEvent.click(await screen.findByRole("button", { name: "Сверка" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Покрытие" }));
     expect(await screen.findByRole("img", { name: "Карта покрытия закупочного листа" })).toBeTruthy();
     fireEvent.click(await screen.findByTestId("map-marker-KZ"));
     expect(await screen.findByText(/Сайта STIHL на общей платформе у страны нет/)).toBeTruthy();
@@ -1337,7 +1367,7 @@ describe("matching and coverage (EP-108)", () => {
     expect(within(screen.getByRole("list", { name: "Организации страны" })).getByRole("button", { name: "Рядом" })).toBeTruthy();
     fireEvent.focus(screen.getByRole("textbox", { name: "Выбрать страну" }));
     fireEvent.click(await screen.findByRole("option", { name: /Франция/ }));
-    expect(await screen.findByText(/загрузите его во вкладке «Ассортимент стран»/)).toBeTruthy();
+    expect(await screen.findByText(/загрузите его во вкладке «Источники»/)).toBeTruthy();
   });
 
   it("sorts the list by coverage and shows it in a row", async () => {
