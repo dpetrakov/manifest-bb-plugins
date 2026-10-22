@@ -27,7 +27,7 @@ interface SourceRow {
   kind: string;
   country_code: string | null;
   company_id: string | null;
-  current: { id: string } | null;
+  current: { id: string; confirmed_at?: string | null } | null;
 }
 interface Facets {
   countries?: { value: string; count: number }[];
@@ -301,14 +301,17 @@ function mergeCountries(covs: CountryCoverage[], sources: SourceRow[], facets: F
   const m = new Map<string, MapCountry>();
   const get = (code: string) => {
     let c = m.get(code);
-    if (!c) m.set(code, (c = { code, coverage: null, byPositions: null, site: false, suppliers: 0, refined: 0 }));
+    if (!c) m.set(code, (c = { code, coverage: null, byPositions: null, site: false, suppliers: 0, refined: 0, drafts: 0 }));
     return c;
   };
   for (const f of facets.countries ?? []) if (f.value) get(f.value).suppliers = f.count;
   for (const s of sources) {
     if (!s.country_code) continue;
     if (s.kind === "stihl_country") get(s.country_code).site = true;
-    else if (s.company_id && s.current) get(s.country_code).refined += 1;
+    else if (s.company_id && s.current) {
+      if (s.current.confirmed_at) get(s.country_code).refined += 1;
+      else get(s.country_code).drafts = (get(s.country_code).drafts ?? 0) + 1;
+    }
   }
   for (const c of covs) Object.assign(get(c.country), { coverage: c.by_volume, byPositions: c.by_positions });
   return [...m.values()];

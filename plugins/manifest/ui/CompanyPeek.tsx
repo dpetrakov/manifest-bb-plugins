@@ -255,6 +255,7 @@ export function CompanyPeek({
                   <span className="text-muted-foreground">
                     {" · "}
                     {it.coverage.by === "pricelist" ? "прайс организации" : it.coverage.by === "distributor_site" ? "сайт организации" : `сайт STIHL ${countryName(it.coverage.country)}`}
+                    {it.coverage.draft ? " (черновик, не подтверждён)" : ""}
                   </span>
                   {it.coverage.unchecked ? <span className="text-[var(--mf-amber)]"> · проверить {it.coverage.unchecked}</span> : null}
                 </span>

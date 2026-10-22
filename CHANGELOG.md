@@ -4,6 +4,15 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.13.0
+
+- An organisation's draft assortment counts at once, like an automatic choice of the
+  matching (Manifest update, migration 00059): it is the organisation's current source,
+  marked as a draft — a dashed amber frame on the percent in the list, a dashed amber circle
+  on the map, «черновик» in the card. «Подтвердить» removes the mark; «Отклонить» brings the
+  previous confirmed source back, or the countries.
+- Ukraine is out of the country list.
+
 ## manifest 0.12.0
 
 - An organisation's own assortment (EP-112): the card gets «Ассортимент» — what the

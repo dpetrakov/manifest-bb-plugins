@@ -1,7 +1,8 @@
 // «Ассортимент» of an organisation card (EP-112, README §6в): what its rating is counted
-// by (its countries' STIHL sites or its own source), its own price list or site, and a
-// draft — from a file here or collected by the agent from the organisation's site — that
-// a person applies or drops. An applied own source replaces the countries in the rating.
+// by (its countries' STIHL sites or its own source), its own price list or site. A draft —
+// from a file here or collected by the agent from the organisation's site — counts in the
+// rating at once, like an automatic choice of the matching; a person confirms it or
+// rejects it (the previous confirmed source or the countries come back).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { errorText, useCompanyChanged, useStatus, useTool } from "../hooks";
@@ -16,6 +17,7 @@ interface Snapshot {
   models: number;
   applied_at: string | null;
   finished_at: string | null;
+  confirmed_at: string | null;
   created_by: string;
 }
 interface Source {
@@ -34,6 +36,7 @@ interface CompanyAssortmentData {
   sources: Source[] | null;
   coverage: Coverage | null;
   by: string;
+  draft: boolean;
   country: string;
 }
 interface Preview {
@@ -66,8 +69,9 @@ export function CompanyAssortment({ companyId, website, canEdit }: { companyId: 
     try {
       const d = await tool<CompanyAssortmentData>("assortment_company", { company_id: companyId });
       setData(d);
-      const ready = (d.sources ?? []).map((s) => s.latest).filter((x): x is Snapshot => !!x && x.status === "ready");
-      setDrafts(await Promise.all(ready.map((sn) => tool<Preview>("assortment_preview", { id: sn.id }))));
+      // A draft is the current snapshot of an own source not confirmed yet.
+      const unconfirmed = (d.sources ?? []).map((s) => s.current).filter((x): x is Snapshot => !!x && !x.confirmed_at);
+      setDrafts(await Promise.all(unconfirmed.map((sn) => tool<Preview>("assortment_preview", { id: sn.id }))));
       setError(null);
     } catch (e) {
       setError(errorText(e));
@@ -96,7 +100,7 @@ export function CompanyAssortment({ companyId, website, canEdit }: { companyId: 
   };
   if (!status?.canAssortment) return null;
   if (!data) return <p className="text-xs text-muted-foreground">{error ?? "…"}</p>;
-  const own = (data.sources ?? []).filter((s) => s.current);
+  const own = (data.sources ?? []).filter((s) => s.current?.confirmed_at);
   return (
     <div className="flex flex-col gap-2 text-xs">
       {data.coverage ? (
@@ -104,13 +108,14 @@ export function CompanyAssortment({ companyId, website, canEdit }: { companyId: 
           Покрытие листа: <b className="tabular-nums">{Math.round(data.coverage.by_volume)}%</b> по объёму ·{" "}
           <b className="tabular-nums">{Math.round(data.coverage.by_positions)}%</b> позиций
           <span className="text-muted-foreground"> — {byLabel(data.by, data.country)}</span>
+          {data.draft ? <Badge tone="warn" className="ml-1.5">черновик</Badge> : null}
         </p>
       ) : (
         <p className="text-muted-foreground">Покрытие листа: нет данных — сайта STIHL у её стран нет, своего источника тоже.</p>
       )}
       {own.map((s) => (
         <p key={s.id} className="text-muted-foreground">
-          {KIND_LABEL[s.kind] ?? s.kind}: {s.current!.products} тов., применён {formatDateTime(s.current!.applied_at)}
+          {KIND_LABEL[s.kind] ?? s.kind}: {s.current!.products} тов., подтверждён {formatDateTime(s.current!.confirmed_at)}
           {s.base_url ? (
             <>
               {" · "}
@@ -129,16 +134,14 @@ export function CompanyAssortment({ companyId, website, canEdit }: { companyId: 
               {KIND_LABEL[p.kind] ?? p.kind}: {p.snapshot.products} тов., распознано для листа {p.recognized}
             </span>
           </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">Уже в рейтинге организации и на карте; ждёт подтверждения.</p>
           <p className="mt-1">
             По нему покрытие <b className="tabular-nums">{Math.round(p.coverage.by_volume)}%</b> по объёму ·{" "}
             <b className="tabular-nums">{Math.round(p.coverage.by_positions)}%</b> позиций
             {p.current ? (
-              <span className="text-muted-foreground">
-                {" "}
-                (сейчас {Math.round(p.current.by_volume)}% {p.current_by === "stihl_country" ? "по стране" : "по своему источнику"})
-              </span>
+              <span className="text-muted-foreground"> (без него — {Math.round(p.current.by_volume)}% по стране)</span>
             ) : (
-              <span className="text-muted-foreground"> (сейчас нет данных)</span>
+              <span className="text-muted-foreground"> (без него — нет данных)</span>
             )}
           </p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -153,8 +156,8 @@ export function CompanyAssortment({ companyId, website, canEdit }: { companyId: 
           ) : null}
           {canEdit ? (
             <div className="mt-1.5 flex gap-1.5">
-              <Button size="sm" className="h-7 px-2" disabled={busy} onClick={() => void act("assortment_apply", { id: p.snapshot.id })}>
-                Применить
+              <Button size="sm" className="h-7 px-2" disabled={busy} onClick={() => void act("assortment_confirm", { id: p.snapshot.id })}>
+                Подтвердить
               </Button>
               <Button size="sm" variant="outline" className="h-7 px-2" disabled={busy} onClick={() => void act("assortment_discard", { id: p.snapshot.id })}>
                 Отклонить

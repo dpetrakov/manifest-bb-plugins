@@ -18,8 +18,10 @@ export interface MapCountry {
   site: boolean;
   /** Organisations of the registry in the country. */
   suppliers: number;
-  /** Of them — with their own catalog or price list. */
+  /** Of them — with their own catalog or price list, confirmed. */
   refined: number;
+  /** Of them — with a draft of their own catalog (counts, not confirmed yet). */
+  drafts?: number;
 }
 
 /**
@@ -151,8 +153,9 @@ export function CoverageMap({
                 cx={x}
                 cy={y}
                 r={r}
-                fill={c.refined > 0 ? "var(--mf-amber)" : "white"}
-                stroke={sel ? "var(--mf-ink-900)" : "var(--mf-ink-700)"}
+                fill={c.refined > 0 ? "var(--mf-amber)" : c.drafts ? "color-mix(in oklab, var(--mf-amber) 35%, white)" : "white"}
+                stroke={sel ? "var(--mf-ink-900)" : !c.refined && c.drafts ? "var(--mf-amber)" : "var(--mf-ink-700)"}
+                strokeDasharray={!sel && !c.refined && c.drafts ? `${1.6 * Math.max(k, 0.35)} ${1 * Math.max(k, 0.35)}` : undefined}
                 strokeWidth={(sel ? 1.6 : 0.9) * Math.max(k, 0.35)}
                 className="cursor-pointer"
                 onMouseMove={move(c.code)}
@@ -217,7 +220,8 @@ export function describe(c: MapCountry): string {
   if (c.coverage != null) parts.push(`покрытие ${Math.round(c.coverage)}% по объёму`);
   else if (c.site) parts.push("сайт STIHL не загружен");
   else parts.push("нет источника ассортимента");
-  if (c.suppliers) parts.push(`${c.suppliers} орг.${c.refined ? `, свой каталог — ${c.refined}` : ""}`);
+  if (c.suppliers)
+    parts.push(`${c.suppliers} орг.${c.refined ? `, свой каталог — ${c.refined}` : ""}${c.drafts ? `, черновик каталога — ${c.drafts}` : ""}`);
   return parts.join(" · ");
 }
 
@@ -241,6 +245,10 @@ function Legend({ cluster }: { cluster: boolean }) {
       <span className="flex items-center gap-1">
         <span className="h-2 w-2 rounded-full border border-[var(--mf-ink-700)] bg-[var(--mf-amber)]" />
         есть свой каталог
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="h-2 w-2 rounded-full border border-dashed border-[var(--mf-amber)] bg-[color-mix(in_oklab,var(--mf-amber)_35%,white)]" />
+        черновик каталога
       </span>
       {cluster ? (
         <>

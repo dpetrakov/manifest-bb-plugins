@@ -213,8 +213,14 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
                 <span className="flex flex-none items-center gap-1.5">
                   {it.coverage ? (
                     <span
-                      className="rounded bg-[color-mix(in_oklab,var(--diff-added,#16a34a)_14%,transparent)] px-1 font-medium tabular-nums text-foreground"
-                      title={`Покрытие закупочного листа: ${it.coverage.by_volume}% по объёму, ${it.coverage.by_positions}% по позициям (сайт STIHL ${it.coverage.country})${it.coverage.unchecked ? ` · ${it.coverage.unchecked} выборов проверить` : ""}`}
+                      className={
+                        it.coverage.draft
+                          ? "rounded border border-dashed border-[var(--mf-amber)] px-1 font-medium tabular-nums text-foreground"
+                          : "rounded bg-[color-mix(in_oklab,var(--diff-added,#16a34a)_14%,transparent)] px-1 font-medium tabular-nums text-foreground"
+                      }
+                      title={`Покрытие закупочного листа: ${it.coverage.by_volume}% по объёму, ${it.coverage.by_positions}% по позициям (${
+                        it.coverage.by === "pricelist" ? "прайс организации" : it.coverage.by === "distributor_site" ? "сайт организации" : `сайт STIHL ${it.coverage.country}`
+                      }${it.coverage.draft ? ", черновик — не подтверждён" : ""})${it.coverage.unchecked ? ` · ${it.coverage.unchecked} выборов проверить` : ""}`}
                     >
                       {Math.round(it.coverage.by_volume)}%
                     </span>

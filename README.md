@@ -141,7 +141,7 @@ needs a Manifest server with the capability `outreach.mail`.
 
 | Plugin | Version | What it does |
 |---|---|---|
-| [`manifest`](plugins/manifest) | 0.12.0 | The outreach workspace: registry, card, company chat, outreach dashboard with topic chats, mail templates and senders, agent tools, connection settings. |
+| [`manifest`](plugins/manifest) | 0.13.0 | The outreach workspace: registry, card, company chat, outreach dashboard with topic chats, mail templates and senders, agent tools, connection settings. |
 ### Sending letters (since 0.7.0)
 
 A letter or a mailing is sent by a person — «Отправить» in the chat chip or in the widget

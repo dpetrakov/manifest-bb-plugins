@@ -1200,9 +1200,9 @@ describe("organisation roles (ADR-051)", () => {
 });
 
 describe("organisation's own assortment (EP-112)", () => {
-  it("shows the rating source and a draft, applies it", async () => {
+  it("counts a draft at once and confirms it", async () => {
     const calls: { name: string; args: Record<string, unknown> }[] = [];
-    const snap = { id: "d1", status: "ready", products: 40, models: 12, applied_at: null, finished_at: "2026-10-22T10:00:00Z", created_by: "op@example.com · агент BB" };
+    const snap = { id: "d1", status: "applied", products: 40, models: 12, applied_at: "2026-10-22T10:00:00Z", finished_at: "2026-10-22T10:00:00Z", confirmed_at: null, created_by: "op@example.com · агент BB" };
     renderSlot({ component: () => <CompanyAssortment companyId="k1" canEdit website="https://kazgarden.example" /> }, {} as never, {
       pluginId: "manifest",
       rpc: {
@@ -1210,7 +1210,7 @@ describe("organisation's own assortment (EP-112)", () => {
         tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
           calls.push({ name, args });
           if (name === "assortment_company") {
-            return { result: { sources: [{ id: "s1", kind: "distributor_site", base_url: "https://kazgarden.example/stihl", current: null, latest: snap }], coverage: null, by: "", country: "" } };
+            return { result: { sources: [{ id: "s1", kind: "distributor_site", base_url: "https://kazgarden.example/stihl", current: snap, latest: snap }], coverage: { by_volume: 64.2, by_positions: 40, unchecked: 2 }, by: "distributor_site", draft: true, country: "KZ" } };
           }
           if (name === "assortment_preview") {
             return { result: { snapshot: snap, kind: "distributor_site", origin: "https://kazgarden.example/stihl", recognized: 9, coverage: { by_volume: 64.2, by_positions: 40, unchecked: 2 }, current: null, current_by: "", unknown: ["Масло для цепи"] } };
@@ -1219,13 +1219,14 @@ describe("organisation's own assortment (EP-112)", () => {
         },
       } as never,
     });
-    expect(await screen.findByText(/нет данных — сайта STIHL у её стран нет/)).toBeTruthy();
+    expect(await screen.findByText(/по источнику: сайт организации/)).toBeTruthy();
     const draft = await screen.findByRole("group", { name: "Черновик ассортимента" });
     expect(within(draft).getByText(/распознано для листа 9/)).toBeTruthy();
-    expect(within(draft).getByText("64%")).toBeTruthy();
+    expect(within(draft).getByText(/Уже в рейтинге организации/)).toBeTruthy();
+    expect(within(draft).getByText(/без него — нет данных/)).toBeTruthy();
     expect(screen.getByText(/сайте kazgarden.example/)).toBeTruthy();
-    fireEvent.click(within(draft).getByRole("button", { name: "Применить" }));
-    await waitFor(() => expect(calls.find((c) => c.name === "assortment_apply")?.args).toEqual({ id: "d1" }));
+    fireEvent.click(within(draft).getByRole("button", { name: "Подтвердить" }));
+    await waitFor(() => expect(calls.find((c) => c.name === "assortment_confirm")?.args).toEqual({ id: "d1" }));
   });
 });
 
