@@ -12,7 +12,8 @@ import { Note } from "../RegistryList";
 import { Badge } from "../manifest";
 import { useOpenObject, useOpenPinned } from "../workspace/state";
 import { CountryLookup, CoverageMap, describe, type Cluster, type MapCountry } from "../map/CoverageMap";
-import { ASSORTMENT_CHANGED, ChoiceTable, assortmentChanged, sourceLabel, type ChoiceRow, type SourceInfo } from "./ChoiceTable";
+import { ASSORTMENT_CHANGED, ChoiceTable, sourceLabel, type ChoiceRow, type SourceInfo } from "./ChoiceTable";
+import { useOpenSource } from "./nav";
 
 export interface CountryCoverage {
   country: string;
@@ -178,7 +179,7 @@ export function Matching() {
               </button>
             ))}
           </div>
-          {selected ? <SourceLine c={selected} canDecide={canDecide} /> : null}
+          {selected ? <SourceLine c={selected} /> : null}
           {rows ? <ChoiceTable rows={rows} canDecide={canDecide} /> : <Note>Загружаем сверку…</Note>}
         </>
       ) : country ? (
@@ -188,23 +189,13 @@ export function Matching() {
   );
 }
 
-/** The selected source: its rating and, for a draft catalog, «Подтвердить» / «Отклонить». */
-function SourceLine({ c, canDecide }: { c: SourceCoverage; canDecide: boolean }) {
-  const tool = useTool();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const act = async (name: string) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await tool(name, { id: c.snapshot_id });
-      assortmentChanged();
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
+/**
+ * The selected source: its rating and, for an organisation's catalog, the way to its place
+ * in «Источники» — prominent for a draft (decided there), quiet for a confirmed one.
+ */
+function SourceLine({ c }: { c: SourceCoverage }) {
+  const openSource = useOpenSource();
+  const own = c.source_kind !== "stihl_country";
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs">
       <span>
@@ -214,23 +205,19 @@ function SourceLine({ c, canDecide }: { c: SourceCoverage; canDecide: boolean })
         полностью {c.full} · частично {c.partial} · нет {c.none}
         {c.unchecked ? <span className="text-[var(--mf-amber)]"> · проверить {c.unchecked}</span> : null}
       </span>
-      {c.draft ? (
+      {own && c.draft ? (
         <span className="flex items-center gap-1.5">
           <Badge tone="warn">черновик</Badge>
-          <span className="text-[11px] text-muted-foreground">уже в рейтинге, ждёт подтверждения</span>
-          {canDecide ? (
-            <>
-              <Button size="sm" className="h-6 px-2 text-[11px]" disabled={busy} onClick={() => void act("assortment_confirm")}>
-                Подтвердить
-              </Button>
-              <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" disabled={busy} onClick={() => void act("assortment_discard")}>
-                Отклонить
-              </Button>
-            </>
-          ) : null}
+          <span className="text-[11px] text-muted-foreground">уже в рейтинге</span>
+          <Button size="sm" variant="outline" className="h-6 border-[var(--mf-amber)] px-2 text-[11px]" onClick={() => openSource(c.source_id)}>
+            Проверить в источниках
+          </Button>
         </span>
+      ) : own ? (
+        <button type="button" className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" onClick={() => openSource(c.source_id)}>
+          Каталог в источниках
+        </button>
       ) : null}
-      {error ? <span role="alert" className="text-destructive">{error}</span> : null}
     </div>
   );
 }

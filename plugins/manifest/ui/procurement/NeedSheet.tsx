@@ -14,7 +14,7 @@ import { Badge, ConfirmCard, KindLabel } from "../manifest";
 import type { ImportPreview, Need } from "../types";
 import { railTarget } from "../workspace/intent";
 import { useOpenObject } from "../workspace/state";
-import { NEEDS_HUB } from "./paths";
+import { NEEDS_HUB, OPEN_SOURCE, takeSource } from "./paths";
 import { Countries } from "./Countries";
 import { Matching } from "./Matching";
 import { Review, useReview } from "./Review";
@@ -52,8 +52,22 @@ export function NeedsPage(_: PluginNavPanelProps) {
 /** The «Закупочный лист» object: the sheet and the assortment of countries. */
 export function NeedSheet() {
   const { status } = useStatus();
-  const [tab, setTab] = useState<"sheet" | "matching" | "countries" | "review">("sheet");
+  // A source asked for before the sheet opened (from a card) opens «Источники» at once.
+  const [focus, setFocus] = useState<string | null>(() => takeSource());
+  const [tab, setTab] = useState<"sheet" | "matching" | "countries" | "review">(() => (focus ? "countries" : "sheet"));
   const review = useReview();
+  useEffect(() => {
+    const on = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      if (!id) return;
+      e.preventDefault();
+      setTab("countries");
+      setFocus(null);
+      setTimeout(() => setFocus(id), 0); // the same source asked again opens it again
+    };
+    window.addEventListener(OPEN_SOURCE, on);
+    return () => window.removeEventListener(OPEN_SOURCE, on);
+  }, []);
   if (!status?.canAssortment) return <SheetTab />;
   return (
     <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
@@ -80,7 +94,7 @@ export function NeedSheet() {
         {tab === "sheet" ? (
           <SheetTab />
         ) : (
-          <div className="h-full overflow-y-auto">{tab === "matching" ? <Matching /> : tab === "review" ? <Review /> : <Countries />}</div>
+          <div className="h-full overflow-y-auto">{tab === "matching" ? <Matching /> : tab === "review" ? <Review /> : <Countries focus={focus} />}</div>
         )}
       </div>
     </div>

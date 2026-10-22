@@ -4,6 +4,21 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.15.0
+
+- A catalog is decided where it is seen: «Источники → Каталоги организаций» opens its
+  contents — what it gives the sheet (the matching, with decisions) and what it has beyond
+  the sheet — with «Подтвердить / Отклонить» above. Elsewhere (the card, «Покрытие»,
+  «Проверить») a draft has «Проверить в источниках», a confirmed catalog a quiet «Каталог в
+  источниках»; the sheet switches to the catalog and scrolls to it.
+- «Проверить» compares what is needed with what is offered: doubtful choices are grouped by
+  position — the position as the sheet has it (model, set, category, quantity, articles,
+  reference price, the name in the sheet) on top, the candidates under it, one row per
+  product with where it is, the doubt in a few words and «Тот же / ½ / Не то». Columns don't
+  overlap; on a narrow panel the decision goes under the product.
+- Battery starter sets (Starterset, Zestaw startowy, Aloitussarja, «+ AL 101») are sets, not a
+  single battery (Manifest update).
+
 ## manifest 0.14.0
 
 - The procurement sheet object is laid out by jobs: «Лист», «Покрытие», «Источники»,

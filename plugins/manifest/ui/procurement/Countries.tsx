@@ -10,7 +10,7 @@ import { countryName, formatDateTime } from "../labels";
 import { Note } from "../RegistryList";
 import { Badge, Progress } from "../manifest";
 import { useOpenObject, useOpenPinned } from "../workspace/state";
-import { assortmentChanged } from "./ChoiceTable";
+import { CatalogDetail } from "./CatalogDetail";
 import { useAssortmentChanged, type SourceCoverage } from "./Matching";
 import { GroupRow, KitMark, money, th } from "./grid";
 
@@ -58,7 +58,7 @@ const plural = (n: number, one: string, few: string, many: string) => {
   return t >= 11 && t <= 14 ? many : u === 1 ? one : u >= 2 && u <= 4 ? few : many;
 };
 
-export function Countries() {
+export function Countries({ focus = null }: { focus?: string | null }) {
   const { status } = useStatus();
   const tool = useTool();
   const [all, setAll] = useState<Source[] | null>(null);
@@ -78,6 +78,16 @@ export function Countries() {
   }, [tool]);
   useEffect(load, [load]);
   useAssortmentChanged(load);
+  // A source asked for from elsewhere: its segment, and a country's row open.
+  useEffect(() => {
+    const src = focus && all?.find((x) => x.id === focus);
+    if (!src) return;
+    if (src.company_id) setSeg("orgs");
+    else {
+      setSeg("countries");
+      setOpen(src.country_code);
+    }
+  }, [focus, all]);
   const running = sources?.some((s) => s.latest?.status === "running");
   useEffect(() => {
     if (!running) return;
@@ -117,7 +127,7 @@ export function Countries() {
         {segBtn("orgs", `Каталоги организаций (${own.length})`)}
       </div>
       {error ? <p role="alert" className="px-3 py-2 text-xs text-destructive">{error}</p> : null}
-      {seg === "orgs" ? <OrgSources sources={own} canManage={canManage} /> : (
+      {seg === "orgs" ? <OrgSources sources={own} canManage={canManage} focus={focus} /> : (
       <>
       <table className="w-full border-collapse bg-[var(--mf-surface)] text-xs">
         <thead className="sticky top-0 z-10 bg-[var(--mf-surface)] shadow-[inset_0_-1px_0_var(--mf-line-300)]">
@@ -191,14 +201,19 @@ export function Countries() {
  * Organisations' own catalogs (EP-112): a site read by the agent or a price list; a draft
  * already counts in the rating and waits for «Подтвердить» / «Отклонить».
  */
-function OrgSources({ sources, canManage }: { sources: Source[]; canManage: boolean }) {
+function OrgSources({ sources, canManage, focus }: { sources: Source[]; canManage: boolean; focus: string | null }) {
   const tool = useTool();
   const openPinned = useOpenPinned();
   const openObject = useOpenObject();
   const [covs, setCovs] = useState<Map<string, SourceCoverage>>(new Map());
-  const [open, setOpen] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(focus);
+  // Asked for from elsewhere («Проверить в источниках»): open it and bring it into view.
+  useEffect(() => {
+    if (!focus) return;
+    setOpen(focus);
+    const t = setTimeout(() => document.getElementById(`mf-source-${focus}`)?.scrollIntoView({ block: "start", behavior: "smooth" }), 50);
+    return () => clearTimeout(t);
+  }, [focus]);
   const loadCovs = useCallback(() => {
     tool<{ sources?: SourceCoverage[] }>("assortment_coverage", {}).then(
       (r) => setCovs(new Map((r.sources ?? []).map((x) => [x.source_id, x]))),
@@ -207,25 +222,12 @@ function OrgSources({ sources, canManage }: { sources: Source[]; canManage: bool
   }, [tool]);
   useEffect(loadCovs, [loadCovs]);
   useAssortmentChanged(loadCovs);
-  const act = async (name: string, id: string) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await tool(name, { id });
-      assortmentChanged();
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
   if (!sources.length) {
     return <Note>Каталогов организаций пока нет: загрузите прайс в карточке организации или попросите агента в её чате разобрать её сайт.</Note>;
   }
   const rows = [...sources].sort((a, b) => (covs.get(b.id)?.by_volume ?? -1) - (covs.get(a.id)?.by_volume ?? -1));
   return (
     <>
-      {error ? <p role="alert" className="px-3 py-2 text-xs text-destructive">{error}</p> : null}
       <table className="w-full border-collapse bg-[var(--mf-surface)] text-xs">
         <thead className="sticky top-0 z-10 bg-[var(--mf-surface)] shadow-[inset_0_-1px_0_var(--mf-line-300)]">
           <tr>
@@ -245,7 +247,7 @@ function OrgSources({ sources, canManage }: { sources: Source[]; canManage: bool
             const ref = s.company_id ? { kind: "company" as const, id: s.company_id, title: name } : null;
             return (
               <Fragment key={s.id}>
-                <tr className={cn("cursor-pointer border-b border-[var(--mf-line-200)] align-top hover:bg-state-hover", isOpen && "bg-state-active")} onClick={() => setOpen(isOpen ? null : s.id)} aria-expanded={isOpen}>
+                <tr id={`mf-source-${s.id}`} className={cn("cursor-pointer border-b border-[var(--mf-line-200)] align-top hover:bg-state-hover", isOpen && "bg-state-active")} onClick={() => setOpen(isOpen ? null : s.id)} aria-expanded={isOpen}>
                   <td className="max-w-0 py-1.5 pl-3 pr-2">
                     <span className="flex min-w-0 items-center gap-1.5">
                       <span className="truncate font-medium" title={name}>{name}</span>
@@ -267,15 +269,16 @@ function OrgSources({ sources, canManage }: { sources: Source[]; canManage: bool
                           Рядом
                         </Button>
                       ) : null}
-                      {canManage && draft && cur ? (
-                        <>
-                          <Button size="sm" className="h-7 px-2" disabled={busy} onClick={() => void act("assortment_confirm", cur.id)}>
-                            Подтвердить
-                          </Button>
-                          <Button size="sm" variant="outline" className="h-7 px-2" disabled={busy} onClick={() => void act("assortment_discard", cur.id)}>
-                            Отклонить
-                          </Button>
-                        </>
+                      {cur ? (
+                        <Button
+                          size="sm"
+                          variant={isOpen ? "secondary" : "outline"}
+                          className={cn("h-7 px-2", draft && !isOpen && "border-[var(--mf-amber)]")}
+                          onClick={() => setOpen(isOpen ? null : s.id)}
+                          aria-expanded={isOpen}
+                        >
+                          {isOpen ? "Свернуть" : draft ? "Проверить" : "Состав"}
+                        </Button>
                       ) : null}
                     </span>
                   </td>
@@ -283,7 +286,7 @@ function OrgSources({ sources, canManage }: { sources: Source[]; canManage: bool
                 {isOpen && cur ? (
                   <tr className="border-b border-[var(--mf-line-300)]">
                     <td colSpan={4} className="bg-[var(--mf-paper)] p-0">
-                      <CountryItems snapshotId={cur.id} />
+                      <CatalogDetail d={{ source_id: s.id, snapshot_id: cur.id }} draft={draft} canDecide={canManage} />
                     </td>
                   </tr>
                 ) : null}

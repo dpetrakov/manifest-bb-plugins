@@ -115,13 +115,13 @@ export function ChoiceTable({
   return (
     <>
       {error ? <p role="alert" className="px-3 py-2 text-xs text-destructive">{error}</p> : null}
-      <table className="w-full border-collapse bg-[var(--mf-surface)] text-xs">
+      <table className="w-full table-fixed border-collapse bg-[var(--mf-surface)] text-xs">
         <thead className="sticky top-0 z-10 bg-[var(--mf-surface)] shadow-[inset_0_-1px_0_var(--mf-line-300)]">
           <tr>
-            <th className={cn(th, "w-9 pl-3 text-right")}>№</th>
-            <th className={cn(th, "text-left")}>Позиция</th>
+            <th className={cn(th, "w-10 pl-3 text-right")}>№</th>
+            <th className={cn(th, "w-[32%] text-left")}>Позиция</th>
             <th className={cn(th, "hidden text-left @[26rem]:table-cell")}>{productLabel}</th>
-            <th className={cn(th, "pr-3 text-left")}>Итог</th>
+            <th className={cn(th, "w-[13.5rem] pr-3 text-left")}>Итог</th>
           </tr>
         </thead>
         <tbody>
@@ -141,18 +141,16 @@ export function ChoiceTable({
                       <span className="flex min-w-0 items-center gap-1.5">
                         <span className="truncate font-medium">{c.model_key}</span>
                         {c.kit ? <KitMark /> : null}
-                        {showSource && c.source ? (
-                          <span className="min-w-0 flex-none truncate text-[10px] text-muted-foreground">{sourceLabel(c.source)}</span>
-                        ) : null}
                       </span>
                     </td>
-                    <td className="hidden max-w-0 truncate px-2 py-1 text-muted-foreground @[26rem]:table-cell" title={c.name}>
-                      {c.name ?? "—"}
+                    <td className="hidden max-w-0 px-2 py-1 @[26rem]:table-cell" title={c.name}>
+                      <span className="block truncate">{c.name ?? "—"}</span>
+                      {showSource && c.source ? <span className="block truncate text-[10px] text-muted-foreground">{sourceLabel(c.source)}</span> : null}
                     </td>
                     <td className="py-1 pl-2 pr-3">
-                      <span className="flex items-center gap-1.5 whitespace-nowrap">
-                        <StatusDot tone={lv.tone} />
-                        <span className="truncate">{lv.text}</span>
+                      <span className="flex min-w-0 items-start gap-1.5">
+                        <StatusDot tone={lv.tone} className="mt-1 flex-none" />
+                        <span className="min-w-0 leading-snug">{lv.text}</span>
                         {c.review && !c.decided ? <span className="text-[var(--mf-amber)]" title="Проверить">●</span> : null}
                         {c.decided ? <span className="text-[10px] text-muted-foreground" title="Решение человека">✓</span> : null}
                       </span>

@@ -1200,7 +1200,7 @@ describe("organisation roles (ADR-051)", () => {
 });
 
 describe("organisation's own assortment (EP-112)", () => {
-  it("counts a draft at once and confirms it", async () => {
+  it("shows a draft in the rating and sends the decision to «Источники»", async () => {
     const calls: { name: string; args: Record<string, unknown> }[] = [];
     const snap = { id: "d1", status: "applied", products: 40, models: 12, applied_at: "2026-10-22T10:00:00Z", finished_at: "2026-10-22T10:00:00Z", confirmed_at: null, created_by: "op@example.com · агент BB" };
     renderSlot({ component: () => <CompanyAssortment companyId="k1" canEdit website="https://kazgarden.example" /> }, {} as never, {
@@ -1213,7 +1213,7 @@ describe("organisation's own assortment (EP-112)", () => {
             return { result: { sources: [{ id: "s1", kind: "distributor_site", base_url: "https://kazgarden.example/stihl", current: snap, latest: snap }], coverage: { by_volume: 64.2, by_positions: 40, unchecked: 2 }, by: "distributor_site", draft: true, country: "KZ" } };
           }
           if (name === "assortment_preview") {
-            return { result: { snapshot: snap, kind: "distributor_site", origin: "https://kazgarden.example/stihl", recognized: 9, coverage: { by_volume: 64.2, by_positions: 40, unchecked: 2 }, current: null, current_by: "", unknown: ["Масло для цепи"] } };
+            return { result: { snapshot: snap, source_id: "s1", kind: "distributor_site", origin: "https://kazgarden.example/stihl", recognized: 9, coverage: { by_volume: 64.2, by_positions: 40, unchecked: 2 }, current: null, current_by: "", unknown: ["Масло для цепи"] } };
           }
           return { result: {} };
         },
@@ -1225,8 +1225,16 @@ describe("organisation's own assortment (EP-112)", () => {
     expect(within(draft).getByText(/Уже в рейтинге организации/)).toBeTruthy();
     expect(within(draft).getByText(/без него — нет данных/)).toBeTruthy();
     expect(screen.getByText(/сайте kazgarden.example/)).toBeTruthy();
-    fireEvent.click(within(draft).getByRole("button", { name: "Подтвердить" }));
-    await waitFor(() => expect(calls.find((c) => c.name === "assortment_confirm")?.args).toEqual({ id: "d1" }));
+    expect(within(draft).queryByRole("button", { name: "Подтвердить" })).toBeNull();
+    let asked: string | null = null;
+    const on = (e: Event) => {
+      asked = (e as CustomEvent<string>).detail;
+      e.preventDefault();
+    };
+    window.addEventListener("manifest:open-source", on);
+    fireEvent.click(within(draft).getByRole("button", { name: "Проверить в источниках" }));
+    window.removeEventListener("manifest:open-source", on);
+    expect(asked).toBe("s1");
   });
 });
 
@@ -1272,6 +1280,9 @@ describe("assortment of countries (EP-107)", () => {
     expect(screen.getByText("Модель")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Каталоги организаций (1)" }));
     expect(await screen.findByText("Indokita")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Подтвердить" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Проверить" }));
+    expect(await screen.findByText("Совпало с листом")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
     await waitFor(() => expect(calls.find((c) => c.name === "assortment_confirm")?.args).toEqual({ id: "o1s" }));
   });
@@ -1305,6 +1316,10 @@ describe("matching and coverage (EP-108)", () => {
           }
           if (name === "assortment_source_choices") return { result: { items: [row({ source: own, global_id: "", sku: "", name: "Hedge trimmer HSA 50" })] } };
           if (name === "outreach_list_companies") return { result: { items: [{ id: "c1", display_name: "Delhi Garden", priority: 1, country_code: "IN", countries: ["IN"], coverage: null }], total: 1 } };
+          if (name === "assortment_sources") {
+            const sn = { id: "sn2", status: "applied", pages_total: 0, pages_done: 0, pages_failed: 0, products: 1, variants: 1, models: 1, error: "", started_at: "2026-10-22T10:00:00Z", finished_at: null, applied_at: "2026-10-22T10:00:00Z", confirmed_at: null };
+            return { result: { items: [{ id: "s-co", kind: "distributor_site", country_code: "IN", title: "Сайт · Delhi Garden", base_url: "", company_id: "c1", current: sn, latest: sn }] } };
+          }
           return { result: {} };
         },
       } as never,
@@ -1326,13 +1341,22 @@ describe("matching and coverage (EP-108)", () => {
     await waitFor(() =>
       expect(calls.filter((c) => c.name === "assortment_decide").at(-1)?.args).toMatchObject({ key_kind: "name", key: "Hedge trimmer HSA 50", source_id: "s-co" }),
     );
+    // The draft is decided in «Источники»: «Покрытие» leads there.
+    fireEvent.click(screen.getByRole("button", { name: "Проверить в источниках" }));
+    expect(await screen.findByRole("tab", { name: /Каталоги организаций/ })).toBeTruthy();
+    expect(await screen.findByText("Совпало с листом")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
     await waitFor(() => expect(calls.find((c) => c.name === "assortment_confirm")?.args).toEqual({ id: "sn2" }));
     // «Проверить»: the draft and the doubtful choice with its source.
     fireEvent.click(screen.getByRole("button", { name: "Проверить 2" }));
-    expect(await screen.findByText("Черновики каталогов (1)")).toBeTruthy();
-    expect(screen.getByText("Сомнительные выборы (1)")).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Черновики каталогов 1" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Сомнительные выборы 1" })).toBeTruthy();
+    // The position as the sheet needs it, then the candidate with where it is.
+    expect(screen.getByText("№2")).toBeTruthy();
     expect(screen.getAllByText(/Delhi Garden · сайт/).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole("button", { name: "Тот же" })[0]);
+    await waitFor(() => expect(calls.filter((c) => c.name === "assortment_decide").at(-1)?.args).toMatchObject({ need_id: "n2", level: 1, key_kind: "global_id", key: "9" }));
+    expect(screen.getByRole("button", { name: "Проверить в источниках" })).toBeTruthy();
   });
 
   it("shows countries on the map and explains a country without data", async () => {
