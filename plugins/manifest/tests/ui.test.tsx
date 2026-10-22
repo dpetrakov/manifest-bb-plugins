@@ -365,6 +365,55 @@ describe("mail (W-16)", () => {
   });
   const CID = "11111111-2222-3333-4444-555555555555";
 
+  it("attaches the procurement sheet to a draft and downloads it (EP-113)", async () => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    let spec: Record<string, unknown> | null = null;
+    const current = () => {
+      const l = letter();
+      const sheet = { scope: "catalog", source: "auto", no_qty: !!spec?.no_qty, filename: "RFQ STIHL - MSG.xlsx", rows: 28, catalog: true,
+        source_kind: "stihl_country", country: "DE", available: ["country"] };
+      return { ...l, draft: { ...l.draft, attachments: spec ? [spec] : [] }, preview: { ...l.preview, attachments: spec ? [sheet] : [] } };
+    };
+    const created: string[] = [];
+    const orig = URL.createObjectURL;
+    URL.createObjectURL = () => {
+      created.push("blob");
+      return "blob:x";
+    };
+    renderSlot({ component: () => <CompanyMail companyId={CID} /> }, {}, {
+      rpc: {
+        status: () => status({ canMail: true, canManage: true }),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          calls.push({ name, args });
+          if (name === "mail_company_sender") return { result: { legal_entity: null, sender: null, source: "default_audience", problem: "" } };
+          if (name === "mail_entities") return { result: { items: [] } };
+          if (name === "mail_draft_get") return { result: current() };
+          if (name === "mail_draft_attachments") {
+            spec = (args.attachments as Record<string, unknown>[])[0] ?? null;
+            return { result: current() };
+          }
+          if (name === "mail_file") return { result: { filename: "RFQ STIHL - MSG.xlsx", content_type: "application/x", content_base64: "UEs=" } };
+          return { result: null };
+        },
+      } as never,
+    });
+    const pick = await screen.findByRole("combobox", { name: "Вложение письма" });
+    fireEvent.change(pick, { target: { value: "catalog" } });
+    await waitFor(() =>
+      expect(calls.find((c) => c.name === "mail_draft_attachments")?.args).toMatchObject({ company_id: CID, attachments: [{ kind: "procurement_sheet", scope: "catalog", source: "auto" }] }),
+    );
+    expect(await screen.findByText(/28 поз\. · что есть в каталоге \(региональный: сайт STIHL Германия\)/)).toBeTruthy();
+    // The personal catalog the organisation doesn't have is marked; quantities off.
+    expect(screen.getByRole("option", { name: /личный каталог организации — нет/ })).toBeTruthy();
+    fireEvent.change(await screen.findByRole("combobox", { name: "Количество" }), { target: { value: "no" } });
+    await waitFor(() => expect(calls.filter((c) => c.name === "mail_draft_attachments").at(-1)?.args).toMatchObject({ attachments: [{ no_qty: true }] }));
+    expect(await screen.findByText(/28 поз\..*без количества/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Скачать" }));
+    await waitFor(() => expect(calls.find((c) => c.name === "mail_file")?.args).toEqual({ company_id: CID, position: 0 }));
+    await waitFor(() => expect(created).toHaveLength(1));
+    URL.createObjectURL = orig;
+  });
+
   it("shows the letter as it will go out and its problems", async () => {
     renderSlot({ component: LetterDirective }, {
       attributes: { company: CID }, source: `::manifest-letter{company="${CID}"}`,

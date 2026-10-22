@@ -9,6 +9,7 @@ import { Status } from "../manifest";
 import { errorText, useCompanyChanged, useStatus, useTool } from "../hooks";
 import { formatDateTime } from "../labels";
 import { HtmlFrame, type Letter, type Preview } from "./common";
+import { AttachmentList } from "./attachments";
 
 const NO_DRAFT = "нет черновика";
 
@@ -64,11 +65,11 @@ export function LetterView({ letter, compact }: { letter: Letter; compact?: bool
   const caption = `${d.template_name ? `По шаблону «${d.template_name}»${d.template_version ? ` v${d.template_version}` : ""}` : "Без шаблона"}${
     d.edited ? " · изменён" : ""
   } · ${d.updated_by} · ${formatDateTime(d.updated_at)}`;
-  return <PreviewCard preview={letter.preview} caption={caption} compact={compact} />;
+  return <PreviewCard preview={letter.preview} caption={caption} compact={compact} companyId={d.company_id} />;
 }
 
 /** One rendered letter: header, problems, HTML or text. */
-export function PreviewCard({ preview: p, caption, compact }: { preview: Preview; caption?: string; compact?: boolean }) {
+export function PreviewCard({ preview: p, caption, compact, companyId }: { preview: Preview; caption?: string; compact?: boolean; companyId?: string }) {
   const [view, setView] = useState<"html" | "text">("html");
   return (
     <div className="mf-island mf-card flex flex-col gap-2 overflow-hidden p-0 text-xs">
@@ -93,6 +94,7 @@ export function PreviewCard({ preview: p, caption, compact }: { preview: Preview
       ) : (
         <Status tone="ok">Готово к отправке: так письмо и уйдёт.</Status>
       )}
+      {p.attachments?.length ? <AttachmentList sheets={p.attachments} companyId={companyId} /> : null}
       <div className="flex gap-1">
         {(["html", "text"] as const).map((v) => (
           <button

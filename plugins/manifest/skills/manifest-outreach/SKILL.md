@@ -230,6 +230,24 @@ description: Рабочее место аутрича Manifest в BB — чат 
   `manifest_template_draft`; сохраняет шаблон человек кнопкой. Конкретных названий и
   имён в шаблон не вписывай.
 
+### Вложение: закупочный лист (RFQ)
+
+Поставщику можно приложить закупочный лист в Excel — как привыкли поставщики заказчика:
+OEM Part No · Description · Qty, pcs + пустые Price и Availability (их заполняет поставщик).
+
+- Черновик организации — `mail_draft_attachments {company_id, attachments}`; рассылка —
+  `attachments` в `mail_mailing_update` (по умолчанию для всех) и
+  `mail_mailing_recipient_attachments {id, company_id, attachments?}` — своё для получателя
+  (без attachments — вернуть как у рассылки). Шаблон может прикладывать сам.
+- Вложение: `{kind: "procurement_sheet", scope, source, no_qty}`:
+  - `scope`: `catalog` — только позиции из каталога организации; `all` — весь лист;
+  - `source`: `auto` — как в рейтинге; `country` — региональный (сайт STIHL страны); `own` —
+    личный каталог организации; он же добавляет её артикулы к нашим;
+  - `no_qty: true` — без количества, если не хотим сразу раскрывать объём.
+- В ответе `preview.attachments`: сколько позиций уйдёт, по какому каталогу, нет ли
+  выбранного каталога (`fallback`), какие есть (`available`). Скажи человеку итог словами.
+- Файл собирается при отправке; отправляет человек.
+
 ### Прочее
 
 - Кто пишет организации — `mail_company_sender`; сменить — `mail_company_sender_set`.

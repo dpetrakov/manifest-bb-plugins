@@ -2,6 +2,7 @@
 // Сводка (сколько уйдёт, кого пропустим и почему), список получателей и письмо каждого
 // «как уйдёт» с листанием ← →. Директива ::manifest-mailing{id="…"} в чате и страница
 // «Почта аутрича → Рассылки». Отправка — следующая версия.
+import { AttachmentPicker, specsOf } from "./attachments";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRealtime, type PluginMessageDirectiveProps } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
@@ -175,6 +176,22 @@ export function MailingView({
           <Badge tone="muted" className="self-center">Всего: {mailing.total}</Badge>
         </div>
       )}
+      {!sent && canEdit ? (
+        <AttachmentPicker
+          specs={specsOf(mailing.attachments)}
+          busy={busy}
+          onChange={async (next) => {
+            setBusy(true);
+            try {
+              setFresh(await tool<Mailing>("mail_mailing_update", { id, attachments: next ?? [] }));
+            } catch (e) {
+              setLetterError(errorText(e));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      ) : null}
       <MailingSendBar mailing={mailing} onChanged={(m) => setFresh(m)} />
       {!sent && Object.keys(mailing.reasons).length > 0 ? (
         <ul className="flex flex-col gap-0.5 text-foreground">
@@ -243,7 +260,29 @@ export function MailingView({
             </div>
             {letterError ? <p className="text-destructive">{letterError}</p> : null}
             {letter && letter.recipient.company_id === selected ? (
-              <PreviewCard preview={letter.preview} caption={letter.recipient.company_name} />
+              <>
+                {canEdit && !sent ? (
+                  <AttachmentPicker
+                    specs={specsOf(letter.recipient.attachment_specs)}
+                    inherit={!letter.recipient.own_attachments}
+                    available={letter.preview.attachments?.[0]?.available ?? letter.recipient.attachments?.[0]?.available}
+                    busy={busy}
+                    onChange={async (next) => {
+                      setBusy(true);
+                      try {
+                        const args: Record<string, unknown> = { id, company_id: selected };
+                        if (next) args.attachments = next;
+                        setFresh(await tool<Mailing>("mail_mailing_recipient_attachments", args));
+                      } catch (e) {
+                        setLetterError(errorText(e));
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  />
+                ) : null}
+                <PreviewCard preview={letter.preview} caption={letter.recipient.company_name} />
+              </>
             ) : (
               <p className="text-muted-foreground">Собираем письмо…</p>
             )}

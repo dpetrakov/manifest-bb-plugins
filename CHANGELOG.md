@@ -4,6 +4,18 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.16.0
+
+- The procurement sheet as a letter attachment (Manifest update, migrations 00061–00062): a
+  draft, a mailing — and each of its recipients — and a template choose «Вложение»: the RFQ
+  type (none / what the catalog has / the whole sheet), whose catalog (as in the rating /
+  regional — the STIHL site of its country / its own; a missing one is marked) and with or
+  without quantities. Price and Availability are always there. The letter shows «📎 RFQ STIHL - MSG.xlsx · 28 поз. · …» with
+  «Скачать»; a sent letter keeps the file as it went. The Excel is the format the buyer's
+  suppliers know: OEM Part No · Description · Qty, pcs, with empty Price and Availability.
+- The agent sets attachments of a draft (`mail_draft_attachments`) and of a mailing; a
+  person sends.
+
 ## manifest 0.15.0
 
 - A catalog is decided where it is seen: «Источники → Каталоги организаций» opens its

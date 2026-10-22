@@ -83,6 +83,8 @@ export interface Template {
   subject: string;
   body: string;
   placeholders: string[];
+  /** EP-113: what letters from it carry. */
+  attachments?: import("./attachments").AttachmentSpec[];
   updated_at: string;
   updated_by: string;
   versions?: { version: number; subject: string; body: string; created_at: string; created_by: string }[];
@@ -99,6 +101,8 @@ export interface Preview {
   from_name: string;
   problems: string[];
   sample: boolean;
+  /** EP-113: the files the letter carries, built for this organisation. */
+  attachments?: import("./attachments").AttachmentSheet[];
   /** Who the letter goes from; the legal entity tells sandbox or live (W-20). */
   sender?: { legal_entity: { name: string; sandbox: boolean } | null } | null;
 }
@@ -136,6 +140,7 @@ export interface Letter {
     body: string;
     edited: boolean;
     reply_to_inbound_id?: string | null;
+    attachments?: import("./attachments").AttachmentSpec[];
     updated_at: string;
     updated_by: string;
   };
@@ -154,6 +159,10 @@ export interface MailingRecipient {
   from: string;
   ready: boolean;
   problems: string[];
+  attachments?: import("./attachments").AttachmentSheet[];
+  /** What this recipient's letter carries and whether that is its own choice (EP-113). */
+  attachment_specs?: import("./attachments").AttachmentSpec[];
+  own_attachments?: boolean;
   /** After sending (W-20): the letter of this recipient and how it went. */
   message_id?: string;
   status?: string;
@@ -173,6 +182,7 @@ export interface Mailing {
   audience: string;
   subject: string;
   body: string;
+  attachments?: import("./attachments").AttachmentSpec[];
   edited: boolean;
   state: string;
   total: number;

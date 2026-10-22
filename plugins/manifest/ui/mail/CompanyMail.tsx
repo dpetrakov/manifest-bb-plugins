@@ -1,11 +1,12 @@
 // Блок «Почта» карточки организации (W-16, EP-085): кто ей пишет — юрлицо и адрес
 // (свой или по умолчанию) и что мешает отправке. Смена — при outreach.manage.
+import { DraftAttachments, specsOf } from "./attachments";
 import { useCallback, useEffect, useState } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { errorText, useCompanyChanged, useStatus, useTool } from "../hooks";
 import { ModeBadge, Status } from "../manifest";
-import { MAIL_PATH, selectCls, type CompanySender, type LegalEntity, type Mailing, type Template } from "./common";
+import { MAIL_PATH, selectCls, type CompanySender, type LegalEntity, type Letter, type Mailing, type Template } from "./common";
 import { LetterView, useLetter } from "./LetterView";
 import { SendLetterButton, SentLetters } from "./send";
 
@@ -162,6 +163,14 @@ function DraftBlock({ companyId, canEdit }: { companyId: string; canEdit: boolea
       {letter ? (
         <>
           <LetterView letter={letter} compact />
+          {canEdit ? (
+            <DraftAttachments
+              companyId={companyId}
+              specs={specsOf(letter.draft.attachments)}
+              available={letter.preview.attachments?.[0]?.available}
+              onSaved={(l) => setLetter(l as Letter)}
+            />
+          ) : null}
           <SendLetterButton letter={letter} companyId={companyId} onSent={() => reload()} />
           {canEdit ? (
             <div className="flex flex-wrap items-center gap-2">

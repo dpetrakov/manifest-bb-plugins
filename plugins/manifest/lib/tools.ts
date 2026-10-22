@@ -409,6 +409,27 @@ export const AGENT_TOOLS = {
       contact_id: opt(z.string(), "email получателя; пустая строка — основной"),
     }),
   },
+  mail_draft_attachments: {
+    write: true,
+    scopes: ["company"],
+    description:
+      "Вложения черновика письма — заменяет список целиком. Закупочный лист в Excel в привычном поставщикам виде (OEM Part No · Description · Qty, pcs + пустые Price и Availability): " +
+      "scope catalog — только позиции, найденные в каталоге организации (её каталог или сайт STIHL её страны; нет данных — весь лист), all — весь лист. [] — без вложения. Файл собирается при отправке; preview.attachments — сколько позиций уйдёт.",
+    parameters: z.object({
+      company_id: id,
+      attachments: z
+        .array(
+          z.object({
+          kind: z.enum(["procurement_sheet"]),
+          scope: z.enum(["all", "catalog"]).describe("all — весь лист; catalog — что есть в каталоге"),
+          source: opt(z.enum(["auto", "country", "own"]), "чей каталог: auto — как в рейтинге; country — региональный (сайт STIHL страны); own — личный каталог организации"),
+          no_qty: opt(z.boolean(), "true — без колонки количества"),
+        }),
+        )
+        .max(3)
+        .describe("[] — без вложения"),
+    }),
+  },
   mail_draft_discard: {
     write: true,
     scopes: ["company"],
@@ -457,7 +478,42 @@ export const AGENT_TOOLS = {
     scopes: ["company", "dashboard", "mailing"],
     description:
       "Изменить письмо рассылки: тема и/или текст ЦЕЛИКОМ, с подстановками и необязательными фрагментами [[вариант с {{company.city}} || вариант без]], чтобы письмо подходило каждому получателю. Меняй только то, о чём просили.",
-    parameters: z.object({ id, name: opt(z.string(), "название"), subject: opt(z.string(), "тема целиком"), body: opt(z.string(), "текст целиком") }),
+    parameters: z.object({
+      id,
+      name: opt(z.string(), "название"),
+      subject: opt(z.string(), "тема целиком"),
+      body: opt(z.string(), "текст целиком"),
+      attachments: opt(
+        z
+          .array(
+            z.object({
+          kind: z.enum(["procurement_sheet"]),
+          scope: z.enum(["all", "catalog"]).describe("all — весь лист; catalog — что есть в каталоге"),
+          source: opt(z.enum(["auto", "country", "own"]), "чей каталог: auto — как в рейтинге; country — региональный (сайт STIHL страны); own — личный каталог организации"),
+          no_qty: opt(z.boolean(), "true — без колонки количества"),
+        }),
+          )
+          .max(3),
+        "вложения писем рассылки по умолчанию (у получателя можно своё — mail_mailing_recipient_attachments); [] — без вложения",
+      ),
+    }),
+  },
+  mail_mailing_recipient_attachments: {
+    write: true,
+    prep: true,
+    scopes: ["company", "dashboard", "mailing"],
+    description:
+      "Своё вложение письма одного получателя рассылки (не как у рассылки): RFQ весь лист или что есть в каталоге, чей каталог (auto/country/own), с количеством или без. attachments не указывай — вернуть как у рассылки; [] — без вложения.",
+    parameters: z.object({
+      id,
+      company_id: z.string().describe("получатель"),
+      attachments: opt(z.array(z.object({
+          kind: z.enum(["procurement_sheet"]),
+          scope: z.enum(["all", "catalog"]).describe("all — весь лист; catalog — что есть в каталоге"),
+          source: opt(z.enum(["auto", "country", "own"]), "чей каталог: auto — как в рейтинге; country — региональный (сайт STIHL страны); own — личный каталог организации"),
+          no_qty: opt(z.boolean(), "true — без колонки количества"),
+        })).max(3), "вложения этого получателя"),
+    }),
   },
   mail_mailing_add: {
     write: true,
@@ -540,8 +596,8 @@ export const WORK_TOOLS = new Set<string>([
 /** Tools that need Manifest's mail layer (capability "outreach.mail"). */
 export const MAIL_TOOLS = new Set<string>([
   "mail_fields", "mail_templates", "mail_template_get", "mail_preview", "mail_company_sender", "mail_company_sender_set",
-  "mail_entities", "mail_draft_get", "mail_draft_create", "mail_draft_update", "mail_draft_discard",
-  "mail_mailings", "mail_mailing_get", "mail_mailing_letter", "mail_mailing_create", "mail_mailing_update",
+  "mail_entities", "mail_draft_get", "mail_draft_create", "mail_draft_update", "mail_draft_attachments", "mail_draft_discard",
+  "mail_mailings", "mail_mailing_get", "mail_mailing_letter", "mail_mailing_create", "mail_mailing_update", "mail_mailing_recipient_attachments",
   "mail_mailing_add", "mail_mailing_remove", "mail_mailing_discard", "mail_inbound_get", "mail_inbound_link", "mail_inbound_mark",
   "mail_message_get", "mail_messages",
 ]);
@@ -648,12 +704,15 @@ export const PANEL_TOOLS = new Set([
   "mail_draft_get",
   "mail_draft_create",
   "mail_draft_update",
+  "mail_draft_attachments",
   "mail_draft_discard",
+  "mail_file",
   "mail_mailings",
   "mail_mailing_get",
   "mail_mailing_letter",
   "mail_mailing_create",
   "mail_mailing_update",
+  "mail_mailing_recipient_attachments",
   "mail_mailing_add",
   "mail_mailing_remove",
   "mail_mailing_discard",

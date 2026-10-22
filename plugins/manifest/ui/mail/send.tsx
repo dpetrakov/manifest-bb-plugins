@@ -3,6 +3,7 @@
 // подтверждения: что, кому, от кого, песочница или бой. Агенту Manifest эти вызовы не
 // даёт. Статусы живые: сервер плагина раз в 45 с спрашивает Manifest, что изменилось,
 // и рассылает сигналы; виджеты перечитывают свой объект.
+import { AttachmentList } from "./attachments";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRealtime } from "@get-bb/plugin-sdk/app";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,8 @@ export interface SentLetter {
   created_at: string;
   created_by: string;
   replies: MessageReply[];
+  /** EP-113: the files the letter carried. */
+  attachments?: import("./attachments").AttachmentSheet[];
 }
 
 /** Refetch on «letter changed» (send, cancel, a status from the gateway). */
@@ -319,6 +322,7 @@ export function SentLetterView({ id, onReply }: { id: string; onReply?: (inbound
           {letter.mailing_name ? ` · рассылка «${letter.mailing_name}»` : ""}
         </p>
         <CancelLetterButton letter={letter} onDone={setLetter} />
+        <AttachmentList sheets={letter.attachments ?? []} messageId={letter.id} />
         {letter.replies.map((r) => (
           <div key={r.id} title="Текст поставщика как пришёл" className="flex flex-col gap-1 rounded-md border border-[var(--mf-line-300)] bg-background p-2">
             <span className="flex flex-wrap items-center gap-1.5">

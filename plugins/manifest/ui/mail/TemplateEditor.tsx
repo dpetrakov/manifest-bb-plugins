@@ -2,6 +2,7 @@
 // слева — поля шаблона, палитра подстановок и предпросмотр («Шаблон» / «Письмо
 // для …»), справа — чат с агентом. Черновик живёт в метке треда темы шаблона:
 // агент правит его инструментом, правки видны сразу; сохраняет шаблон человек.
+import { AttachmentPicker, specsOf, type AttachmentSpec } from "./attachments";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   experimental_NewThreadComposer,
@@ -72,6 +73,9 @@ export function TemplateEditor({
   const navigate = useBbNavigate();
   const { status } = useStatus();
   const [tpl, setTpl] = useState<Template | null>(null);
+  // EP-113: what letters from the template carry (saved with the next version).
+  const [attachments, setAttachments] = useState<AttachmentSpec[]>([]);
+  useEffect(() => setAttachments(specsOf(tpl?.attachments)), [tpl]);
   const [draft, setDraftLocal] = useState<Draft>(EMPTY);
   const [threadId, setThreadId] = useState<string | null | undefined>(undefined);
   const [fields, setFields] = useState<{ path: string; title: string }[]>([]);
@@ -187,7 +191,7 @@ export function TemplateEditor({
     setError(null);
     try {
       const name = asNew && tpl && draft.name === tpl.name ? `${draft.name} (копия)` : draft.name;
-      const t = await tool<Template>("mail_template_save", { ...(asNew || !tpl ? {} : { id: tpl.id }), ...draft, name });
+      const t = await tool<Template>("mail_template_save", { ...(asNew || !tpl ? {} : { id: tpl.id }), ...draft, name, attachments });
       setTpl(t);
       setDraftLocal((d) => ({ ...d, name: t.name }));
       setSaved(`Сохранено: версия ${t.current_version}`);
@@ -234,6 +238,7 @@ export function TemplateEditor({
           )}
           <span className="flex-1" />
           {saved ? <span className="text-xs text-muted-foreground">{saved}</span> : null}
+          {canManage ? <AttachmentPicker specs={attachments} busy={busy} onChange={(x) => setAttachments(x ?? [])} /> : null}
           {canManage ? (
             <>
               <Button size="sm" className="h-8" disabled={busy || !draft.name || !draft.subject || !draft.body} onClick={() => void save(false)}>
