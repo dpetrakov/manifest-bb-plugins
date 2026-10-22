@@ -25,6 +25,18 @@ export interface CountryCoverage {
   unchecked: number;
   positions: number;
 }
+/** The best organisation working in a country (assortment_coverage.served). */
+interface ServedCoverage {
+  country: string;
+  by_volume: number;
+  by_positions: number;
+  company_id: string;
+  company_name: string;
+  source_kind: string;
+  source_country: string;
+  draft: boolean;
+}
+
 /** The rating of one source (assortment_coverage.sources). */
 export interface SourceCoverage extends SourceInfo {
   by_volume: number;
@@ -58,6 +70,7 @@ export function Matching() {
   const tool = useTool();
   const [covs, setCovs] = useState<CountryCoverage[] | null>(null);
   const [srcCovs, setSrcCovs] = useState<SourceCoverage[]>([]);
+  const [served, setServed] = useState<ServedCoverage[]>([]);
   const [country, setCountry] = useState<string>("");
   const [sourceId, setSourceId] = useState<string>("");
   const [rows, setRows] = useState<ChoiceRow[] | null>(null);
@@ -69,10 +82,11 @@ export function Matching() {
     tool<Facets>("outreach_facets", {}).then(setFacets, () => setFacets({}));
   }, [tool]);
   const loadCovs = useCallback(() => {
-    tool<{ items: CountryCoverage[]; sources?: SourceCoverage[] }>("assortment_coverage", {}).then(
+    tool<{ items: CountryCoverage[]; sources?: SourceCoverage[]; served?: ServedCoverage[] }>("assortment_coverage", {}).then(
       (r) => {
         setCovs(r.items ?? []);
         setSrcCovs(r.sources ?? []);
+        setServed(r.served ?? []);
         setCountry((c) => c || r.items?.[0]?.country || "");
         setError(null);
       },
@@ -97,13 +111,18 @@ export function Matching() {
       live = false;
     };
   }, [country, tool, orgsTry]);
-  // The sources of the selected country: its STIHL site, then the own catalogs of the
-  // organisations serving it (their main country or a coverage country).
+  // The sources of the selected country: its STIHL site, the own catalogs of the
+  // organisations serving it (their main country or a coverage country), and the STIHL
+  // sites of other countries those organisations are rated by (a distributor of South
+  // Africa serves Zambia with the assortment of South Africa).
   const here = useMemo(() => {
-    const ids = new Set((orgs?.items ?? []).map((o) => o.id));
+    const items = orgs?.items ?? [];
+    const ids = new Set(items.map((o) => o.id));
+    const via = new Set(items.filter((o) => o.coverage && (o.coverage.by ?? "stihl_country") === "stihl_country").map((o) => o.coverage!.country));
     const site = srcCovs.filter((x) => x.source_kind === "stihl_country" && x.country === country);
     const own = srcCovs.filter((x) => x.source_kind !== "stihl_country" && (x.country === country || (x.company_id && ids.has(x.company_id))));
-    return [...site, ...own];
+    const other = srcCovs.filter((x) => x.source_kind === "stihl_country" && x.country !== country && via.has(x.country));
+    return [...site, ...own, ...other];
   }, [srcCovs, orgs, country]);
   useEffect(() => {
     setSourceId((cur) => (here.some((x) => x.source_id === cur) ? cur : here[0]?.source_id ?? ""));
@@ -122,7 +141,7 @@ export function Matching() {
     loadRows();
   }, [loadCovs, loadRows]);
   useAssortmentChanged(reload);
-  const mapCountries = useMemo(() => mergeCountries(covs ?? [], srcCovs, sources, facets), [covs, srcCovs, sources, facets]);
+  const mapCountries = useMemo(() => mergeCountries(covs ?? [], srcCovs, served, sources, facets), [covs, srcCovs, served, sources, facets]);
   const cluster = useMemo(() => clusterOf(country, orgs?.items ?? [], mapCountries), [country, orgs, mapCountries]);
   const ownByCompany = useMemo(() => {
     const m = new Map<string, SourceCoverage>();
@@ -173,7 +192,7 @@ export function Matching() {
                   x.draft && "border-dashed",
                 )}
               >
-                {x.source_kind === "stihl_country" ? "Сайт STIHL страны" : sourceLabel(x)}
+                {x.source_kind === "stihl_country" ? (x.country === country ? "Сайт STIHL страны" : `Сайт STIHL ${countryName(x.country)}`) : sourceLabel(x)}
                 <b className="tabular-nums">{Math.round(x.by_volume)}%</b>
                 {x.draft ? <span className="text-[10px] opacity-80">черновик</span> : null}
               </button>
@@ -223,7 +242,7 @@ function SourceLine({ c }: { c: SourceCoverage }) {
 }
 
 /** Countries of the map: coverage, STIHL sites, organisations of the registry. */
-function mergeCountries(covs: CountryCoverage[], srcCovs: SourceCoverage[], sources: SourceRow[], facets: Facets): MapCountry[] {
+function mergeCountries(covs: CountryCoverage[], srcCovs: SourceCoverage[], served: ServedCoverage[], sources: SourceRow[], facets: Facets): MapCountry[] {
   const m = new Map<string, MapCountry>();
   const get = (code: string) => {
     let c = m.get(code);
@@ -249,6 +268,21 @@ function mergeCountries(covs: CountryCoverage[], srcCovs: SourceCoverage[], sour
       Object.assign(c, { coverage: x.by_volume, byPositions: x.by_positions, coverageBy: "own", coverageDraft: x.draft, coverageOrg: x.company_name });
     }
   }
+  // An organisation working in a country brings its catalog there too, also from another
+  // country (a distributor of South Africa serving Zambia): the best of them.
+  for (const x of served) {
+    const c = get(x.country);
+    if (c.coverage != null && x.by_volume <= c.coverage) continue;
+    const via = x.source_country !== x.country;
+    Object.assign(c, {
+      coverage: x.by_volume,
+      byPositions: x.by_positions,
+      coverageBy: via ? "via" : x.source_kind === "stihl_country" ? "site" : "own",
+      coverageDraft: x.draft,
+      coverageOrg: x.company_name,
+      coverageVia: x.source_kind === "stihl_country" ? `сайт STIHL ${countryName(x.source_country)}` : `каталог${x.draft ? ", черновик" : ""}`,
+    });
+  }
   return [...m.values()];
 }
 
@@ -258,7 +292,7 @@ interface OrgRow {
   priority: number;
   country_code: string;
   countries?: string[];
-  coverage: { by_volume: number; country: string } | null;
+  coverage: { by_volume: number; country: string; by?: string } | null;
 }
 
 /** Countries an organisation serves: its main one and its coverage countries. */

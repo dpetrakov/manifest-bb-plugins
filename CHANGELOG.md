@@ -4,6 +4,14 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.16.1
+
+- The map colours a country also by the organisations working there from another country
+  (Manifest update): ANDREAS STIHL of South Africa serves Zambia, Botswana, Namibia… with the
+  assortment of South Africa, so those countries get its coverage; the border is dotted and
+  the tooltip says «через ANDREAS STIHL — сайт STIHL ЮАР». «Сверка по» for such a country
+  offers that site too.
+
 ## manifest 0.16.0
 
 - The procurement sheet as a letter attachment (Manifest update, migrations 00061–00062): a

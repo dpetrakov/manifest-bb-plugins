@@ -15,7 +15,9 @@ export interface MapCountry {
   coverage: number | null;
   byPositions?: number | null;
   /** What the coverage is by: the country's STIHL site or an organisation's own catalog. */
-  coverageBy?: "site" | "own";
+  coverageBy?: "site" | "own" | "via";
+  /** «via»: what the organisation from another country is rated by. */
+  coverageVia?: string;
   coverageDraft?: boolean;
   coverageOrg?: string;
   /** A STIHL site exists but its assortment is not loaded. */
@@ -114,9 +116,12 @@ export function CoverageMap({
                 key={code}
                 d={d}
                 fill={fill}
-                stroke={selected === code ? "var(--mf-ink-900)" : c?.coverageDraft ? "var(--mf-amber)" : "white"}
-                strokeWidth={(selected === code ? 1.4 : c?.coverageDraft ? 1 : 0.5) * k}
-                strokeDasharray={selected !== code && c?.coverageDraft ? `${2 * k} ${1.5 * k}` : undefined}
+                stroke={selected === code ? "var(--mf-ink-900)" : c?.coverageDraft ? "var(--mf-amber)" : c?.coverageBy === "via" ? "var(--mf-ink-700)" : "white"}
+                strokeWidth={(selected === code ? 1.4 : c?.coverageDraft || c?.coverageBy === "via" ? 0.9 : 0.5) * k}
+                strokeDasharray={
+                  selected === code ? undefined : c?.coverageDraft ? `${2 * k} ${1.5 * k}` : c?.coverageBy === "via" ? `${0.6 * k} ${1.4 * k}` : undefined
+                }
+                data-via={c?.coverageBy === "via" ? "1" : undefined}
                 data-draft={c?.coverageDraft ? "1" : undefined}
                 className={cn(clickable(c) && "cursor-pointer hover:brightness-95")}
                 onMouseMove={c ? move(code) : undefined}
@@ -226,7 +231,11 @@ export function describe(c: MapCountry): string {
   if (c.coverage != null)
     parts.push(
       `покрытие ${Math.round(c.coverage)}% по объёму` +
-        (c.coverageBy === "own" ? ` (каталог ${c.coverageOrg ?? "организации"}${c.coverageDraft ? ", черновик" : ""})` : ""),
+        (c.coverageBy === "own"
+          ? ` (каталог ${c.coverageOrg ?? "организации"}${c.coverageDraft ? ", черновик" : ""})`
+          : c.coverageBy === "via"
+            ? ` (через ${c.coverageOrg ?? "организацию"} — ${c.coverageVia ?? ""})`
+            : ""),
     );
   else if (c.site) parts.push("сайт STIHL не загружен");
   else parts.push("нет источника ассортимента");
@@ -259,6 +268,12 @@ function Legend({ cluster }: { cluster: boolean }) {
       <span className="flex items-center gap-1">
         <span className="h-2 w-2 rounded-full border border-dashed border-[var(--mf-amber)] bg-[color-mix(in_oklab,var(--mf-amber)_35%,white)]" />
         черновик каталога (у страны — пунктирная граница)
+      </span>
+      <span className="flex items-center gap-1">
+        <svg width="12" height="8" aria-hidden>
+          <rect x="0.5" y="0.5" width="11" height="7" fill="none" stroke="var(--mf-ink-700)" strokeDasharray="0.8 1.6" />
+        </svg>
+        через организацию из другой страны
       </span>
       {cluster ? (
         <>

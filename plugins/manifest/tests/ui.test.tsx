@@ -1415,7 +1415,11 @@ describe("matching and coverage (EP-108)", () => {
         status: () => status({ canProcurement: true, canProcurementManage: true, canAssortment: true }),
         tool: ({ name }: { name: string }) => {
           if (name === "procurement_needs") return { result: { items: [], total: 0 } };
-          if (name === "assortment_coverage") return { result: { items: [{ country: "IN", by_volume: 62.5, by_positions: 50, full: 1, partial: 1, none: 1, unchecked: 0, positions: 3 }] } };
+          if (name === "assortment_coverage") {
+            return { result: { items: [{ country: "IN", by_volume: 62.5, by_positions: 50, full: 1, partial: 1, none: 1, unchecked: 0, positions: 3 }],
+              // A South African distributor also serves Zambia: Zambia gets its rating.
+              served: [{ country: "ZM", by_volume: 51, by_positions: 47, company_id: "za1", company_name: "ANDREAS STIHL", source_kind: "stihl_country", source_country: "ZA", draft: false }] } };
+          }
           if (name === "assortment_sources") {
             return { result: { items: [
               { kind: "stihl_country", country_code: "IN", company_id: null, current: { id: "s1" } },
@@ -1430,6 +1434,7 @@ describe("matching and coverage (EP-108)", () => {
     });
     fireEvent.click(await screen.findByRole("button", { name: "Покрытие" }));
     expect(await screen.findByRole("img", { name: "Карта покрытия закупочного листа" })).toBeTruthy();
+    expect(document.querySelectorAll('path[data-via="1"]').length).toBeGreaterThan(0);
     fireEvent.click(await screen.findByTestId("map-marker-KZ"));
     expect(await screen.findByText(/Сайта STIHL на общей платформе у страны нет/)).toBeTruthy();
     expect(await screen.findByText("Kaz Garden")).toBeTruthy();
