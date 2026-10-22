@@ -454,6 +454,8 @@ describe("focus of a thread (W-18)", () => {
         threads: {
           get: async ({ threadId }: { threadId: string }) => {
             if (threadId === "gone") throw new Error("not found");
+            // BB deletes softly: a deleted thread is still returned, with deletedAt.
+            if (threadId === "soft") return { id: threadId, title: "Удалённый", deletedAt: 1_761_000_000_000 } as never;
             return { id: threadId, title: `Чат ${threadId}` } as never;
           },
           getPluginMetadata: async ({ threadId }: { threadId: string }) => (meta[threadId] ?? {}) as never,
@@ -539,6 +541,22 @@ describe("focus of a thread (W-18)", () => {
     // t3 worked with c1 too (it is in its chain); a deleted thread drops out.
     expect(chats.map((c) => c.threadId)).toEqual(["t4", "t3"]);
     expect(chats[0].title).toBe("Чат t4");
+  });
+
+  it("never leads to a deleted chat: soft-deleted threads drop out, a deletion cleans the links", async () => {
+    const h = await load();
+    await h.behavior.callRpc("focus_set", { threadId: "soft", focus: { kind: "needs", id: "sheet", title: "Закупочный лист" } });
+    await h.behavior.callRpc("focus_set", { threadId: "t7", focus: { kind: "needs", id: "sheet", title: "Закупочный лист" } });
+    await h.behavior.callRpc("focus_set", { threadId: "t8", focus: { kind: "needs", id: "sheet", title: "Закупочный лист" } });
+    expect(await h.behavior.callRpc("thread_alive", { threadId: "soft" })).toEqual({ alive: false });
+    expect(await h.behavior.callRpc("thread_alive", { threadId: "gone" })).toEqual({ alive: false });
+    expect(await h.behavior.callRpc("thread_alive", { threadId: "t7" })).toEqual({ alive: true });
+    const before = (await h.behavior.callRpc("chats_list", { kind: "needs", id: "sheet" })) as { chats: { threadId: string }[] };
+    expect(before.chats.map((c) => c.threadId)).toEqual(["t8", "t7"]);
+    // BB fires thread.deleted: the thread leaves the object's chats and loses its focus.
+    await h.behavior.emitThreadEvent("thread.deleted", { thread: makeThreadResponse({ id: "t8" }) });
+    const after = (await h.behavior.callRpc("chats_list", { kind: "needs", id: "sheet" })) as { chats: { threadId: string }[] };
+    expect(after.chats.map((c) => c.threadId)).toEqual(["t7"]);
   });
 
   it("keeps the focus of the old company chat when a new one is linked", async () => {

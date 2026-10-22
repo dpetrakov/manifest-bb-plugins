@@ -12,8 +12,8 @@ import { useStatus } from "../hooks";
 import { formatDateTime } from "../labels";
 import { Note } from "../RegistryList";
 import { FilterBar, filterLabel } from "./FilterBar";
-import { useOpenCompany } from "../workspace/state";
-import { railTarget, setComposeIntent } from "../workspace/intent";
+import { useOpenCompany, useRailReturn } from "../workspace/state";
+import { setComposeIntent } from "../workspace/intent";
 import { useDashboardData, useDashboardSelection, useSegments, useTopicFilter, type Filter } from "./state";
 import { Aging, Feed, Funnel, Panel, Quality, QueueView, Regions, Tiles, agingFilter } from "./Widgets";
 
@@ -56,17 +56,23 @@ export function useNewDashboardChat() {
 function DashboardEntry({ topicId }: { topicId: string | null }) {
   const navigate = useBbNavigate();
   const newChat = useNewDashboardChat();
+  const railReturn = useRailReturn();
+  const rpc = useRpc<typeof rpcContract>();
   const [stay, setStay] = useState(false);
   useEffect(() => {
     if (topicId) {
-      navigate.toThread(topicId);
+      // An old link to a topic whose chat was deleted opens the dashboard, not an error.
+      void rpc.call("thread_alive", { threadId: topicId }).then(
+        ({ alive }) => (alive ? navigate.toThread(topicId) : setStay(true)),
+        () => setStay(true),
+      );
       return;
     }
-    const target = railTarget("dashboard");
-    if (target === undefined) setStay(true);
-    else if (target) navigate.toThread(target);
-    else void newChat();
-  }, [navigate, newChat, topicId]);
+    void railReturn("dashboard").then((r) => {
+      if (r === "stay") setStay(true);
+      else if (r === "none") void newChat();
+    });
+  }, [navigate, newChat, railReturn, rpc, topicId]);
   if (!stay) return <Note>Открываем дашборд…</Note>;
   return <Dashboard topicId={null} />;
 }

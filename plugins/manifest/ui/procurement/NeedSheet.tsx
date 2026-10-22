@@ -4,7 +4,7 @@
 // файл CSV/XLSX → предпросмотр (новые / изменённые / без изменений / ошибки) → «Применить»
 // с отпечатком того, что человек увидел.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useBbNavigate, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
+import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -12,8 +12,7 @@ import { errorText, useStatus, useTool } from "../hooks";
 import { Note } from "../RegistryList";
 import { Badge, ConfirmCard, KindLabel } from "../manifest";
 import type { ImportPreview, Need } from "../types";
-import { railTarget } from "../workspace/intent";
-import { useOpenObject } from "../workspace/state";
+import { useOpenObject, useRailReturn } from "../workspace/state";
 import { NEEDS_HUB, OPEN_SOURCE, takeSource } from "./paths";
 import { Countries } from "./Countries";
 import { Matching } from "./Matching";
@@ -35,15 +34,15 @@ function byCategory(items: Need[]): { category: string; items: Need[]; qty: numb
 
 /** The «Закупочный лист» rail: the last sheet chat or a new one, the sheet on the right. */
 export function NeedsPage(_: PluginNavPanelProps) {
-  const navigate = useBbNavigate();
   const openObject = useOpenObject();
+  const railReturn = useRailReturn();
   const [stay, setStay] = useState(false);
   useEffect(() => {
-    const target = railTarget("needs");
-    if (target === undefined) setStay(true);
-    else if (target) navigate.toThread(target);
-    else void openObject(NEEDS_HUB);
-  }, [navigate, openObject]);
+    void railReturn("needs").then((r) => {
+      if (r === "stay") setStay(true);
+      else if (r === "none") void openObject(NEEDS_HUB);
+    });
+  }, [openObject, railReturn]);
   if (!stay) return <Note>Открываем закупочный лист…</Note>;
   return <NeedSheet />;
 }

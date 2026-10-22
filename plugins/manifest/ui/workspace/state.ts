@@ -5,7 +5,7 @@ import { useBbNavigate, useRealtime, useRpc, useSdk } from "@get-bb/plugin-sdk/a
 import type { rpcContract } from "../../server";
 import { DASHBOARD_PATH } from "../dashboard/state";
 import { PANEL_PATH, errorText, useTool } from "../hooks";
-import { setComposeIntent } from "./intent";
+import { forgetThread, railTarget, setComposeIntent } from "./intent";
 import { MAIL_PATH } from "../mail/common";
 import { NEEDS_PATH } from "../procurement/paths";
 
@@ -259,5 +259,31 @@ export function useOpenPinned() {
       return openBeside(navigate, ref, threadId === null ? [BESIDE_NEW_PANEL, BESIDE_PANEL] : [BESIDE_PANEL, BESIDE_NEW_PANEL]);
     },
     [navigate],
+  );
+}
+
+/**
+ * A rail returns the centre to its last chat — only when that chat still opens. A chat
+ * deleted or archived since is forgotten and the rail does what it does without one
+ * (before: BB showed «Failed to load thread»). Resolves "stay" when the rail redirected a
+ * moment ago (browser «back»), "thread" when it went to the chat, "none" otherwise.
+ */
+export function useRailReturn() {
+  const rpc = useRpc<typeof rpcContract>();
+  const navigate = useBbNavigate();
+  return useCallback(
+    async (section: "outreach" | "dashboard" | "mail" | "needs"): Promise<"stay" | "thread" | "none"> => {
+      const target = railTarget(section);
+      if (target === undefined) return "stay";
+      if (!target) return "none";
+      const { alive } = await rpc.call("thread_alive", { threadId: target }).catch(() => ({ alive: false }));
+      if (alive) {
+        navigate.toThread(target);
+        return "thread";
+      }
+      forgetThread(target);
+      return "none";
+    },
+    [navigate, rpc],
   );
 }

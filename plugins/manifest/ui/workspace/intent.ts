@@ -84,3 +84,14 @@ export function railTarget(section: "outreach" | "dashboard" | "mail" | "needs" 
     return null;
   }
 }
+
+/** A remembered thread that is gone (deleted, archived): the rail forgets it. */
+export function forgetThread(threadId: string) {
+  try {
+    for (const key of [LAST, LAST_DASHBOARD, LAST_MAIL, LAST_NEEDS]) {
+      if (window.sessionStorage.getItem(key) === threadId) window.sessionStorage.removeItem(key);
+    }
+  } catch {
+    // no storage
+  }
+}

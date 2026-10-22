@@ -21,7 +21,7 @@ import { useState } from "react";
 import { FocusHeader, ObjectBody, ObjectPanel } from "../ui/workspace/ObjectPanel";
 import { LetterChip, MailingChip } from "../ui/workspace/Chips";
 import { MailingSendBar } from "../ui/mail/send";
-import { NeedSheet } from "../ui/procurement/NeedSheet";
+import { NeedSheet, NeedsPage } from "../ui/procurement/NeedSheet";
 import { CompanyAssortment } from "../ui/procurement/CompanyAssortment";
 
 const status = (over: Record<string, unknown> = {}) => ({
@@ -1342,6 +1342,30 @@ describe("assortment of countries (EP-107)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Отклонить" }));
     await waitFor(() => expect(calls.find((c) => c.name === "assortment_discard")?.args).toEqual({ id: "o1s" }));
     expect(await screen.findByRole("tab", { name: "Каталоги организаций (1)" })).toBeTruthy();
+  });
+});
+
+describe("rails and deleted chats", () => {
+  it("does not return to a remembered chat that was deleted: forgets it and opens the sheet anew", async () => {
+    window.sessionStorage.setItem("manifest:last-needs-thread", "th-deleted");
+    window.sessionStorage.removeItem("manifest:rail-redirect-at");
+    const calls: { method: string; input: unknown }[] = [];
+    const r = renderSlot({ component: NeedsPage }, { subPath: "" } as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status({ canProcurement: true, canAssortment: true }),
+        thread_alive: (input: unknown) => {
+          calls.push({ method: "thread_alive", input });
+          return { alive: false };
+        },
+        chats_list: () => ({ chats: [] }),
+        section_ensure: () => ({ sectionId: null }),
+        tool: () => ({ result: { items: [] } }),
+      } as never,
+    });
+    await waitFor(() => expect(calls).toEqual([{ method: "thread_alive", input: { threadId: "th-deleted" } }]));
+    await waitFor(() => expect(window.sessionStorage.getItem("manifest:last-needs-thread")).toBeNull());
+    expect(JSON.stringify(r.navigateCalls)).not.toContain("th-deleted");
   });
 });
 

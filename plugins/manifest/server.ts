@@ -196,6 +196,12 @@ export const rpcContract = defineRpcContract({
     input: z.object({ threadId: z.string().min(1).max(64), kind: z.string().max(20), id: z.string().min(1).max(64) }),
     output: z.object({ focus: focusRefSchema.nullable(), trail: z.array(focusRefSchema) }),
   },
+  /**
+   * Whether a remembered thread can still be opened: not deleted (BB deletes softly — a
+   * deleted thread is still returned with `deletedAt`) and not archived. The rails ask it
+   * before returning the centre to their last chat.
+   */
+  thread_alive: { input: z.object({ threadId: z.string().min(1).max(64) }), output: z.object({ alive: z.boolean() }) },
   /** Threads of an object, newest first (alive only). */
   chats_list: {
     input: z.object({ kind: z.string().max(20), id: z.string().min(1).max(64) }),
@@ -414,6 +420,42 @@ export default async function plugin(bb: BbPluginApi) {
     lastCreated = { threadId: thread.id, at: now };
   });
 
+  /**
+   * A thread that can be opened. BB deletes softly: `threads.get` still returns a deleted
+   * thread, with `deletedAt` — checking only for an error let the rails and «Чаты» lead to
+   * «Failed to load thread». An archived thread opens, but the rails and lists skip it.
+   */
+  async function threadState(threadId: string): Promise<"alive" | "archived" | "gone"> {
+    try {
+      const t = (await bb.sdk.threads.get({ threadId })) as { deletedAt?: unknown; archived?: boolean; archivedAt?: unknown };
+      if (t.deletedAt) return "gone";
+      return t.archived || t.archivedAt ? "archived" : "alive";
+    } catch {
+      return "gone";
+    }
+  }
+
+  /** A deleted thread leaves everything the plugin linked to it. */
+  bb.events.on("thread.deleted", async ({ thread }) => {
+    const threadId = thread.id;
+    const tf = threadFocusSchema.safeParse(await bb.storage.kv.get(focusKey(threadId)));
+    if (tf.success) {
+      for (const ref of [tf.data.focus, ...tf.data.trail]) {
+        if (!ref) continue;
+        const ids = (await bb.storage.kv.get<string[]>(chatsKey(ref))) ?? [];
+        if (ids.includes(threadId)) await bb.storage.kv.set(chatsKey(ref), ids.filter((x) => x !== threadId));
+        if (ref.kind === "company" && (await bb.storage.kv.get<string>(threadKey(ref.id))) === threadId) await bb.storage.kv.delete(threadKey(ref.id));
+        if (ref.kind === "template" && (await bb.storage.kv.get<string>(`tpl:${ref.id}`)) === threadId) await bb.storage.kv.delete(`tpl:${ref.id}`);
+      }
+      await bb.storage.kv.delete(focusKey(threadId));
+    }
+    const all = await topics();
+    if (all.some((t) => t.threadId === threadId)) {
+      await bb.storage.kv.set(TOPICS, all.filter((t) => t.threadId !== threadId));
+      bb.realtime.publish(TOPICS_CHANGED, {});
+    }
+  });
+
   let mailCursor = "";
   bb.rpc.register(rpcContract, {
     compose_submitted: async ({ kind, id, title }) => {
@@ -469,13 +511,9 @@ export default async function plugin(bb: BbPluginApi) {
     chat_get: async ({ companyId }) => {
       const threadId = await bb.storage.kv.get<string>(threadKey(companyId));
       if (!threadId) return { threadId: null };
-      try {
-        await bb.sdk.threads.get({ threadId });
-        return { threadId };
-      } catch {
-        await bb.storage.kv.delete(threadKey(companyId));
-        return { threadId: null };
-      }
+      if ((await threadState(threadId)) !== "gone") return { threadId };
+      await bb.storage.kv.delete(threadKey(companyId));
+      return { threadId: null };
     },
     chat_link: async ({ companyId, threadId }) => {
       // The old chat of the company keeps its focus: migrate it before the link moves.
@@ -510,8 +548,8 @@ export default async function plugin(bb: BbPluginApi) {
       const alive: Topic[] = [];
       for (const t of all) {
         try {
-          const thread = (await bb.sdk.threads.get({ threadId: t.threadId })) as { title?: string | null; archived?: boolean; archivedAt?: unknown };
-          if (thread.archived || thread.archivedAt) continue;
+          const thread = (await bb.sdk.threads.get({ threadId: t.threadId })) as { title?: string | null; archived?: boolean; archivedAt?: unknown; deletedAt?: unknown };
+          if (thread.deletedAt || thread.archived || thread.archivedAt) continue;
           alive.push({ ...t, title: thread.title || t.title });
         } catch {
           // deleted thread: dropped from the index
@@ -536,13 +574,9 @@ export default async function plugin(bb: BbPluginApi) {
     template_thread_get: async ({ templateId }) => {
       const threadId = await bb.storage.kv.get<string>(`tpl:${templateId}`);
       if (!threadId) return { threadId: null };
-      try {
-        await bb.sdk.threads.get({ threadId });
-        return { threadId };
-      } catch {
-        await bb.storage.kv.delete(`tpl:${templateId}`);
-        return { threadId: null };
-      }
+      if ((await threadState(threadId)) !== "gone") return { threadId };
+      await bb.storage.kv.delete(`tpl:${templateId}`);
+      return { threadId: null };
     },
     template_thread_link: async ({ templateId, threadId }) => {
       const meta = ((await bb.sdk.threads.getPluginMetadata({ threadId })) ?? {}) as { kind?: unknown };
@@ -585,6 +619,7 @@ export default async function plugin(bb: BbPluginApi) {
       const cur = next ?? tf;
       return { focus: cur.focus, trail: cur.trail };
     },
+    thread_alive: async ({ threadId }) => ({ alive: (await threadState(threadId)) === "alive" }),
     chats_list: async ({ kind, id }) => {
       const key = chatsKey({ kind, id });
       let ids = (await bb.storage.kv.get<string[]>(key)) ?? [];
@@ -597,8 +632,12 @@ export default async function plugin(bb: BbPluginApi) {
       const alive: string[] = [];
       for (const threadId of ids) {
         try {
-          const t = (await bb.sdk.threads.get({ threadId })) as { title?: string | null; archived?: boolean; archivedAt?: unknown };
-          if (t.archived || t.archivedAt) continue;
+          const t = (await bb.sdk.threads.get({ threadId })) as { title?: string | null; archived?: boolean; archivedAt?: unknown; deletedAt?: unknown };
+          if (t.deletedAt) continue; // deleted: dropped from the index
+          if (t.archived || t.archivedAt) {
+            alive.push(threadId); // archived: kept, not listed
+            continue;
+          }
           alive.push(threadId);
           chats.push({ threadId, title: t.title || "Чат" });
         } catch {

@@ -4,7 +4,7 @@
 // открывает его чат (или экран нового треда BB) с объектом справа. Рейл открывает
 // последний чат по почте или новый. Токены шлюза задаются только в вебе Manifest.
 import { useCallback, useEffect, useState } from "react";
-import { useBbNavigate, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
+import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -21,8 +21,7 @@ import {
   type LegalEntity,
   type Template,
 } from "./common";
-import { useOpenObject } from "../workspace/state";
-import { railTarget } from "../workspace/intent";
+import { useOpenObject, useRailReturn } from "../workspace/state";
 import type { Mailing } from "./common";
 import { mailingLine } from "./send";
 import { ModeBadge, Status, StatusDot } from "../manifest";
@@ -71,20 +70,20 @@ export const MAIL_HUB = { kind: "mail" as const, id: "hub", title: "Почта �
  * After «back» (a redirect a moment ago) the hub stays here.
  */
 export function MailPage({ subPath }: PluginNavPanelProps) {
-  const navigate = useBbNavigate();
   const openObject = useOpenObject();
+  const railReturn = useRailReturn();
   const [stay, setStay] = useState(false);
   const [head, rest] = [subPath.split("/")[0] || "", subPath.split("/")[1] ?? ""];
   useEffect(() => {
     if (head === "mailing" && rest) return void openObject({ kind: "mailing", id: rest, title: "" });
     if (head === "inbound" && rest) return void openObject({ kind: "inbound", id: rest, title: "" });
     if (head === "tpl") return void openObject({ kind: "template", id: rest && rest !== "new" ? rest : "", title: "" });
-    const target = railTarget("mail");
-    if (target === undefined) setStay(true);
-    else if (target) navigate.toThread(target);
-    // No hub chat in this window: the hub's last chat (any window) or a new one.
-    else void openObject(MAIL_HUB);
-  }, [head, navigate, openObject, rest]);
+    void railReturn("mail").then((r) => {
+      if (r === "stay") setStay(true);
+      // No live hub chat in this window: the hub's last chat (any window) or a new one.
+      else if (r === "none") void openObject(MAIL_HUB);
+    });
+  }, [head, openObject, railReturn, rest]);
   if (!stay) return <Note>Открываем почту…</Note>;
   return <MailHub initial={TABS.some(([k]) => k === head) ? head : "mailings"} />;
 }

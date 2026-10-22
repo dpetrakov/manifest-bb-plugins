@@ -6,7 +6,7 @@
 // чаты сбоку. Открытие раздела включает список поставщиков в сайдбаре.
 import { useEffect, useState } from "react";
 import { useBbNavigate, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
-import { railTarget } from "./workspace/intent";
+import { useRailReturn } from "./workspace/state";
 import { CardView } from "./CardTab";
 import { useRegistry, useStatus, useTool } from "./hooks";
 import { KindLabel } from "./manifest";
@@ -17,17 +17,17 @@ import { ChatsList } from "./workspace/ObjectPanel";
 export function OutreachPage({ subPath }: PluginNavPanelProps) {
   const companyId = subPath.split("/")[0] ?? "";
   const navigate = useBbNavigate();
+  const railReturn = useRailReturn();
   // Раздел «Аутрич» работает со списком поставщиков слева — плагин включает его сам.
   // Без организации страница не нужна: центр возвращается к последнему треду (или к
   // экрану нового треда), список — слева.
   useEffect(() => {
     requestSuppliersShow();
     if (companyId) return;
-    const target = railTarget();
-    if (target === undefined) return;
-    if (target) navigate.toThread(target);
-    else navigate.toCompose();
-  }, [companyId, navigate]);
+    void railReturn("outreach").then((r) => {
+      if (r === "none") navigate.toCompose();
+    });
+  }, [companyId, navigate, railReturn]);
   if (!companyId) {
     return (
       <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">

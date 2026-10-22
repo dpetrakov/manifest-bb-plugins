@@ -4,6 +4,12 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.16.3
+
+- The agent checks the tag «каталог проверен» and the comment «Каталог с сайта (дата): …»
+  before looking for an organisation's catalog on its site, and leaves both after any try,
+  so the same site is not crawled again for nothing.
+
 ## manifest 0.16.2
 
 - The template editor in a chat's side panel keeps the panel header (the chain back to
@@ -19,6 +25,12 @@ tagged `manifest/vX.Y.Z`.
 - Phone width: the tab bar scrolls sideways instead of overflowing, the countries and the
   catalogs fit the screen, the matched product is shown under the position instead of a
   one-letter column.
+- A deleted chat no longer breaks a section: «Аутрич», «Дашборд аутрича», «Почта аутрича»
+  and «Закупочный лист» return to their last chat only if it still opens; a deleted (or
+  archived) one is forgotten and the section opens anew instead of «Failed to load
+  thread». BB deletes threads softly, so the plugin now reads `deletedAt`, not only an
+  error: «Чаты» of an object, dashboard topics, a template's chat and an old link to a topic
+  skip deleted threads, and a deletion removes the thread from every link the plugin keeps.
 - A potential supplier's card no longer shows supplier currency and «активен» (Manifest
   update): these fields come only with the role «Поставщик».
 
