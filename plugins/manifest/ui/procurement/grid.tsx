@@ -1,5 +1,6 @@
 // The table look of the procurement sheet, shared by its tabs: header cells, money with
-// the currency sign and the «набор» mark.
+// the currency sign and the «набор» mark; a deep view with its sticky bar.
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
 export const th = "py-1.5 px-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground";
 
@@ -28,4 +29,97 @@ export function GroupRow({ colSpan, title, note }: { colSpan: number; title: str
       </td>
     </tr>
   );
+}
+
+/** The scroll container of a procurement tab (NeedSheet marks it). */
+export const SCROLL_ATTR = "data-mf-scroll";
+export const scrollerOf = (el: Element | null) => el?.closest<HTMLElement>(`[${SCROLL_ATTR}]`) ?? null;
+
+/**
+ * A view one level deep in a tab (a country's assortment, an organisation's catalog): its
+ * bar — «← back», what it is, its actions — sticks to the top of the tab while the person
+ * scrolls, so the way back and the decision are always at hand. Table heads below stick
+ * under the bar (`top-[var(--mf-sticky,0px)]`).
+ */
+export function DeepView({ back, onBack, title, meta, actions, children }: {
+  back: string;
+  onBack: () => void;
+  title: React.ReactNode;
+  meta?: React.ReactNode;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <StickySection
+      bar={
+        <div className="mf-surface flex flex-col gap-1 border-b border-border px-3 py-2 text-xs shadow-[0_1px_0_var(--mf-line-300)]">
+          <button type="button" className="self-start text-[11px] text-muted-foreground hover:text-foreground hover:underline" onClick={onBack}>
+            ← {back}
+          </button>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] font-bold leading-snug">{title}</div>
+              {meta ? <div className="text-[11px] text-muted-foreground">{meta}</div> : null}
+            </div>
+            {actions ? <div className="flex flex-none flex-wrap items-center gap-1.5">{actions}</div> : null}
+          </div>
+        </div>
+      }
+    >
+      {children}
+    </StickySection>
+  );
+}
+
+/** A bar that sticks to the top of the tab over its section; table heads stick under it. */
+export function StickySection({ bar, children }: { bar: React.ReactNode; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [h, setH] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    setH(el.offsetHeight);
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div className="flex flex-col" style={{ "--mf-sticky": `${h}px` } as React.CSSProperties}>
+      <div ref={ref} className="sticky top-0 z-20">
+        {bar}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Going one level deep and back keeps the place: the list scrolls to the top for the deep
+ * view and returns to where the person was.
+ */
+export function useDeep<T>(anchor: React.RefObject<HTMLElement | null>) {
+  const [deep, setDeep] = useState<T | null>(null);
+  const saved = useRef(0);
+  const go = useCallback(
+    (to: T | null) => {
+      const sc = scrollerOf(anchor.current);
+      if (to !== null) {
+        if (sc && deep === null) saved.current = sc.scrollTop;
+        setDeep(to);
+        requestAnimationFrame(() => {
+          const s = scrollerOf(anchor.current);
+          if (s) s.scrollTop = 0;
+        });
+      } else {
+        setDeep(null);
+        requestAnimationFrame(() => {
+          const s = scrollerOf(anchor.current);
+          if (s) s.scrollTop = saved.current;
+        });
+      }
+    },
+    [anchor, deep],
+  );
+  return [deep, go] as const;
 }

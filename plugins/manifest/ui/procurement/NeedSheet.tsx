@@ -18,7 +18,7 @@ import { NEEDS_HUB, OPEN_SOURCE, takeSource } from "./paths";
 import { Countries } from "./Countries";
 import { Matching } from "./Matching";
 import { Review, useReview } from "./Review";
-import { GroupRow, KitMark, money, th } from "./grid";
+import { GroupRow, KitMark, SCROLL_ATTR, money, th } from "./grid";
 import { readFile, toBase64 } from "./file";
 
 /** Positions grouped by category, in sheet order inside a group. */
@@ -71,7 +71,7 @@ export function NeedSheet() {
   if (!status?.canAssortment) return <SheetTab />;
   return (
     <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
-      <div className="mf-surface flex gap-1 border-b border-border px-3">
+      <div className="mf-surface flex flex-none gap-1 overflow-x-auto border-b border-border px-1.5 @[24rem]:px-3">
         {(
           [
             ["sheet", "Лист"],
@@ -84,7 +84,8 @@ export function NeedSheet() {
             key={k}
             type="button"
             onClick={() => setTab(k)}
-            className={cn("whitespace-nowrap px-3 py-2 text-xs", tab === k ? "border-b-2 border-foreground font-semibold" : "text-muted-foreground hover:text-foreground")}
+            aria-current={tab === k ? "page" : undefined}
+            className={cn("flex-none whitespace-nowrap px-2 py-2 text-xs @[24rem]:px-3", tab === k ? "border-b-2 border-foreground font-semibold" : "text-muted-foreground hover:text-foreground")}
           >
             {label}
           </button>
@@ -94,7 +95,7 @@ export function NeedSheet() {
         {tab === "sheet" ? (
           <SheetTab />
         ) : (
-          <div className="h-full overflow-y-auto">{tab === "matching" ? <Matching /> : tab === "review" ? <Review /> : <Countries focus={focus} />}</div>
+          <div className="h-full overflow-y-auto" {...{ [SCROLL_ATTR]: "" }}>{tab === "matching" ? <Matching /> : tab === "review" ? <Review /> : <Countries focus={focus} />}</div>
         )}
       </div>
     </div>
@@ -152,7 +153,7 @@ function SheetTab() {
         ) : null}
       </div>
       {error ? <p role="alert" className="px-3 py-2 text-xs text-destructive">{error}</p> : null}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto" {...{ [SCROLL_ATTR]: "" }}>
         {creating ? (
           <div className="border-b border-border bg-[var(--mf-surface)] p-3">
             <NeedForm

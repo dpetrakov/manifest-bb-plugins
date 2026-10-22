@@ -1327,13 +1327,21 @@ describe("assortment of countries (EP-107)", () => {
     expect(screen.getByText("5 196 ZAR")).toBeTruthy();
     expect(screen.getByText("Цепная пила")).toBeTruthy();
     expect(screen.getByText("Модель")).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: "Каталоги организаций (1)" }));
+    // A country opens one level deep: the way back is in its bar, the list comes back.
+    expect(screen.queryByRole("tab", { name: "Каталоги организаций (1)" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "← Сайты STIHL стран" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Каталоги организаций (1)" }));
     expect(await screen.findByText("Indokita")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Подтвердить" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Проверить" }));
     expect(await screen.findByText("Совпало с листом")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "← Каталоги организаций" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
     await waitFor(() => expect(calls.find((c) => c.name === "assortment_confirm")?.args).toEqual({ id: "o1s" }));
+    // «Отклонить» returns to the list: the draft is gone.
+    fireEvent.click(screen.getByRole("button", { name: "Отклонить" }));
+    await waitFor(() => expect(calls.find((c) => c.name === "assortment_discard")?.args).toEqual({ id: "o1s" }));
+    expect(await screen.findByRole("tab", { name: "Каталоги организаций (1)" })).toBeTruthy();
   });
 });
 
@@ -1385,7 +1393,9 @@ describe("matching and coverage (EP-108)", () => {
     await waitFor(() => expect(calls.filter((c) => c.name === "assortment_decide").at(-1)?.args).toMatchObject({ key: "10", level: 1 }));
     // The organisation's catalog: a product without an article is decided by name in its catalog.
     fireEvent.click(within(switcher).getByRole("tab", { name: /Delhi Garden/ }));
-    fireEvent.click(await screen.findByText("Hedge trimmer HSA 50"));
+    // A narrow panel shows the product under the position too (container queries are not
+    // evaluated here): either opens the row.
+    fireEvent.click((await screen.findAllByText("Hedge trimmer HSA 50"))[0]);
     fireEvent.click(await screen.findByRole("button", { name: "Тот же товар" }));
     await waitFor(() =>
       expect(calls.filter((c) => c.name === "assortment_decide").at(-1)?.args).toMatchObject({ key_kind: "name", key: "Hedge trimmer HSA 50", source_id: "s-co" }),

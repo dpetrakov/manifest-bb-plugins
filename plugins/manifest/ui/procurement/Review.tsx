@@ -314,7 +314,7 @@ function Drafts({ drafts }: { drafts: SourceCoverage[] }) {
           <th className={cn(th, "pl-3 text-left")}>Организация</th>
           <th className={cn(th, "w-20 text-right")}>Покрытие</th>
           <th className={cn(th, "hidden w-24 text-right @[30rem]:table-cell")}>Позиций</th>
-          <th className={cn(th, "w-[11rem] pr-3 text-right")} />
+          <th className={cn(th, "w-[6.5rem] pr-3 text-right @[30rem]:w-[11rem]")} />
         </tr>
       </thead>
       <tbody>
@@ -333,8 +333,9 @@ function Drafts({ drafts }: { drafts: SourceCoverage[] }) {
               {d.full + d.partial} из {d.positions}
             </td>
             <td className="py-1.5 pl-2 pr-3 text-right">
-              <Button size="sm" variant="outline" className="h-7 whitespace-nowrap border-[var(--mf-amber)] px-2 text-[11px]" onClick={() => openSource(d.source_id)}>
-                Проверить в источниках
+              <Button size="sm" variant="outline" className="h-7 whitespace-nowrap border-[var(--mf-amber)] px-2 text-[11px]" aria-label="Проверить в источниках" onClick={() => openSource(d.source_id)}>
+                <span className="@[30rem]:hidden">Проверить</span>
+                <span className="hidden @[30rem]:inline">Проверить в источниках</span>
               </Button>
             </td>
           </tr>

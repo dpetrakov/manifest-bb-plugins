@@ -4,6 +4,24 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.16.2
+
+- The template editor in a chat's side panel keeps the panel header (the chain back to
+  «Почта аутрича», «Чаты») and scrolls as one page; the letter preview no longer runs off
+  the panel's bottom.
+- «Закупочный лист» in «Источники»: a country's assortment and an organisation's catalog
+  open one level deep instead of unfolding a row into a long sheet. Their bar sticks to the
+  top: «← Сайты STIHL стран» / «← Каталоги организаций», the name and — for a draft —
+  «Подтвердить» and «Отклонить» stay at hand while scrolling; table heads stick under it.
+  Back returns to the same place in the list.
+- «Покрытие»: the selected country and its sources stick over the matching, «↑ Карта» goes
+  back to the map.
+- Phone width: the tab bar scrolls sideways instead of overflowing, the countries and the
+  catalogs fit the screen, the matched product is shown under the position instead of a
+  one-letter column.
+- A potential supplier's card no longer shows supplier currency and «активен» (Manifest
+  update): these fields come only with the role «Поставщик».
+
 ## manifest 0.16.1
 
 - The map colours a country also by the organisations working there from another country

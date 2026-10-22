@@ -14,6 +14,7 @@ import { useOpenObject, useOpenPinned } from "../workspace/state";
 import { CountryLookup, CoverageMap, describe, type Cluster, type MapCountry } from "../map/CoverageMap";
 import { ASSORTMENT_CHANGED, ChoiceTable, sourceLabel, type ChoiceRow, type SourceInfo } from "./ChoiceTable";
 import { useOpenSource } from "./nav";
+import { StickySection, scrollerOf } from "./grid";
 
 export interface CountryCoverage {
   country: string;
@@ -156,7 +157,7 @@ export function Matching() {
     <div className="flex flex-col">
       <CoverageMap countries={mapCountries} selected={country} cluster={cluster} onSelect={setCountry} />
       <div className="mf-surface flex flex-wrap items-start gap-2 border-y border-border px-3 py-2">
-        <div className="w-44 flex-none">
+        <div className="w-full flex-none @[30rem]:w-44">
           <CountryLookup countries={mapCountries} selected={country} onSelect={setCountry} />
         </div>
         {country ? (
@@ -176,9 +177,13 @@ export function Matching() {
       </div>
       {error ? <p role="alert" className="px-3 py-2 text-xs text-destructive">{error}</p> : null}
       {here.length ? (
-        <>
-          <div className="flex flex-wrap items-center gap-1.5 px-3 pt-2 text-xs" role="tablist" aria-label="Сверка по источнику">
-            <span className="text-muted-foreground">Сверка по:</span>
+        // The matching is long: the country and its source stay on top while scrolling,
+        // «↑ Карта» goes back to pick another country.
+        <StickySection
+          bar={
+          <div className="mf-surface flex flex-wrap items-center gap-1.5 border-b border-border px-3 py-2 text-xs" role="tablist" aria-label="Сверка по источнику">
+            <b className="whitespace-nowrap">{countryName(country)}</b>
+            <span className="text-muted-foreground">· сверка по:</span>
             {here.map((x) => (
               <button
                 key={x.source_id}
@@ -197,10 +202,23 @@ export function Matching() {
                 {x.draft ? <span className="text-[10px] opacity-80">черновик</span> : null}
               </button>
             ))}
+            <button
+              type="button"
+              className="ml-auto whitespace-nowrap text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+              onClick={(e) => {
+                const sc = scrollerOf(e.currentTarget);
+                if (sc?.scrollTo) sc.scrollTo({ top: 0, behavior: "smooth" });
+                else if (sc) sc.scrollTop = 0;
+              }}
+            >
+              ↑ Карта
+            </button>
           </div>
+          }
+        >
           {selected ? <SourceLine c={selected} /> : null}
           {rows ? <ChoiceTable rows={rows} canDecide={canDecide} /> : <Note>Загружаем сверку…</Note>}
-        </>
+        </StickySection>
       ) : country ? (
         <NoData c={mapCountries.find((x) => x.code === country)} />
       ) : null}

@@ -228,8 +228,15 @@ export function TemplateEditor({
   if (templateId && !tpl && !error) return <Note>Загружаем шаблон…</Note>;
 
   return (
-    <div className="@container mf-island mf-paper flex h-full min-h-0 flex-col gap-2 overflow-y-auto p-2 @4xl:flex-row @4xl:overflow-hidden">
-      <div className="mf-card flex min-w-0 flex-1 flex-col gap-3 p-3 text-sm @4xl:overflow-y-auto">
+    // In the thread panel (embedded) the editor is a plain block: the panel scrolls it under
+    // its header. Its own scroll (h-full, a scrolling card beside the chats) is the page's.
+    <div
+      className={cn(
+        "@container mf-island mf-paper flex flex-col gap-2 p-2",
+        !embedded && "h-full min-h-0 overflow-y-auto @4xl:flex-row @4xl:overflow-hidden",
+      )}
+    >
+      <div className={cn("mf-card flex min-w-0 flex-1 flex-col gap-3 p-3 text-sm", !embedded && "@4xl:overflow-y-auto")}>
         <div className="flex flex-wrap items-center gap-2">
           {embedded ? null : (
             <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => navigate.toPluginPanel(MAIL_PATH, { subPath: "templates" })}>
