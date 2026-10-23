@@ -22,6 +22,7 @@ import {
   AGENT_TOOL_NAMES,
   PANEL_TOOLS,
   READ_TOOLS,
+  isLocal,
   isPrep,
   agentText,
   companyOf,
@@ -790,6 +791,43 @@ export default async function plugin(bb: BbPluginApi) {
     if (typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)) await bb.storage.kv.set(mailingOwnerKey(id), owner);
   }
 
+  /**
+   * A file for letters from the storage of the agent's thread: the chat's attachments and
+   * the files the agent put there. Only that storage — a path outside it (keys, secrets,
+   * the project) is refused, so text in a letter or a card can't make the agent attach
+   * them. The plugin reads the file on the thread's host and uploads it; the agent never
+   * carries the bytes.
+   */
+  async function fileFromThread(args: Record<string, unknown>, threadId: string, signal?: AbortSignal) {
+    const loc = (await bb.sdk.threads.storageLocation({ threadId })) as { hostId: string; storageRootPath: string };
+    const root = loc.storageRootPath.replace(/\/+$/, "");
+    let rel = String(args.path ?? "").trim().replace(/\\/g, "/");
+    if (rel.startsWith(`${root}/`)) rel = rel.slice(root.length + 1);
+    rel = rel.replace(/^\.\//, "");
+    if (!rel || rel.startsWith("/") || rel.startsWith("~") || rel.split("/").some((p) => p === ".." || p === "")) {
+      return fail(`файл должен лежать в хранилище этого треда (${root}): вложения чата или файлы, которые ты туда положил. Путь «${String(args.path ?? "")}» вне его.`);
+    }
+    const file = (await bb.sdk.files.read({ hostId: loc.hostId, rootPath: root, path: rel, signal })) as {
+      content: string;
+      contentEncoding: "base64" | "utf8";
+      mimeType?: string;
+      sizeBytes: number;
+    };
+    if (file.sizeBytes > 7 * 1024 * 1024) return fail(`файл ${rel} больше 7 МБ — шлюз не возьмёт его в письмо.`);
+    const content_base64 = file.contentEncoding === "base64" ? file.content : Buffer.from(file.content, "utf8").toString("base64");
+    const given = typeof args.filename === "string" ? args.filename.trim() : "";
+    const filename = given || rel.split("/").pop() || "file";
+    const { structured, text } = await call(
+      "mail_file_upload",
+      { filename, content_base64, ...(file.mimeType ? { content_type: file.mimeType } : {}) },
+      "agent",
+      signal,
+    );
+    const f = structured as { id?: string; filename?: string; size?: number } | null;
+    if (!f?.id) return agentText(structured, text);
+    return `Файл загружен: ${f.filename} (${Math.round((f.size ?? 0) / 1024)} КБ), file_id ${f.id}. Чтобы приложить — добавь {kind: "file", file_id: "${f.id}"} во вложения: mail_draft_attachments (черновик), mail_mailing_update (вся рассылка) или mail_mailing_recipient_attachments (один получатель). Список вложений заменяется целиком — сохрани нужные прежние.`;
+  }
+
   for (const name of AGENT_TOOL_NAMES) {
     const def = AGENT_TOOLS[name];
     bb.agents.registerTool({
@@ -836,6 +874,7 @@ export default async function plugin(bb: BbPluginApi) {
               idsOf(tf, "mailing").includes(mid);
             if (!mine) return fail("эту рассылку можно менять только в чате, где она создана или открыта; попросите человека открыть её здесь.");
           }
+          if (isLocal(name)) return await fileFromThread(args, ctx.threadId, ctx.signal);
           const { structured, text } = await call(name, args, "agent", ctx.signal);
           changed(name, args, structured);
           if (name === "mail_mailing_create") {

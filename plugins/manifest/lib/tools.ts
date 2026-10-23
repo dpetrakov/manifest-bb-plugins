@@ -50,6 +50,23 @@ const touchSchema = z.object({
 });
 
 /**
+ * What a letter carries (ADR-052): the procurement sheet built for the recipient, or an
+ * uploaded file as it is (id from mail_file_from_thread).
+ */
+const attachmentSpec = z.union([
+  z.object({
+    kind: z.literal("procurement_sheet"),
+    scope: z.enum(["all", "catalog"]).describe("all — весь лист; catalog — что есть в каталоге"),
+    source: opt(z.enum(["auto", "country", "own"]), "чей каталог: auto — как в рейтинге; country — региональный (сайт STIHL страны); own — личный каталог организации"),
+    no_qty: opt(z.boolean(), "true — без колонки количества"),
+  }),
+  z.object({
+    kind: z.literal("file"),
+    file_id: z.string().describe("id файла из mail_file_from_thread"),
+  }),
+]);
+
+/**
  * Kind of object a thread works with (W-18, ADR-049): the focus of the thread.
  * «dashboard» is a dashboard topic (a selection of organisations).
  */
@@ -414,19 +431,15 @@ export const AGENT_TOOLS = {
     scopes: ["company"],
     description:
       "Вложения черновика письма — заменяет список целиком. Закупочный лист в Excel в привычном поставщикам виде (OEM Part No · Description · Qty, pcs + пустые Price и Availability): " +
-      "scope catalog — только позиции, найденные в каталоге организации (её каталог или сайт STIHL её страны; нет данных — весь лист), all — весь лист. [] — без вложения. Файл собирается при отправке; preview.attachments — сколько позиций уйдёт.",
+      "scope catalog — только позиции, найденные в каталоге организации (её каталог или сайт STIHL её страны; нет данных — весь лист), all — весь лист. " +
+      "Любой файл: {kind: file, file_id} — сначала загрузи его mail_file_from_thread. До 5 вложений и 7 МБ вместе. [] — без вложения. Лист собирается при отправке, файл уходит как есть; preview.attachments — что уйдёт.",
     parameters: z.object({
       company_id: id,
       attachments: z
         .array(
-          z.object({
-          kind: z.enum(["procurement_sheet"]),
-          scope: z.enum(["all", "catalog"]).describe("all — весь лист; catalog — что есть в каталоге"),
-          source: opt(z.enum(["auto", "country", "own"]), "чей каталог: auto — как в рейтинге; country — региональный (сайт STIHL страны); own — личный каталог организации"),
-          no_qty: opt(z.boolean(), "true — без колонки количества"),
-        }),
+          attachmentSpec,
         )
-        .max(3)
+        .max(5)
         .describe("[] — без вложения"),
     }),
   },
@@ -486,16 +499,23 @@ export const AGENT_TOOLS = {
       attachments: opt(
         z
           .array(
-            z.object({
-          kind: z.enum(["procurement_sheet"]),
-          scope: z.enum(["all", "catalog"]).describe("all — весь лист; catalog — что есть в каталоге"),
-          source: opt(z.enum(["auto", "country", "own"]), "чей каталог: auto — как в рейтинге; country — региональный (сайт STIHL страны); own — личный каталог организации"),
-          no_qty: opt(z.boolean(), "true — без колонки количества"),
-        }),
+            attachmentSpec,
           )
-          .max(3),
+          .max(5),
         "вложения писем рассылки по умолчанию (у получателя можно своё — mail_mailing_recipient_attachments); [] — без вложения",
       ),
+    }),
+  },
+  mail_file_from_thread: {
+    write: false,
+    local: true,
+    scopes: ["company", "dashboard", "mailing", "template"],
+    description:
+      "Загрузить в Manifest файл из хранилища этого треда ($BB_THREAD_STORAGE: вложения, которые человек прислал в чат, и файлы, которые ты туда положил), чтобы приложить его к письму. " +
+      "path — путь внутри хранилища (например Attachments/price.pdf) или абсолютный внутри него; файлы вне хранилища треда не берутся. До 7 МБ. Возвращает id — положи {kind: file, file_id: id} во вложения черновика, рассылки или получателя. Писем это не отправляет.",
+    parameters: z.object({
+      path: z.string().describe("путь к файлу в хранилище треда"),
+      filename: opt(z.string(), "имя, которое увидит получатель; по умолчанию — имя файла"),
     }),
   },
   mail_mailing_recipient_attachments: {
@@ -503,16 +523,11 @@ export const AGENT_TOOLS = {
     prep: true,
     scopes: ["company", "dashboard", "mailing"],
     description:
-      "Своё вложение письма одного получателя рассылки (не как у рассылки): RFQ весь лист или что есть в каталоге, чей каталог (auto/country/own), с количеством или без. attachments не указывай — вернуть как у рассылки; [] — без вложения.",
+      "Свои вложения письма одного получателя рассылки (не как у рассылки, список целиком): RFQ весь лист или что есть в каталоге, чей каталог (auto/country/own), с количеством или без, и/или файлы {kind: file, file_id}. Так одному получателю убирают файл рассылки или дают другой. attachments не указывай — вернуть как у рассылки; [] — без вложений.",
     parameters: z.object({
       id,
       company_id: z.string().describe("получатель"),
-      attachments: opt(z.array(z.object({
-          kind: z.enum(["procurement_sheet"]),
-          scope: z.enum(["all", "catalog"]).describe("all — весь лист; catalog — что есть в каталоге"),
-          source: opt(z.enum(["auto", "country", "own"]), "чей каталог: auto — как в рейтинге; country — региональный (сайт STIHL страны); own — личный каталог организации"),
-          no_qty: opt(z.boolean(), "true — без колонки количества"),
-        })).max(3), "вложения этого получателя"),
+      attachments: opt(z.array(attachmentSpec).max(5), "вложения этого получателя"),
     }),
   },
   mail_mailing_add: {
@@ -576,9 +591,14 @@ export const AGENT_TOOLS = {
     description: "Юрлица-отправители с адресами, готовностью и состоянием канала (без токенов).",
     parameters: z.object({}),
   },
-} as const satisfies Record<string, { write: boolean; prep?: boolean; scopes: readonly ToolScope[]; description: string; parameters: z.ZodTypeAny }>;
+} as const satisfies Record<string, { write: boolean; prep?: boolean; local?: boolean; scopes: readonly ToolScope[]; description: string; parameters: z.ZodTypeAny }>;
 
 /** Writes that prepare mail and change no organisation (mailings): allowed outside a company chat. */
+/** A tool the plugin runs itself (not a call of a Manifest tool of the same name). */
+export function isLocal(name: AgentToolName): boolean {
+  return "local" in AGENT_TOOLS[name] && (AGENT_TOOLS[name] as { local?: boolean }).local === true;
+}
+
 export function isPrep(name: AgentToolName): boolean {
   return "prep" in AGENT_TOOLS[name] && (AGENT_TOOLS[name] as { prep?: boolean }).prep === true;
 }
@@ -599,7 +619,7 @@ export const MAIL_TOOLS = new Set<string>([
   "mail_entities", "mail_draft_get", "mail_draft_create", "mail_draft_update", "mail_draft_attachments", "mail_draft_discard",
   "mail_mailings", "mail_mailing_get", "mail_mailing_letter", "mail_mailing_create", "mail_mailing_update", "mail_mailing_recipient_attachments",
   "mail_mailing_add", "mail_mailing_remove", "mail_mailing_discard", "mail_inbound_get", "mail_inbound_link", "mail_inbound_mark",
-  "mail_message_get", "mail_messages",
+  "mail_message_get", "mail_messages", "mail_file_from_thread",
 ]);
 
 /** Tools that need the procurement sheet on the server (capability "procurement.sheet"). */
@@ -713,6 +733,7 @@ export const PANEL_TOOLS = new Set([
   "mail_mailing_create",
   "mail_mailing_update",
   "mail_mailing_recipient_attachments",
+  "mail_file_upload",
   "mail_mailing_add",
   "mail_mailing_remove",
   "mail_mailing_discard",

@@ -22,11 +22,13 @@ import {
   type Template,
 } from "./common";
 import { useOpenObject, useRailReturn } from "../workspace/state";
+import { SectionTabs } from "../workspace/nav";
 import type { Mailing } from "./common";
+import { MAIL_HUB, OPEN_MAIL_TAB, takeMailTab } from "./hubTabs";
 import { mailingLine } from "./send";
 import { ModeBadge, Status, StatusDot } from "../manifest";
 
-const TABS: [string, string][] = [
+export const MAIL_TABS: readonly (readonly [string, string])[] = [
   ["templates", "Шаблоны"],
   ["mailings", "Рассылки"],
   ["entities", "Юрлица и отправители"],
@@ -36,24 +38,27 @@ const TABS: [string, string][] = [
 /** The mail hub: in a chat's side panel or, as a fallback, on the whole page. */
 export function MailHub({ initial = "mailings" }: { initial?: string }) {
   const { status } = useStatus();
-  const [tab, setTab] = useState(initial);
+  const [tab, setTab] = useState(() => {
+    const asked = takeMailTab();
+    return asked && MAIL_TABS.some(([k]) => k === asked) ? asked : initial;
+  });
+  useEffect(() => {
+    const on = (e: Event) => {
+      const t = (e as CustomEvent<string>).detail;
+      if (MAIL_TABS.some(([k]) => k === t)) {
+        setTab(t);
+        takeMailTab();
+      }
+    };
+    window.addEventListener(OPEN_MAIL_TAB, on);
+    return () => window.removeEventListener(OPEN_MAIL_TAB, on);
+  }, []);
   if (!status) return <Note>Подключаемся к Manifest…</Note>;
   if (!status.connected) return <Note>{status.message}</Note>;
   if (!status.canMail) return <Note>Почта появится после обновления Manifest: на сервере ещё нет почтового слоя.</Note>;
   return (
     <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
-      <div className="mf-surface flex gap-1 overflow-x-auto border-b border-border px-3">
-        {TABS.map(([k, label]) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setTab(k)}
-            className={cn("whitespace-nowrap px-3 py-2 text-xs", tab === k ? "border-b-2 border-foreground font-semibold" : "text-muted-foreground hover:text-foreground")}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <SectionTabs tabs={MAIL_TABS} active={tab} onSelect={setTab} label="Почта аутрича" />
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {tab === "entities" ? <Entities /> : tab === "inbound" ? <InboundList /> : tab === "mailings" ? <Mailings /> : <Templates />}
       </div>
@@ -62,7 +67,7 @@ export function MailHub({ initial = "mailings" }: { initial?: string }) {
 }
 
 /** The mail hub as an object: its chats are indexed under mail/hub (server, compose link). */
-export const MAIL_HUB = { kind: "mail" as const, id: "hub", title: "Почта аутрича" };
+export { MAIL_HUB, useOpenMailTab } from "./hubTabs";
 
 /**
  * The «Почта аутрича» rail: the last mail chat or BB's New thread screen with the hub on
@@ -85,7 +90,7 @@ export function MailPage({ subPath }: PluginNavPanelProps) {
     });
   }, [head, openObject, railReturn, rest]);
   if (!stay) return <Note>Открываем почту…</Note>;
-  return <MailHub initial={TABS.some(([k]) => k === head) ? head : "mailings"} />;
+  return <MailHub initial={MAIL_TABS.some(([k]) => k === head) ? head : "mailings"} />;
 }
 
 // ---- templates ----
@@ -125,7 +130,7 @@ function Templates() {
       ) : items.length === 0 ? (
         <Note>Шаблонов пока нет. Создайте первый — агент поможет с текстом.</Note>
       ) : (
-        <ul className="flex flex-col divide-y divide-border mf-card overflow-hidden">
+        <ul className="@container flex flex-col divide-y divide-border mf-card overflow-hidden">
           {items.map((t) => (
             <li key={t.id}>
               <button
@@ -133,8 +138,8 @@ function Templates() {
                 onClick={() => void openObject({ kind: "template", id: t.id, title: t.name })}
                 className="flex w-full flex-col gap-0.5 px-3 py-2 text-left hover:bg-state-hover"
               >
-                <span className="flex items-baseline justify-between gap-2">
-                  <span className="font-medium">{t.name}</span>
+                <span className="flex flex-wrap items-baseline justify-between gap-x-2">
+                  <span className="min-w-0 font-medium">{t.name}</span>
                   <span className="text-[11px] text-muted-foreground">
                     {AUDIENCE_LABEL[t.audience] ?? t.audience} · {KIND_LABEL[t.kind] ?? t.kind} · {t.language} · v{t.current_version}
                   </span>
@@ -168,18 +173,18 @@ function Mailings() {
   if (items.length === 0) return <Note>Рассылок нет.</Note>;
   const n = (v: number | undefined) => (v ? v : <span className="text-muted-foreground">—</span>);
   return (
-    <div className="mf-card overflow-x-auto">
+    <div className="@container mf-card overflow-hidden">
       <table className="w-full text-xs">
         <thead className="bg-[var(--mf-surface-strong,#eef3f1)] text-left text-muted-foreground">
           <tr>
             <th className="px-3 py-2 font-semibold">Рассылка</th>
-            <th className="px-2 py-2 font-semibold">Состояние</th>
-            <th className="px-2 py-2 text-right font-semibold" title="Получателей / готовых писем">Получ.</th>
-            <th className="px-2 py-2 text-right font-semibold">Ушло</th>
-            <th className="px-2 py-2 text-right font-semibold" title="В очереди шлюза">Очередь</th>
-            <th className="px-2 py-2 text-right font-semibold" title="Недоставка, ошибка, дубль">Недост.</th>
-            <th className="px-2 py-2 text-right font-semibold">Ответы</th>
-            <th className="hidden px-3 py-2 font-semibold @2xl:table-cell">Обновлена</th>
+            <th className="hidden px-2 py-2 font-semibold @[30rem]:table-cell">Состояние</th>
+            <th className="hidden px-2 py-2 text-right font-semibold @[40rem]:table-cell" title="Получателей / готовых писем">Получ.</th>
+            <th className="hidden px-2 py-2 text-right font-semibold @[40rem]:table-cell">Ушло</th>
+            <th className="hidden px-2 py-2 text-right font-semibold @[48rem]:table-cell" title="В очереди шлюза">Очередь</th>
+            <th className="hidden px-2 py-2 text-right font-semibold @[48rem]:table-cell" title="Недоставка, ошибка, дубль">Недост.</th>
+            <th className="hidden px-2 py-2 text-right font-semibold @[40rem]:table-cell">Ответы</th>
+            <th className="hidden px-3 py-2 font-semibold @[56rem]:table-cell">Обновлена</th>
           </tr>
         </thead>
         <tbody>
@@ -188,22 +193,32 @@ function Mailings() {
             const line = mailingLine(m);
             return (
               <tr key={m.id} className="cursor-pointer border-t border-border hover:bg-state-hover" onClick={() => void openObject({ kind: "mailing", id: m.id, title: m.name })}>
-                <td className="max-w-[18rem] px-3 py-2">
+                <td className="max-w-0 px-3 py-2">
                   <div className="truncate font-medium">{m.name}</div>
                   <div className="truncate text-[11px] text-muted-foreground">{m.template_name || "без шаблона"}</div>
+                  {/* A narrow panel: the state and the counts under the name, not columns off the edge. */}
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground @[40rem]:hidden">
+                    <span className="@[30rem]:hidden">
+                      <Status tone={line.tone}>{MAILING_STATE[m.state] ?? m.state}</Status>
+                    </span>
+                    <span>писем {p ? p.letters : m.total}</span>
+                    <span>ушло {p?.sent ?? 0}</span>
+                    {p?.failed ? <span className="text-destructive">недоставка {p.failed}</span> : null}
+                    <span>ответов {p?.replies ?? 0}</span>
+                  </div>
                 </td>
-                <td className="whitespace-nowrap px-2 py-2">
+                <td className="hidden whitespace-nowrap px-2 py-2 @[30rem]:table-cell">
                   <span className="inline-flex items-center gap-1.5">
                     <Status tone={line.tone}>{MAILING_STATE[m.state] ?? m.state}</Status>
-                    {m.mode ? <ModeBadge sandbox={m.mode === "sandbox"} /> : null}
+                    <ModeBadge sandbox={m.mode === "sandbox" || m.mode === "mixed"} />
                   </span>
                 </td>
-                <td className="px-2 py-2 text-right tabular-nums">{p ? p.letters : m.total}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{n(p?.sent)}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{n(p?.in_channel)}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{p?.failed ? <span className="inline-flex items-center gap-1"><StatusDot tone="error" />{p.failed}</span> : n(0)}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{p?.replies ? <span className="mf-badge mf-badge--volt">{p.replies}</span> : n(0)}</td>
-                <td className="hidden whitespace-nowrap px-3 py-2 text-muted-foreground @2xl:table-cell">{formatDateTime(m.updated_at)}</td>
+                <td className="hidden px-2 py-2 text-right tabular-nums @[40rem]:table-cell">{p ? p.letters : m.total}</td>
+                <td className="hidden px-2 py-2 text-right tabular-nums @[40rem]:table-cell">{n(p?.sent)}</td>
+                <td className="hidden px-2 py-2 text-right tabular-nums @[48rem]:table-cell">{n(p?.in_channel)}</td>
+                <td className="hidden px-2 py-2 text-right tabular-nums @[48rem]:table-cell">{p?.failed ? <span className="inline-flex items-center gap-1"><StatusDot tone="error" />{p.failed}</span> : n(0)}</td>
+                <td className="hidden px-2 py-2 text-right tabular-nums @[40rem]:table-cell">{p?.replies ? <span className="mf-badge mf-badge--volt">{p.replies}</span> : n(0)}</td>
+                <td className="hidden whitespace-nowrap px-3 py-2 text-muted-foreground @[56rem]:table-cell">{formatDateTime(m.updated_at)}</td>
               </tr>
             );
           })}
@@ -214,6 +229,76 @@ function Mailings() {
 }
 
 // ---- legal entities and senders ----
+
+/**
+ * The signature ({{signature}}) and the footer of a legal entity — they go into every letter
+ * sent under it. Placeholders ({{sender.name}}, {{legal.…}}) and the light markup of templates
+ * work here too. Saving sends the whole entity: the server replaces it.
+ */
+function EntityTexts({ entity, canEdit, onSaved }: { entity: LegalEntity; canEdit: boolean; onSaved: () => void }) {
+  const tool = useTool();
+  const [signature, setSignature] = useState(entity.signature);
+  const [footer, setFooter] = useState(entity.footer);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    setSignature(entity.signature);
+    setFooter(entity.footer);
+  }, [entity.signature, entity.footer]);
+  const changed = signature !== entity.signature || footer !== entity.footer;
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const { id, code, name, full_name, details, address, website, phone, subdomain, sandbox, language } = entity;
+      await tool("mail_entity_save", { id, code, name, full_name, details, address, website, phone, subdomain, language, ...(sandbox ? { sandbox } : {}), signature, footer });
+      setSaved(true);
+      onSaved();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const area = "min-h-[5.5rem] w-full rounded-md border border-input bg-background px-2 py-1.5 font-mono text-xs disabled:opacity-70";
+  return (
+    <details className="mt-2 rounded-md border border-[var(--mf-line-300)] bg-[var(--mf-surface)] px-2 py-1.5 text-xs" open={changed || undefined}>
+      <summary className="cursor-pointer select-none font-medium">Подпись и подвал писем</summary>
+      <div className="mt-2 flex flex-col gap-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-muted-foreground">Подпись — вместо {"{{signature}}"} в тексте письма</span>
+          <textarea className={area} value={signature} maxLength={2000} disabled={!canEdit || busy} onChange={(e) => setSignature(e.target.value)} aria-label="Подпись" />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-muted-foreground">Подвал — добавляется под каждым письмом (реквизиты, отписка)</span>
+          <textarea className={area} value={footer} maxLength={4000} disabled={!canEdit || busy} onChange={(e) => setFooter(e.target.value)} aria-label="Подвал" />
+        </label>
+        <p className="text-[11px] text-muted-foreground">
+          Подстановки: {"{{sender.name}}"}, {"{{sender.email}}"}, {"{{legal.name}}"}, {"{{legal.address}}"}, {"{{legal.website}}"}, {"{{legal.phone}}"}; разметка — как в шаблоне (**жирный**, [текст](https://…)). Действует для всех писем этого юрлица.
+        </p>
+        {error ? <p role="alert" className="text-destructive">{error}</p> : null}
+        {canEdit ? (
+          <div className="flex items-center gap-2">
+            <Button size="sm" className="h-7" disabled={busy || !changed} onClick={() => void save()}>
+              Сохранить
+            </Button>
+            {changed ? (
+              <Button size="sm" variant="ghost" className="h-7" disabled={busy} onClick={() => { setSignature(entity.signature); setFooter(entity.footer); }}>
+                Отменить
+              </Button>
+            ) : saved ? (
+              <span className="text-[var(--mf-green)]">Сохранено</span>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-[11px] text-muted-foreground">Менять может сотрудник с правом «Почта: настройки».</p>
+        )}
+      </div>
+    </details>
+  );
+}
 
 function Entities() {
   const tool = useTool();
@@ -292,7 +377,7 @@ function Entities() {
           ) : null}
           <ul className="mt-2 flex flex-col gap-1 text-xs">
             {e.senders.map((s) => (
-              <li key={s.id} className="flex items-center gap-2">
+              <li key={s.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span className="font-medium">{s.display_name}</span>
                 <span className="text-muted-foreground">&lt;{s.address}&gt;</span>
                 {s.registered_at ? (
@@ -306,6 +391,7 @@ function Entities() {
             ))}
           </ul>
           {canSettings ? <AddSender entity={e} busy={busy} onAdd={(local, name) => void run("mail_sender_save", { legal_entity_id: e.id, local_part: local, display_name: name })} /> : null}
+          <EntityTexts entity={e} canEdit={canSettings} onSaved={load} />
         </section>
       ))}
       {defaults ? (

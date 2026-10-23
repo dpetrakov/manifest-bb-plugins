@@ -86,7 +86,10 @@ test("tools helpers", () => {
   assert.equal(companyOf({}), null);
   assert.equal(quote('a"b\nc'), '"a\\"b c"');
   assert.match(agentText("x".repeat(100), "", 10), /обрезано/);
-  for (const name of Object.keys(AGENT_TOOLS)) assert.ok(PANEL_TOOLS.has(name), name);
+  // Every agent tool is a Manifest tool the panels may call — except the plugin's own
+  // (local), which run Manifest tools of their own (the file from a thread → mail_file_upload).
+  for (const name of Object.keys(AGENT_TOOLS)) assert.ok(AGENT_TOOLS[name].local || PANEL_TOOLS.has(name), name);
+  assert.ok(AGENT_TOOLS.mail_file_from_thread.local && PANEL_TOOLS.has("mail_file_upload"));
   assert.ok(AGENT_TOOLS.outreach_update_company.write && !AGENT_TOOLS.outreach_get_company.write);
 });
 
@@ -106,4 +109,13 @@ test("live: contract v1 against MANIFEST_URL", { skip: !live.MANIFEST_URL }, asy
     const r = await callTool(base, token, name, {}, "panel").catch((e) => e);
     assert.ok(!(r instanceof ManifestError && r.code === "protocol"), `${name}: ${r.message}`);
   }
+});
+
+test("names why Manifest is not reached", async () => {
+  const { netReason } = await import("../lib/mcp-client.ts");
+  const timeout = Object.assign(new TypeError("fetch failed"), { cause: { code: "UND_ERR_CONNECT_TIMEOUT" } });
+  assert.match(netReason(timeout), /за 10 с.*UND_ERR_CONNECT_TIMEOUT/);
+  const dns = Object.assign(new TypeError("fetch failed"), { cause: { code: "ENOTFOUND", message: "getaddrinfo ENOTFOUND m.example" } });
+  assert.match(netReason(dns), /DNS/);
+  assert.equal(netReason(new Error("boom")), "boom");
 });

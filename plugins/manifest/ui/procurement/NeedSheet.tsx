@@ -13,6 +13,7 @@ import { Note } from "../RegistryList";
 import { Badge, ConfirmCard, KindLabel } from "../manifest";
 import type { ImportPreview, Need } from "../types";
 import { useOpenObject, useRailReturn } from "../workspace/state";
+import { SectionTabs } from "../workspace/nav";
 import { NEEDS_HUB, OPEN_SOURCE, takeSource } from "./paths";
 import { Countries } from "./Countries";
 import { Matching } from "./Matching";
@@ -70,26 +71,17 @@ export function NeedSheet() {
   if (!status?.canAssortment) return <SheetTab />;
   return (
     <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
-      <div className="mf-surface flex flex-none gap-1 overflow-x-auto border-b border-border px-1.5 @[24rem]:px-3">
-        {(
-          [
-            ["sheet", "Лист"],
-            ["matching", "Покрытие"],
-            ["countries", "Источники"],
-            ["review", review.data ? `Проверить ${review.data.queue.length + review.data.drafts.length}` : "Проверить"],
-          ] as const
-        ).map(([k, label]) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setTab(k)}
-            aria-current={tab === k ? "page" : undefined}
-            className={cn("flex-none whitespace-nowrap px-2 py-2 text-xs @[24rem]:px-3", tab === k ? "border-b-2 border-foreground font-semibold" : "text-muted-foreground hover:text-foreground")}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <SectionTabs
+        label="Закупочный лист"
+        active={tab}
+        onSelect={(k) => setTab(k as typeof tab)}
+        tabs={[
+          ["sheet", "Лист"],
+          ["matching", "Покрытие"],
+          ["countries", "Источники"],
+          ["review", review.data ? `Проверить ${review.data.queue.length + review.data.drafts.length}` : "Проверить"],
+        ]}
+      />
       <div className="min-h-0 flex-1">
         {tab === "sheet" ? (
           <SheetTab />

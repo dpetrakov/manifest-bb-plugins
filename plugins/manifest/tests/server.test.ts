@@ -55,6 +55,8 @@ beforeEach(async () => {
             ? { cursor: "2026-10-19T10:00:00Z", letters: [{ id: "m1", company_id: "c1", mailing_id: null, status: "sent" }], mailings: ["mg1"], inbound: ["i1"], companies: ["c1"] }
           : m.params.name === "mail_mailing_create"
             ? { id: String(m.params.arguments.from_company ?? "") === "c1" ? "22222222-2222-2222-2222-222222222222" : "11111111-1111-1111-1111-111111111111", total: 1 }
+          : m.params.name === "mail_file_upload"
+            ? { id: "f0000000-0000-0000-0000-000000000001", filename: m.params.arguments.filename, size: Buffer.from(String(m.params.arguments.content_base64), "base64").length }
           : m.params.name === "mail_preview"
             ? { subject: "Hi", text: "x", html: "<p>x</p>", missing: [], unknown: String(m.params.arguments.body).includes("{{bad}}") ? ["bad"] : [], problems: [] }
           : m.params.name === "outreach_list_companies"
@@ -441,6 +443,7 @@ describe("mail (W-16)", () => {
 
 describe("focus of a thread (W-18)", () => {
   const meta: Record<string, Record<string, unknown>> = {};
+  const reads: { hostId: string; rootPath: string; path: string }[] = [];
   const MID = "22222222-2222-2222-2222-222222222222";
   const load = async () => {
     withWork = true;
@@ -462,6 +465,13 @@ describe("focus of a thread (W-18)", () => {
           updatePluginMetadata: async ({ threadId, set }: { threadId: string; set?: Record<string, unknown> }) => {
             meta[threadId] = { ...(meta[threadId] ?? {}), ...(set ?? {}) };
             return meta[threadId] as never;
+          },
+          storageLocation: async ({ threadId }: { threadId: string }) => ({ hostId: "host-1", storageRootPath: `/storage/${threadId}` }) as never,
+        },
+        files: {
+          read: async (args: { hostId: string; rootPath: string; path: string }) => {
+            reads.push(args);
+            return { content: Buffer.from("Payment terms").toString("base64"), contentEncoding: "base64", mimeType: "text/plain", sizeBytes: 13, path: args.path, sha256: "" } as never;
           },
         },
       },
@@ -541,6 +551,22 @@ describe("focus of a thread (W-18)", () => {
     // t3 worked with c1 too (it is in its chain); a deleted thread drops out.
     expect(chats.map((c) => c.threadId)).toEqual(["t4", "t3"]);
     expect(chats[0].title).toBe("Чат t4");
+  });
+
+  it("uploads a file for letters only from the storage of the agent's own thread", async () => {
+    const h = await load();
+    reads.length = 0;
+    await h.behavior.callRpc("focus_set", { threadId: "t9", focus: { kind: "company", id: "c1", title: "THK" } });
+    const ok = await h.behavior.callAgentTool("mail_file_from_thread", { path: "/storage/t9/Attachments/terms.txt" }, { threadId: "t9" });
+    expect(JSON.stringify(ok)).toContain("f0000000-0000-0000-0000-000000000001");
+    expect(reads).toEqual([{ hostId: "host-1", rootPath: "/storage/t9", path: "Attachments/terms.txt", signal: expect.anything() }]);
+    expect(seen.at(-1)).toMatchObject({ tool: "mail_file_upload", actor: "agent", args: { filename: "terms.txt", content_type: "text/plain", content_base64: Buffer.from("Payment terms").toString("base64") } });
+    // Anything outside the thread's storage is refused before reading.
+    for (const path of ["/Users/op/secret/key.pem", "../t8/Attachments/x.pdf", "Attachments/../../t8/x.pdf", "~/notes.txt", ""]) {
+      const bad = (await h.behavior.callAgentTool("mail_file_from_thread", { path }, { threadId: "t9" })) as { isError?: boolean };
+      expect(bad.isError, path).toBe(true);
+    }
+    expect(reads.length).toBe(1);
   });
 
   it("never leads to a deleted chat: soft-deleted threads drop out, a deletion cleans the links", async () => {

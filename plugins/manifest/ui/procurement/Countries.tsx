@@ -387,7 +387,7 @@ function OrgDetail({ source, canManage, onBack }: { source: Source; canManage: b
       onBack={onBack}
       title={
         <>
-          <span className="min-w-0 break-words">{name}</span>
+          <span className="min-w-0 truncate" title={name}>{name}</span>
           {draft ? <Badge tone="warn">черновик</Badge> : null}
         </>
       }

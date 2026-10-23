@@ -73,7 +73,7 @@ export async function callTool(
       body: JSON.stringify({ jsonrpc: "2.0", id: nextId++, method: "tools/call", params: { name, arguments: args } }),
     });
   } catch (error) {
-    throw new ManifestError(`Manifest недоступен: ${error instanceof Error ? error.message : String(error)}`, "unavailable");
+    throw new ManifestError(`Manifest недоступен: ${netReason(error)}`, "unavailable");
   }
   if (resp.status === 401) throw new ManifestError("Токен недействителен или отозван — войдите снова", "unauthorized");
   if (!resp.ok) throw new ManifestError(`Manifest ответил ${resp.status}`, "unavailable");
@@ -96,6 +96,30 @@ export async function callTool(
   return { structured: result.structuredContent ?? null, text };
 }
 
+/**
+ * Why a request did not reach Manifest, in words: fetch says only «fetch failed», the cause
+ * (undici) tells a timeout from DNS, a refused connection or a certificate — what the
+ * person checks on the machine of the bb server differs.
+ */
+export function netReason(error: unknown): string {
+  const msg = error instanceof Error ? error.message : String(error);
+  const cause = (error as { cause?: { code?: string; message?: string } } | null)?.cause;
+  const code = cause?.code ?? "";
+  const hint: Record<string, string> = {
+    UND_ERR_CONNECT_TIMEOUT: "соединение не установилось за 10 с — сеть машины сервера bb не доходит до Manifest (VPN, фильтр, маршрут)",
+    ETIMEDOUT: "соединение не установилось вовремя — сеть машины сервера bb не доходит до Manifest",
+    ENOTFOUND: "адрес Manifest не находится в DNS на машине сервера bb",
+    EAI_AGAIN: "DNS на машине сервера bb не отвечает",
+    ECONNREFUSED: "сервер отклонил соединение — Manifest не слушает этот порт",
+    ECONNRESET: "соединение оборвано по пути",
+    CERT_HAS_EXPIRED: "сертификат Manifest просрочен",
+    UNABLE_TO_VERIFY_LEAF_SIGNATURE: "сертификат Manifest не проверяется",
+  };
+  if (hint[code]) return `${hint[code]} (${code})`;
+  if (code || cause?.message) return `${msg}: ${[code, cause?.message].filter(Boolean).join(" ")}`;
+  return msg;
+}
+
 /** Exchanges email + password for a token (POST /api/plugin/auth/login). */
 export async function login(
   baseUrl: string,
@@ -112,7 +136,7 @@ export async function login(
       body: JSON.stringify({ email, password, device }),
     });
   } catch (error) {
-    throw new ManifestError(`Manifest недоступен: ${error instanceof Error ? error.message : String(error)}`, "unavailable");
+    throw new ManifestError(`Manifest недоступен: ${netReason(error)}`, "unavailable");
   }
   const body = (await resp.json().catch(() => ({}))) as { token?: string; email?: string; expires_at?: string; detail?: string };
   if (!resp.ok || !body.token) {

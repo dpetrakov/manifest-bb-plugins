@@ -20,7 +20,26 @@ import { TemplateEditor } from "../mail/TemplateEditor";
 import { InboundView } from "./InboundView";
 import { KindLabel } from "../manifest";
 import { KIND_LABEL, useBesideHost, useFocus, useOpenObject, useOpenObjectPanel, useStartChat, type FocusKind, type FocusRef } from "./state";
-import { MAIL_HUB, MailHub } from "../mail/MailPage";
+import { MAIL_TABS, MailHub, useOpenMailTab } from "../mail/MailPage";
+import { BackBar, SectionTabs } from "./nav";
+
+/** Where «back» leads from an object of the mail: its list in the mail hub. */
+const BACK_TAB: Record<string, [string, string]> = {
+  template: ["templates", "Шаблоны"],
+  mailing: ["mailings", "Рассылки"],
+  inbound: ["inbound", "Неразобранные входящие"],
+};
+
+/** Sections with tabs: their hub object and the objects that live in them. */
+const MAIL_SECTION = { title: "Почта аутрича", hub: "mail", tabs: MAIL_TABS };
+const NEEDS_SECTION = { title: "Закупочный лист", hub: "needs", tabs: [] as readonly (readonly [string, string])[] };
+const SECTION_OF: Partial<Record<string, typeof MAIL_SECTION>> = {
+  mail: MAIL_SECTION,
+  template: MAIL_SECTION,
+  mailing: MAIL_SECTION,
+  inbound: MAIL_SECTION,
+  needs: NEEDS_SECTION,
+};
 import { NeedSheet } from "../procurement/NeedSheet";
 import { useRealtime } from "@get-bb/plugin-sdk/app";
 import { FOCUS_CHANGED } from "./state";
@@ -80,40 +99,58 @@ export function PinnedObject({ pin, threadId, mainTitle }: { pin: FocusRef; thre
 function FocusedObject({ threadId }: { threadId: string }) {
   const { focus, trail, error, setFocus, back, forget } = useFocus(threadId);
   const [chatsOpen, setChatsOpen] = useState(false);
-  const openObject = useOpenObject();
+  const openMailTab = useOpenMailTab();
   if (focus === undefined) return <PanelNote>{error ?? "Открываем…"}</PanelNote>;
   if (!focus) return <PanelNote>Этот чат не привязан к объекту Manifest. Объекты открываются из разделов «Аутрич», «Дашборд аутрича», «Почта аутрича».</PanelNote>;
   const open = (ref: FocusRef) => void setFocus(ref);
   return (
     <div className="@container mf-root mf-island mf-paper flex h-full min-h-0 flex-col">
-      <header className="mf-surface flex flex-col gap-1 border-b border-border px-3 py-2">
-        {trail.length === 0 && ["mailing", "template", "inbound"].includes(focus.kind) ? (
-          <nav aria-label="Цепочка объектов" className="flex text-[11px] text-muted-foreground">
-            <button type="button" className="rounded px-1 py-0.5 hover:bg-state-hover" onClick={() => void openObject(MAIL_HUB)}>
-              ← Почта аутрича
-            </button>
-          </nav>
-        ) : null}
-        {trail.length > 0 ? (
-          <nav aria-label="Цепочка объектов" className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
-            {trail.slice(-3).map((r) => (
-              <button key={`${r.kind}:${r.id}`} type="button" className="max-w-[12rem] truncate rounded px-1 py-0.5 hover:bg-state-hover" onClick={() => void back(r)}>
-                ← {r.title || KIND_LABEL[r.kind]}
-              </button>
-            ))}
-          </nav>
-        ) : null}
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <KindLabel>{KIND_LABEL[focus.kind]}</KindLabel>
-            <div className="truncate text-base font-bold leading-snug">{focus.title || KIND_LABEL[focus.kind]}</div>
-          </div>
-          <Button size="sm" variant="ghost" className="h-8" onClick={() => setChatsOpen(!chatsOpen)} aria-expanded={chatsOpen}>
+      {(() => {
+        const section = SECTION_OF[focus.kind];
+        const chats = (
+          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setChatsOpen(!chatsOpen)} aria-expanded={chatsOpen}>
             Чаты
           </Button>
-        </div>
-        {chatsOpen ? <ChatsList focus={focus} currentThreadId={threadId} /> : null}
-      </header>
+        );
+        // Where «back» leads: the object this thread came from, else the object's list.
+        const prev = trail.at(-1);
+        const backTo = prev
+          ? { label: prev.title || KIND_LABEL[prev.kind], go: () => void back(prev) }
+          : BACK_TAB[focus.kind]
+            ? { label: BACK_TAB[focus.kind][1], go: () => openMailTab(BACK_TAB[focus.kind][0]) }
+            : null;
+        const title = focus.title || KIND_LABEL[focus.kind];
+        return (
+          <header className="flex-none">
+            {section ? (
+              // A section (mail, procurement sheet): its name, then its tabs — always on top.
+              <div className="mf-surface flex items-center gap-2 border-b border-border px-3 py-1.5">
+                <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{section.title}</span>
+                {focus.kind === section.hub ? chats : null}
+              </div>
+            ) : null}
+            {section && focus.kind !== section.hub ? (
+              <SectionTabs tabs={section.tabs} active={BACK_TAB[focus.kind]?.[0] ?? ""} onSelect={(k) => openMailTab(k)} label={section.title} />
+            ) : null}
+            {section && focus.kind === section.hub ? null : backTo ? (
+              <BackBar back={backTo.label} onBack={backTo.go} kind={KIND_LABEL[focus.kind]} title={<span className="truncate">{title}</span>} actions={chats} />
+            ) : (
+              <div className="mf-surface flex items-center gap-2 border-b border-border px-3 py-1.5">
+                <div className="min-w-0 flex-1">
+                  <KindLabel>{KIND_LABEL[focus.kind]}</KindLabel>
+                  <div className="truncate text-[13px] font-bold leading-snug">{title}</div>
+                </div>
+                {chats}
+              </div>
+            )}
+            {chatsOpen ? (
+              <div className="mf-surface border-b border-border px-3">
+                <ChatsList focus={focus} currentThreadId={threadId} />
+              </div>
+            ) : null}
+          </header>
+        );
+      })()}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <FocusBody focus={focus} threadId={threadId} onOpen={open} onBack={() => void forget(focus)} />
       </div>

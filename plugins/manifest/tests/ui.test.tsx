@@ -23,6 +23,8 @@ import { LetterChip, MailingChip } from "../ui/workspace/Chips";
 import { MailingSendBar } from "../ui/mail/send";
 import { NeedSheet, NeedsPage } from "../ui/procurement/NeedSheet";
 import { CompanyAssortment } from "../ui/procurement/CompanyAssortment";
+import { DraftAttachments } from "../ui/mail/attachments";
+import { takeMailTab } from "../ui/mail/hubTabs";
 
 const status = (over: Record<string, unknown> = {}) => ({
   connected: true,
@@ -1097,8 +1099,10 @@ describe("«Почта аутрича» hub", () => {
         tool: () => ({ result: null }),
       } as never,
     });
-    fireEvent.click(await screen.findByRole("button", { name: "← Почта аутрича" }));
+    // «Back» names the list the mailing belongs to and opens the hub on it.
+    fireEvent.click(await screen.findByRole("button", { name: "← Рассылки" }));
     await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toThread", threadId: "th-hub" }));
+    expect(takeMailTab()).toBe("mailings");
   });
 });
 
@@ -1129,7 +1133,8 @@ describe("objects beside the chat", () => {
       rpc: { status: () => status({ canMail: true }), tool: () => ({ result: { items: [sending] } }) } as never,
     });
     expect(await screen.findByText("STIHL — first letter")).toBeTruthy();
-    expect(screen.getByText("Идёт")).toBeTruthy();
+    // A narrow panel repeats the state under the name (container queries are not evaluated here).
+    expect(screen.getAllByText("Идёт").length).toBeGreaterThan(0);
     expect(screen.getByText("песочница")).toBeTruthy();
     const row = screen.getByText("STIHL — first letter").closest("tr")!;
     expect(within(row).getByText("3")).toBeTruthy(); // ушло
@@ -1342,6 +1347,66 @@ describe("assortment of countries (EP-107)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Отклонить" }));
     await waitFor(() => expect(calls.find((c) => c.name === "assortment_discard")?.args).toEqual({ id: "o1s" }));
     expect(await screen.findByRole("tab", { name: "Каталоги организаций (1)" })).toBeTruthy();
+  });
+});
+
+describe("signature and footer of a legal entity", () => {
+  it("edits the signature and saves the whole entity", async () => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    const entity = {
+      id: "e1", code: "msg", name: "MSG", full_name: "LLC MSG", details: "INN 1", address: "St. Petersburg", website: "https://msgcargo.com",
+      phone: "", subdomain: "msg.manifestmail.fyi", sandbox: true, language: "en", signature: "Best regards,\n{{sender.name}}", footer: "LLC MSG",
+      token_set: true, health_ok: true, health_checked_at: null, health_error: "", quota: null, ready: true, ready_problems: [], senders: [],
+    };
+    renderSlot({ component: MailHub }, { initial: "entities" } as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status({ canMail: true, canMailSettings: true }),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          calls.push({ name, args });
+          if (name === "mail_entities") return { result: { items: [entity] } };
+          if (name === "mail_defaults") return { result: { general: { legal_entity_id: "", sender_id: "" }, audiences: {} } };
+          return { result: {} };
+        },
+      } as never,
+    });
+    const area = (await screen.findByLabelText("Подпись")) as HTMLTextAreaElement;
+    expect(area.value).toContain("{{sender.name}}");
+    fireEvent.change(area, { target: { value: "Kind regards,\n{{sender.name}}\nWhatsApp: +7 900" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    await waitFor(() => expect(calls.find((c) => c.name === "mail_entity_save")).toBeTruthy());
+    expect(calls.find((c) => c.name === "mail_entity_save")?.args).toEqual({
+      id: "e1", code: "msg", name: "MSG", full_name: "LLC MSG", details: "INN 1", address: "St. Petersburg", website: "https://msgcargo.com",
+      phone: "", subdomain: "msg.manifestmail.fyi", language: "en", sandbox: true, signature: "Kind regards,\n{{sender.name}}\nWhatsApp: +7 900", footer: "LLC MSG",
+    });
+  });
+});
+
+describe("attachments: files beside the RFQ", () => {
+  it("adds a file from the computer and removes one, keeping the RFQ", async () => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    const sheet = { kind: "procurement_sheet", scope: "catalog", source: "auto" };
+    const old = { kind: "file", file_id: "f-old", filename: "old terms.pdf", size: 120_000 };
+    renderSlot({ component: DraftAttachments }, { companyId: "c1", specs: [sheet, old], onSaved: () => undefined } as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status(),
+        tool: ({ name, args }: { name: string; args: Record<string, unknown> }) => {
+          calls.push({ name, args });
+          if (name === "mail_file_upload") return { result: { id: "f-new", filename: args.filename, size: 5 } };
+          return { result: {} };
+        },
+      } as never,
+    });
+    expect(screen.getByText("old terms.pdf")).toBeTruthy();
+    expect(screen.getByText("117 КБ")).toBeTruthy();
+    const input = screen.getByLabelText("Файл во вложение") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["hello"], "profile.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => expect(calls.map((c) => c.name)).toEqual(["mail_file_upload", "mail_draft_attachments"]));
+    expect(calls[0].args).toMatchObject({ filename: "profile.pdf", content_type: "application/pdf", content_base64: btoa("hello") });
+    expect(calls[1].args.attachments).toEqual([sheet, { kind: "file", file_id: "f-old" }, { kind: "file", file_id: "f-new" }]);
+    fireEvent.click(screen.getByRole("button", { name: "Убрать old terms.pdf" }));
+    await waitFor(() => expect(calls.at(-1)?.args.attachments).toEqual([sheet]));
   });
 });
 

@@ -2,7 +2,7 @@
 // Сводка (сколько уйдёт, кого пропустим и почему), список получателей и письмо каждого
 // «как уйдёт» с листанием ← →. Директива ::manifest-mailing{id="…"} в чате и страница
 // «Почта аутрича → Рассылки». Отправка — следующая версия.
-import { AttachmentPicker, specsOf } from "./attachments";
+import { AttachmentPicker, availableOf, specsOf } from "./attachments";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRealtime, type PluginMessageDirectiveProps } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
@@ -265,7 +265,7 @@ export function MailingView({
                   <AttachmentPicker
                     specs={specsOf(letter.recipient.attachment_specs)}
                     inherit={!letter.recipient.own_attachments}
-                    available={letter.preview.attachments?.[0]?.available ?? letter.recipient.attachments?.[0]?.available}
+                    available={availableOf(letter.preview.attachments) ?? availableOf(letter.recipient.attachments)}
                     busy={busy}
                     onChange={async (next) => {
                       setBusy(true);

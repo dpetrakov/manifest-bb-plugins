@@ -4,6 +4,33 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.16.4
+
+- Only the sandbox is marked: the «бой» badge is gone everywhere — live is the normal state.
+  A mailing partly in the sandbox is marked «песочница».
+- One way to move in «Почта аутрича» and «Закупочный лист»: the section's name and its tabs
+  stay on top — also inside a template, a mailing or an inbound message (the tab of its
+  list is active); «back» is one compact line «← list · what is open» with its actions on
+  the right (they wrap on a phone). The section's name is no longer shown twice.
+- «Рассылки» fit a narrow panel: the state and the counts go under the name.
+- «Почта аутрича → Юрлица и отправители»: the signature ({{signature}}) and the footer of a
+  legal entity are edited in the plugin (placeholders and the templates' markup work there);
+  the template editor links to them («Изменить подпись и подвал →»).
+- «Back» from an object of the mail names its list and opens the hub on it: a template →
+  «← Шаблоны», a mailing → «← Рассылки», an inbound message → «← Неразобранные входящие»
+  (before: «← Почта аутрича», always on «Рассылки»).
+- «Manifest недоступен» names the cause instead of «fetch failed»: a connect timeout (the
+  network of the bb server's machine does not reach Manifest), DNS, a refused connection or
+  a certificate.
+- Any file in a letter beside the RFQ (Manifest update, migration 00063): «+ Файл» uploads one
+  from the computer, «✕» removes it — in a draft, a mailing, a template and for a single
+  recipient of a mailing (remove the mailing's file for some companies or give them
+  another). Up to 5 attachments and 7 MB per letter; the preview says when it is over.
+- The agent attaches a file sent to it in the chat: `mail_file_from_thread {path}` reads it
+  from the thread's own storage on the thread's host and uploads it to Manifest (the agent
+  never carries the bytes); a path outside that storage is refused. Then the file goes into
+  the attachments of a draft, a mailing or one recipient. A person sends.
+
 ## manifest 0.16.3
 
 - The agent checks the tag «каталог проверен» and the comment «Каталог с сайта (дата): …»

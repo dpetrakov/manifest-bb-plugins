@@ -216,7 +216,13 @@ export function SendLetterButton({ letter, companyId, onSent, compact }: { lette
             </dd>
             <dt className="text-muted-foreground">Куда</dt>
             <dd>
-              <ModeBadge sandbox={sandbox} /> {sandbox ? "настоящему адресу не уйдёт" : "настоящему адресату"}
+              {sandbox ? (
+                <>
+                  <ModeBadge sandbox /> настоящему адресу не уйдёт
+                </>
+              ) : (
+                "настоящему адресату"
+              )}
             </dd>
             <dt className="text-muted-foreground">Когда</dt>
             <dd>в порядке очереди юрлица</dd>
@@ -496,11 +502,17 @@ export function MailingSendBar({ mailing: live, onChanged }: { mailing: Mailing;
               <dd>
                 {mailing.mode === "mixed" ? (
                   <>
-                    <ModeBadge sandbox /> и <ModeBadge sandbox={false} /> — разные юрлица
+                    часть писем — <ModeBadge sandbox />, часть — настоящим адресатам (разные юрлица)
                   </>
                 ) : (
                   <>
-                    <ModeBadge sandbox={sandbox} /> {sandbox ? "настоящим адресатам не уйдёт" : "настоящим адресатам"}
+                    {sandbox ? (
+                      <>
+                        <ModeBadge sandbox /> настоящим адресатам не уйдёт
+                      </>
+                    ) : (
+                      "настоящим адресатам"
+                    )}
                   </>
                 )}
               </dd>

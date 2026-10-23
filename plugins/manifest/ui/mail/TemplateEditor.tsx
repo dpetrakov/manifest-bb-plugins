@@ -18,6 +18,7 @@ import type { Draft, rpcContract } from "../../server";
 import { errorText, useStatus, useTool } from "../hooks";
 import { Note } from "../RegistryList";
 import { ChatsList } from "../workspace/ObjectPanel";
+import { useOpenMailTab } from "./hubTabs";
 import {
   AUDIENCE_LABEL,
   CompanyPicker,
@@ -72,6 +73,7 @@ export function TemplateEditor({
   const sdk = useSdk();
   const navigate = useBbNavigate();
   const { status } = useStatus();
+  const openMailTab = useOpenMailTab();
   const [tpl, setTpl] = useState<Template | null>(null);
   // EP-113: what letters from the template carry (saved with the next version).
   const [attachments, setAttachments] = useState<AttachmentSpec[]>([]);
@@ -293,6 +295,12 @@ export function TemplateEditor({
         <Field label="Текст" hint="Абзацы — пустой строкой, списки «- », **жирный**, [текст](https://…). Подвал с реквизитами добавится сам. Чего может не быть у получателя — во фрагмент: [[ in {{company.city}}]] исчезнет без города; варианты: [[Dear {{person.name}}, || Dear Sir or Madam,]]; запасное: {{person.name | &quot;Sir or Madam&quot;}}.">
           <textarea ref={bodyRef} className={cn(areaCls, "min-h-56")} value={draft.body ?? ""} onChange={(e) => edit({ body: e.target.value })} />
         </Field>
+        <p className="text-[11px] text-muted-foreground">
+          {"{{signature}}"} и подвал задаются у юрлица отправителя — одни на все его письма.{" "}
+          <button type="button" className="text-foreground underline-offset-2 hover:underline" onClick={() => openMailTab("entities")}>
+            Изменить подпись и подвал →
+          </button>
+        </p>
         <div className="flex flex-wrap gap-1">
           {fields.map((f) => (
             <button

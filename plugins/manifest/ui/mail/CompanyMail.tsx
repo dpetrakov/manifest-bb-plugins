@@ -1,6 +1,6 @@
 // Блок «Почта» карточки организации (W-16, EP-085): кто ей пишет — юрлицо и адрес
 // (свой или по умолчанию) и что мешает отправке. Смена — при outreach.manage.
-import { DraftAttachments, specsOf } from "./attachments";
+import { DraftAttachments, availableOf, specsOf } from "./attachments";
 import { useCallback, useEffect, useState } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { Button } from "@/components/ui/button";
@@ -63,7 +63,7 @@ export function CompanyMail({ companyId }: { companyId: string }) {
   };
 
   if (!cs) return <p className="text-xs text-muted-foreground">{error ?? "Загружаем…"}</p>;
-  // Режим показываем, только если Manifest его прислал: без поля «бой» был бы неправдой.
+  // Песочницу помечаем, только если Manifest прислал режим; бой бейджа не имеет.
   const mode = cs.legal_entity && "sandbox" in cs.legal_entity ? <ModeBadge sandbox={cs.legal_entity.sandbox} /> : null;
   const who = cs.sender ? `${cs.sender.display_name} <${cs.sender.address}>${cs.legal_entity ? ` · ${cs.legal_entity.name}` : ""}` : "не задан";
   return (
@@ -167,7 +167,7 @@ function DraftBlock({ companyId, canEdit }: { companyId: string; canEdit: boolea
             <DraftAttachments
               companyId={companyId}
               specs={specsOf(letter.draft.attachments)}
-              available={letter.preview.attachments?.[0]?.available}
+              available={availableOf(letter.preview.attachments)}
               onSaved={(l) => setLetter(l as Letter)}
             />
           ) : null}
