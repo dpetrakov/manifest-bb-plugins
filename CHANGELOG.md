@@ -4,6 +4,34 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.17.0
+
+Needs Manifest with `mail_mailing_recipient` and `mail_mailing_recipient_address` (core update,
+no migration).
+
+- The agent prepares the recipients of its mailing without a person opening each card: from the
+  mailing chat it reads a recipient's card and adds contact persons, emails (the primary
+  address included) and comments with the source. Every such call carries `mailing_id`;
+  Manifest checks the organisation is on that mailing now and the mailing is still a draft
+  (refused: not a recipient, removed, no such mailing, already sent). Status, «do not
+  contact», deletions, touches and letter drafts of that organisation stay with a person.
+- `manifest_focus_open {kind: company}` opens a recipient of a mailing of the thread on the
+  right (Manifest confirms the recipient); the mailing goes to the trail, «← mailing» goes
+  back. Other objects are still opened by a person. An organisation a person opens is an
+  ordinary one of the chain again.
+- The default address of a letter follows the organisation's **primary** email (and the
+  person it belongs to) — before, the first email by creation date won and a new primary
+  changed nothing. A recipient may be pinned to a person / email for one mailing
+  (`mail_mailing_recipient_address`); a pin survives a new primary, and a pinned email that
+  became invalid or bounced stops the letter with a reason instead of silently going to
+  another address.
+- Adding an email the card already has names its `contact_id` to edit instead of a bare
+  «already exists».
+- `outreach_list_companies` sorts by the share of the procurement sheet's **positions**
+  (`sort=coverage_positions`) or volume (`coverage_volume`; `coverage` stays volume).
+- The mailing chat sees the legal entities and channel (`mail_entities`) to check the sender
+  and the live / sandbox mode.
+
 ## manifest 0.16.4
 
 - Only the sandbox is marked: the «бой» badge is gone everywhere — live is the normal state.

@@ -24,6 +24,13 @@ export const threadFocusSchema = z.object({
   trail: z.array(focusRefSchema),
   /** «kind:id» of objects the agent created in this thread — it may focus them. */
   created: z.array(z.string()),
+  /**
+   * «company:id» → mailing id: organisations the agent opened as recipients of a mailing
+   * of this thread (workspace.md §2.6). Their writes stay bound to that mailing: only the
+   * recipient tools, each call carrying mailing_id that Manifest checks. A person opening
+   * the organisation drops the entry (then it is an ordinary organisation of the chain).
+   */
+  via: z.record(z.string(), z.string().max(64)).optional(),
 });
 export type ThreadFocus = z.infer<typeof threadFocusSchema>;
 
@@ -66,6 +73,24 @@ export function chain(tf: ThreadFocus): FocusRef[] {
   return tf.focus ? [...tf.trail, tf.focus] : [...tf.trail];
 }
 
+/** The mailing an organisation was opened through by the agent (null — opened by a person). */
+export function viaOf(tf: ThreadFocus, companyId: string): string | null {
+  return tf.via?.[`company:${companyId}`] ?? null;
+}
+
+/** Organisations of the chain a person opened (or reached from them): fully writable. */
+export function openedCompanies(tf: ThreadFocus): string[] {
+  return idsOf(tf, "company").filter((id) => !viaOf(tf, id));
+}
+
+/** Sets or drops the «opened through a mailing» mark of an organisation. */
+export function withVia(tf: ThreadFocus, companyId: string, mailingId: string | null): ThreadFocus {
+  const via = { ...(tf.via ?? {}) };
+  if (mailingId) via[`company:${companyId}`] = mailingId;
+  else delete via[`company:${companyId}`];
+  return { ...tf, via };
+}
+
 /** Ids of objects of a kind in the chain. */
 export function idsOf(tf: ThreadFocus, kind: FocusKind): string[] {
   return chain(tf)
@@ -94,11 +119,20 @@ export const KIND_TITLE: Record<FocusKind, string> = {
  * session start and again in the result of every focus change: instructions don't
  * change inside a running session.
  */
-export function rulesFor(ref: FocusRef, opts: { work: boolean; mail: boolean }): string {
+export function rulesFor(ref: FocusRef, opts: { work: boolean; mail: boolean; via?: string | null }): string {
   // Ids and titles come from storage and metadata: always quoted, never raw text.
   const id = JSON.stringify(ref.id.slice(0, 64));
   switch (ref.kind) {
     case "company":
+      if (opts.via) {
+        return [
+          `Справа — карточка организации ${JSON.stringify(ref.title)} (id ${id}), открытая как получатель рассылки ${JSON.stringify(opts.via.slice(0, 64))}.`,
+          "Готовь её к письму: читай outreach_get_company; контактные лица — outreach_save_person, каналы и основной email — outreach_save_contact (person_id — чей адрес, is_primary — основной), " +
+            "источник найденного — outreach_add_comment (ссылка и дата). Дубль email не добавляется: Manifest вернёт contact_id существующего — правь его.",
+          "Каждая правка идёт от рассылки: Manifest проверяет, что организация в ней и рассылка ещё черновик. Статус, удаление, касания и письма этой организации — только когда человек откроет её сам.",
+          "Письмо получателя — mail_mailing_letter; закрепить адресата — mail_mailing_recipient_address. Вернуться к рассылке — manifest_focus_open {kind: mailing}.",
+        ].join("\n");
+      }
       return [
         `Справа — карточка организации ${JSON.stringify(ref.title)} (id ${id}).`,
         "Читай её outreach_get_company, меняй инструментами outreach_*; каждое изменение пишется в историю с пометкой «агент BB».",
@@ -118,6 +152,10 @@ export function rulesFor(ref: FocusRef, opts: { work: boolean; mail: boolean }):
         `Справа — рассылка ${JSON.stringify(ref.title)} (id ${id}): сводка «уйдёт / не уйдёт», получатели и письмо каждого.`,
         "Получатели — mail_mailing_add / mail_mailing_remove (company_ids или filter), текст — mail_mailing_update целиком, " +
           "с подстановками и фрагментами [[ … || … ]], чтобы письмо подходило каждому. Сводка — mail_mailing_get, письмо получателя — mail_mailing_letter.",
+        "Карточки получателей готовишь отсюда, пока рассылка черновик: читай outreach_get_company, добавляй лиц (outreach_save_person), email и основной адрес (outreach_save_contact), источник (outreach_add_comment) — " +
+          "Manifest на каждом вызове проверяет, что организация в этой рассылке. Открыть карточку справа — manifest_focus_open {kind: company, id}, вернуться — {kind: mailing}. " +
+          "Адресат по умолчанию — основной email организации (с его лицом) и пересчитывается сразу; закрепить другой — mail_mailing_recipient_address (пустая строка — снять). Проверка — mail_mailing_letter.",
+        "Отправитель и режим — mode и senders в mail_mailing_get, юрлица и канал — mail_entities.",
         "Список получателей и письма в ответ не печатай — пользователь видит их справа. Удалить рассылку — mail_mailing_discard, только по явной просьбе.",
         "Отправляет и останавливает рассылку человек кнопкой; ты не отправляешь. После отправки прогресс — в mail_mailing_get (progress), ответы ведутся в чатах организаций.",
       ].join("\n");

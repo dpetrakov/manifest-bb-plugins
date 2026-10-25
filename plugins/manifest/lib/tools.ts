@@ -28,7 +28,8 @@ export const filterSchema = z.object({
   ids: opt(z.array(z.string()), "конкретные организации"),
   role: opt(z.string(), "роль: potential_supplier — потенциальный поставщик, supplier — поставщик закупок"),
 });
-// sort=coverage with desc=true puts the best coverage of the procurement sheet first.
+// Coverage of the procurement sheet: sort=coverage_positions (share of positions) or
+// coverage_volume (= coverage, by volume), with desc=true — the best first.
 export type Filter = z.infer<typeof filterSchema>;
 
 const nextActionSchema = z.object({
@@ -75,12 +76,15 @@ export type ToolScope = "company" | "dashboard" | "template" | "mailing" | "inbo
 export const AGENT_TOOLS = {
   outreach_list_companies: {
     write: false,
-    scopes: ["company", "dashboard", "template", "inbound"],
+    scopes: ["company", "dashboard", "template", "inbound", "mailing"],
     description:
       "Список потенциальных поставщиков Manifest с фильтрами (страна, регион, приоритет, статусы, метки, ответственный, внимание, давность касания, поиск).",
     parameters: filterSchema.extend({
       status: opt(z.string(), "один статус воронки"),
-      sort: opt(z.string(), "priority, name, country, region, status, updated, last_touch, last_inbound, next_action"),
+      sort: opt(
+        z.string(),
+        "priority, name, country, region, status, updated, last_touch, last_inbound, next_action; покрытие закупочного листа: coverage_positions — по доле позиций, coverage_volume (= coverage) — по объёму (с desc=true — лучшие сверху)",
+      ),
       desc: opt(z.boolean(), "по убыванию"),
       limit: opt(z.number().int().min(1).max(200), "размер страницы"),
       offset: opt(z.number().int().min(0), "смещение"),
@@ -88,7 +92,7 @@ export const AGENT_TOOLS = {
   },
   outreach_get_company: {
     write: false,
-    scopes: ["company", "dashboard", "template", "inbound"],
+    scopes: ["company", "dashboard", "template", "inbound", "mailing"],
     description: "Карточка организации: реквизиты, страны, каналы связи, контактные лица, комментарии, история правок.",
     parameters: z.object({ id }),
   },
@@ -222,8 +226,10 @@ export const AGENT_TOOLS = {
   },
   outreach_save_contact: {
     write: true,
-    scopes: ["company"],
-    description: "Добавить канал связи (без contact_id) или изменить существующий.",
+    scopes: ["company", "mailing"],
+    recipient: true,
+    description:
+      "Добавить канал связи (без contact_id) или изменить существующий: person_id — чей канал, is_primary — основной своего типа (основной email — адрес писем по умолчанию). Правка заменяет поля канала целиком (передай type, value_raw, person_id, label, verification как в карточке). Тот же email второй раз не добавляется — Manifest вернёт contact_id существующего, правь его.",
     parameters: z.object({
       company_id: id,
       contact_id: opt(z.string(), "id канала для правки"),
@@ -233,6 +239,7 @@ export const AGENT_TOOLS = {
       person_id: opt(z.string(), "id контактного лица"),
       is_primary: opt(z.boolean(), "основной канал"),
       verification: opt(z.string(), "unknown, valid, invalid, bounced"),
+      mailing_id: opt(z.string(), "рассылка, получателя которой ты готовишь (вне чата организации; по умолчанию — рассылка этого треда, через которую открыта карточка или что справа)"),
     }),
   },
   outreach_delete_contact: {
@@ -243,8 +250,9 @@ export const AGENT_TOOLS = {
   },
   outreach_save_person: {
     write: true,
-    scopes: ["company"],
-    description: "Добавить контактное лицо (без person_id) или изменить существующее.",
+    scopes: ["company", "mailing"],
+    recipient: true,
+    description: "Добавить контактное лицо (без person_id) или изменить существующее. Его email — outreach_save_contact с person_id этого лица.",
     parameters: z.object({
       company_id: id,
       person_id: opt(z.string(), "id лица для правки"),
@@ -254,6 +262,7 @@ export const AGENT_TOOLS = {
       languages: opt(z.array(z.string()), "языки"),
       is_decision_maker: opt(z.boolean(), "принимает решения"),
       note: opt(z.string(), "заметка"),
+      mailing_id: opt(z.string(), "рассылка, получателя которой ты готовишь (вне чата организации; по умолчанию — рассылка этого треда, через которую открыта карточка или что справа)"),
     }),
   },
   outreach_delete_person: {
@@ -264,9 +273,15 @@ export const AGENT_TOOLS = {
   },
   outreach_add_comment: {
     write: true,
-    scopes: ["company"],
-    description: "Добавить комментарий к организации.",
-    parameters: z.object({ company_id: id, body: z.string(), pinned: opt(z.boolean(), "закрепить") }),
+    scopes: ["company", "mailing"],
+    recipient: true,
+    description: "Добавить комментарий к организации (например, источник найденного контакта: ссылка и дата).",
+    parameters: z.object({
+      company_id: id,
+      body: z.string(),
+      pinned: opt(z.boolean(), "закрепить"),
+      mailing_id: opt(z.string(), "рассылка, получателя которой ты готовишь (вне чата организации; по умолчанию — рассылка этого треда, через которую открыта карточка или что справа)"),
+    }),
   },
   // ---- W-15: work layer (Manifest capability "outreach.work") ----
   outreach_queue: {
@@ -382,7 +397,7 @@ export const AGENT_TOOLS = {
   },
   mail_company_sender: {
     write: false,
-    scopes: ["company"],
+    scopes: ["company", "mailing"],
     description: "Кто пишет организации: юрлицо и адрес отправителя (свой или по умолчанию) и что мешает отправке.",
     parameters: z.object({ company_id: id }),
   },
@@ -470,6 +485,26 @@ export const AGENT_TOOLS = {
     scopes: ["company", "dashboard", "mailing"],
     description: "Письмо рассылки для одного получателя — как оно уйдёт (company_id или номер index с 0).",
     parameters: z.object({ id, company_id: opt(z.string(), "получатель"), index: opt(z.number().int().min(0), "номер получателя") }),
+  },
+  mail_mailing_recipient: {
+    write: false,
+    scopes: ["company", "dashboard", "mailing"],
+    description:
+      "Получатель рассылки: организация в ней сейчас или нет (ошибка), черновик ли рассылка (editable), закреплённые person_id/contact_id (null — адрес по умолчанию: основной email организации и его лицо).",
+    parameters: z.object({ id, company_id: id }),
+  },
+  mail_mailing_recipient_address: {
+    write: true,
+    prep: true,
+    scopes: ["company", "dashboard", "mailing"],
+    description:
+      "Закрепить адресата письма одного получателя рассылки-черновика: contact_id — email-канал организации, person_id — лицо для обращения; пустая строка — снять (тогда основной email организации, пересчитывается сразу). Закреплённое не меняется при смене основного. Возвращает письмо получателя.",
+    parameters: z.object({
+      id,
+      company_id: id,
+      contact_id: opt(z.string(), "email-канал; пустая строка — снять закрепление"),
+      person_id: opt(z.string(), "контактное лицо; пустая строка — снять"),
+    }),
   },
   mail_mailing_create: {
     write: true,
@@ -587,11 +622,11 @@ export const AGENT_TOOLS = {
   },
   mail_entities: {
     write: false,
-    scopes: ["company", "template"],
+    scopes: ["company", "template", "mailing"],
     description: "Юрлица-отправители с адресами, готовностью и состоянием канала (без токенов).",
     parameters: z.object({}),
   },
-} as const satisfies Record<string, { write: boolean; prep?: boolean; local?: boolean; scopes: readonly ToolScope[]; description: string; parameters: z.ZodTypeAny }>;
+} as const satisfies Record<string, { write: boolean; prep?: boolean; local?: boolean; recipient?: boolean; scopes: readonly ToolScope[]; description: string; parameters: z.ZodTypeAny }>;
 
 /** Writes that prepare mail and change no organisation (mailings): allowed outside a company chat. */
 /** A tool the plugin runs itself (not a call of a Manifest tool of the same name). */
@@ -601,6 +636,15 @@ export function isLocal(name: AgentToolName): boolean {
 
 export function isPrep(name: AgentToolName): boolean {
   return "prep" in AGENT_TOOLS[name] && (AGENT_TOOLS[name] as { prep?: boolean }).prep === true;
+}
+
+/**
+ * A card write allowed for a recipient of a mailing of the thread (workspace.md §2.6):
+ * persons, channels and the primary address, comments. Each such call carries mailing_id
+ * and Manifest checks the organisation is on that draft mailing.
+ */
+export function isRecipientWrite(name: AgentToolName): boolean {
+  return "recipient" in AGENT_TOOLS[name] && (AGENT_TOOLS[name] as { recipient?: boolean }).recipient === true;
 }
 
 export type AgentToolName = keyof typeof AGENT_TOOLS;
@@ -617,7 +661,7 @@ export const WORK_TOOLS = new Set<string>([
 export const MAIL_TOOLS = new Set<string>([
   "mail_fields", "mail_templates", "mail_template_get", "mail_preview", "mail_company_sender", "mail_company_sender_set",
   "mail_entities", "mail_draft_get", "mail_draft_create", "mail_draft_update", "mail_draft_attachments", "mail_draft_discard",
-  "mail_mailings", "mail_mailing_get", "mail_mailing_letter", "mail_mailing_create", "mail_mailing_update", "mail_mailing_recipient_attachments",
+  "mail_mailings", "mail_mailing_get", "mail_mailing_letter", "mail_mailing_recipient", "mail_mailing_recipient_address", "mail_mailing_create", "mail_mailing_update", "mail_mailing_recipient_attachments",
   "mail_mailing_add", "mail_mailing_remove", "mail_mailing_discard", "mail_inbound_get", "mail_inbound_link", "mail_inbound_mark",
   "mail_message_get", "mail_messages", "mail_file_from_thread",
 ]);
@@ -662,7 +706,7 @@ export const READ_TOOLS = new Set([
   "outreach_batches", "outreach_batch_preview",
   "mail_fields", "mail_entities", "mail_defaults", "mail_templates", "mail_template_get", "mail_preview",
   "mail_company_sender", "mail_inbound_list", "mail_inbound_get", "mail_entity_health", "mail_draft_get",
-  "mail_mailings", "mail_mailing_get", "mail_mailing_letter",
+  "mail_mailings", "mail_mailing_get", "mail_mailing_letter", "mail_mailing_recipient",
   "mail_message_get", "mail_messages", "mail_changes", "mail_blocked_countries",
   "procurement_needs", "procurement_import_preview",
   "assortment_sources", "assortment_items",
@@ -730,6 +774,8 @@ export const PANEL_TOOLS = new Set([
   "mail_mailings",
   "mail_mailing_get",
   "mail_mailing_letter",
+  "mail_mailing_recipient",
+  "mail_mailing_recipient_address",
   "mail_mailing_create",
   "mail_mailing_update",
   "mail_mailing_recipient_attachments",

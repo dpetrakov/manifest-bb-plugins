@@ -256,21 +256,24 @@ bb builds the plugins from source on install; no prebuilt artifacts are committe
 Manifest's MCP server publishes these tools. The panels can call all of them. The agent
 gets a set that depends on the kind of chat: in a **company chat** it reads and edits that
 one company; in a **dashboard topic** it reads the whole registry and changes data only
-through batch previews; in a **template topic** it edits only the template draft. The tools a session actually receives also depend on the user's
+through batch previews; in a **template topic** it edits only the template draft; in a
+**mailing chat** it prepares the cards of the mailing's recipients — contact persons,
+channels and the primary email, comments — each call carrying `mailing_id`, which Manifest
+checks against the mailing's current list while it is a draft (since 0.17.0). The tools a session actually receives also depend on the user's
 permissions.
 
 | Tool | Agent | Permission | Purpose |
 |---|:---:|---|---|
 | `manifest_whoami` | | signed in | Current user, permissions, contract version. |
 | `outreach_facets` | | `outreach.view` | Regions and countries with counts, dictionaries. |
-| `outreach_list_companies` | ✓ | `outreach.view` | Search and filter the registry. |
+| `outreach_list_companies` | ✓ | `outreach.view` | Search and filter the registry; `sort=coverage_positions` / `coverage_volume` — by the share of the procurement sheet's positions / volume. |
 | `outreach_get_company` | ✓ | `outreach.view` | Full card, including comments, history and source text. |
 | `outreach_update_company` | ✓ | `outreach.manage` | Fields, status, tags, “do not contact”, manual priority; optimistic locking with `expected_updated_at`. |
-| `outreach_save_contact` | ✓ | `outreach.manage` | Add or change a phone, mobile, WhatsApp, Telegram, fax, email or website. |
+| `outreach_save_contact` | ✓ company, mailing recipient | `outreach.manage` | Add or change a phone, mobile, WhatsApp, Telegram, fax, email or website; `is_primary`, `person_id`. A duplicate is refused with the existing `contact_id`. Optional `mailing_id`: the organisation must be a recipient of that draft mailing. |
 | `outreach_delete_contact` | ✓ | `outreach.manage` | Remove a contact channel. |
-| `outreach_save_person` | ✓ | `outreach.manage` | Add or change a contact person. |
+| `outreach_save_person` | ✓ company, mailing recipient | `outreach.manage` | Add or change a contact person; optional `mailing_id` as above. |
 | `outreach_delete_person` | ✓ | `outreach.manage` | Remove a contact person. |
-| `outreach_add_comment` | ✓ | `outreach.manage` | Comment on a company as the user. |
+| `outreach_add_comment` | ✓ company, mailing recipient | `outreach.manage` | Comment on a company as the user (e.g. the source of a found contact); optional `mailing_id` as above. |
 | `outreach_update_comment` | | `outreach.manage` | Edit or pin one's own comment. |
 | `outreach_delete_comment` | | `outreach.manage` | Delete one's own comment. |
 | `outreach_queue` | ✓ both | `outreach.view` | Today queue with a reason per row. |
@@ -288,7 +291,7 @@ permissions.
 | `outreach_batch_apply`, `outreach_batch_revert` | never | `outreach.manage` | Apply or revert a batch — refused when called by the agent. |
 | `manifest_dashboard_show` | ✓ topic | — | Plugin-local: set the topic filter shown on the dashboard. |
 | `mail_fields`, `mail_templates`, `mail_template_get`, `mail_preview` | ✓ all | `outreach.view` | Placeholders, templates with versions, and the rendered letter for an organisation or a sample. |
-| `mail_entities` | ✓ company, template | `outreach.view` | Legal entities, senders, channel health and quota; no tokens. |
+| `mail_entities` | ✓ company, template, mailing | `outreach.view` | Legal entities, senders, channel health and quota; no tokens. |
 | `mail_defaults` | | `outreach.view` | Default senders, overall and per audience. |
 | `mail_company_sender` | ✓ company | `outreach.view` | Who writes to the organisation and what blocks sending. |
 | `mail_company_sender_set` | ✓ company | `outreach.manage` | Change the organisation's legal entity and sender. |
@@ -300,10 +303,12 @@ permissions.
 | `mail_draft_create`, `mail_draft_update`, `mail_draft_discard` | ✓ company | `outreach.manage` | Start a letter from a template, edit subject/body (placeholders kept), drop it. |
 | `mail_mailings`, `mail_mailing_get`, `mail_mailing_letter` | ✓ company, topic | `outreach.view` | Mailings, their recipients with what will not go and why, one recipient's letter; shown by `::manifest-mailing`. |
 | `mail_mailing_create`, `mail_mailing_update`, `mail_mailing_add`, `mail_mailing_remove` | ✓ company, topic | `outreach.manage` | Prepare a mailing: from a draft or a template, recipients by id or filter, edit the text. Changes no organisation. |
+| `mail_mailing_recipient` | ✓ company, topic, mailing | `outreach.view` | Is an organisation a recipient of the mailing now, is the mailing a draft, its pinned person and email. |
+| `mail_mailing_recipient_address` | ✓ own mailing | `outreach.manage` | Pin (or unpin with an empty string) the person and email of one recipient of a draft mailing; a pin survives a change of the primary. |
 | `mail_mailing_discard` | | `outreach.manage` | Drop a mailing. |
 | `mail_message_get`, `mail_messages` | ✓ | `outreach.view` | A sent letter (status, replies) and the letters of an organisation or a mailing. |
 | `mail_send`, `mail_message_cancel`, `mail_mailing_send`, `mail_mailing_stop` | — (panels only) | `outreach.send` | Sending, cancelling and stopping — a person's button; Manifest refuses the agent. |
-| `manifest_focus_get`, `manifest_focus_open` | ✓ all | — | Plugin-local: what is on the right of the thread, and going back to an object of the thread's trail. |
+| `manifest_focus_get`, `manifest_focus_open` | ✓ all | — | Plugin-local: what is on the right of the thread; open an object of the thread's trail, one it created, or a recipient of its mailing (Manifest confirms the recipient). |
 | `manifest_template_draft` | ✓ template | — | Plugin-local: change the draft shown in the template editor. |
 
 The bundled agent skill [`manifest-outreach`](plugins/manifest/skills/manifest-outreach/SKILL.md)
