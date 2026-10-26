@@ -1,4 +1,6 @@
-// Agent tools of the plugin = Manifest MCP tools, contract v1 (EP-071).
+// Legacy descriptions (EP-071) and panel helpers. Agent exposure and canonical
+// schemas now come from Manifest tools/list (ADR-053); these scope helpers are
+// retained for legacy fixtures, never used as an access-control mechanism.
 //
 // The schemas describe the tools to the model; Manifest validates every call
 // again and checks the user's rights, so these are a description, not a guard.

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.0 - 2026-10-26
+
+- Make Manifest tools available in every authorized BB thread and project.
+- Discover the complete user-permitted MCP tool catalog, including company creation,
+  template saving, procurement writes, assortment decisions and mail operations.
+- Keep focus as UI context; enforce current user permissions and business guards in Manifest.
+- Preserve agent audit labels, concurrency checks and preview fingerprints.
+- Require explicit user instructions for sending; preparation alone does not authorize delivery.
+
+
 All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.

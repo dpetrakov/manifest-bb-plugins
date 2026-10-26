@@ -96,6 +96,48 @@ export async function callTool(
   return { structured: result.structuredContent ?? null, text };
 }
 
+/** Canonical tool catalog, filtered by Manifest's current user rights. */
+export interface ManifestTool {
+  name: string;
+  description?: string;
+  inputSchema: Record<string, unknown>;
+}
+
+export async function listTools(baseUrl: string, token: string, fetchImpl: Fetch = fetch): Promise<ManifestTool[]> {
+  if (!baseUrl || !token) throw new ManifestError("Плагин не подключён к Manifest", "unauthorized");
+  const tools: ManifestTool[] = [];
+  let cursor: string | undefined;
+  const cursors = new Set<string>();
+  do {
+    let resp: Response;
+    try {
+      resp = await fetchImpl(`${baseUrl}/api/mcp`, {
+        method: "POST",
+        signal: AbortSignal.timeout(10_000),
+        headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream",
+          Authorization: `Bearer ${token}`, "MCP-Protocol-Version": PROTOCOL_VERSION, "X-Manifest-Actor-Kind": "agent" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: nextId++, method: "tools/list", params: cursor ? { cursor } : {} }),
+      });
+    } catch (error) { throw new ManifestError(`Manifest недоступен: ${netReason(error)}`, "unavailable"); }
+    if (resp.status === 401) throw new ManifestError("Токен недействителен или отозван — войдите снова", "unauthorized");
+    if (!resp.ok) throw new ManifestError(`Manifest ответил ${resp.status}`, "unavailable");
+    const body = await resp.json() as { error?: { message?: string }; result?: { tools?: ManifestTool[]; nextCursor?: string } };
+    if (body.error || !Array.isArray(body.result?.tools)) throw new ManifestError(body.error?.message ?? "Некорректный каталог инструментов Manifest", "protocol");
+    for (const tool of body.result.tools) {
+      if (!/^[a-z][a-z0-9_]{0,63}$/.test(tool.name) || tool.inputSchema?.type !== "object" || JSON.stringify(tool.inputSchema).length > 128 * 1024) {
+        throw new ManifestError("Некорректная схема инструмента Manifest", "protocol");
+      }
+      tools.push(tool);
+    }
+    cursor = body.result.nextCursor;
+    if (cursor && cursors.has(cursor)) throw new ManifestError("Повтор курсора каталога Manifest", "protocol");
+    if (cursor) cursors.add(cursor);
+    if (tools.length > 500) throw new ManifestError("Каталог Manifest слишком велик", "protocol");
+  } while (cursor);
+  if (new Set(tools.map(t => t.name)).size !== tools.length) throw new ManifestError("Повтор инструмента Manifest", "protocol");
+  return tools;
+}
+
 /**
  * Why a request did not reach Manifest, in words: fetch says only «fetch failed», the cause
  * (undici) tells a timeout from DNS, a refused connection or a certificate — what the

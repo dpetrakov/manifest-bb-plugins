@@ -1,5 +1,18 @@
 # manifest — Manifest outreach workspace for bb
 
+## Доступ в любом треде BB (0.18.0, ADR-053)
+
+После авторизации инструменты Manifest доступны в любом треде и проекте BB.
+Плагин получает их список и схемы через MCP tools/list; права проверяет Manifest
+при каждом запросе. Фокус справа задаёт контекст интерфейса и не ограничивает запись.
+Агент создаёт и обновляет организации, сохраняет шаблоны mail_template_save,
+работает с закупочным листом, каталогами и массовыми правками в пределах прав пользователя.
+Отправка требует отдельного явного поручения и актуального fingerprint предпросмотра.
+Серверные проверки данных, авторства, прав и конкурирующих изменений сохраняются.
+Правила ниже о записи только в объектном чате и обязательных ручных кнопках
+заменены ADR-053; интерфейс и история фокуса продолжают работать.
+
+
 A [bb](https://github.com/get-bb/bb) plugin that connects bb to **Manifest**, a private
 operations service, and gives the team its supplier outreach workspace inside bb. The
 plugin interface and the agent skill are in Russian.

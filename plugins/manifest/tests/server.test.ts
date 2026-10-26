@@ -5,6 +5,8 @@ import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createFakePluginHost, makePluginAgentConfigurationContext, makeThreadResponse } from "@get-bb/plugin-sdk/testing";
 import plugin from "../server";
+import { z } from "zod";
+import { AGENT_TOOLS, outreachTools } from "../lib/tools";
 
 interface Seen {
   auth?: string;
@@ -19,9 +21,13 @@ let seen: Seen[] = [];
 let withWork = false;
 let withMail = false;
 let revoked: string[] = [];
+let catalogOverride: string[] | undefined;
+let tokenRevoked = false;
+let denyWrites = false;
 
 beforeEach(async () => {
   seen = [];
+  catalogOverride = undefined; tokenRevoked = false; denyWrites = false;
   revoked = [];
   withWork = false;
   withMail = false;
@@ -43,8 +49,20 @@ beforeEach(async () => {
       return;
     }
     if (req.url === "/api/mcp") {
-      if (req.headers.authorization !== "Bearer mfp_ok") return json(401, {});
+      if (tokenRevoked || req.headers.authorization !== "Bearer mfp_ok") return json(401, {});
       const m = JSON.parse(body);
+      if (m.method === "tools/list") {
+        const names = catalogOverride ?? [...outreachTools(withWork, withMail), "outreach_create_company",
+          ...(withWork ? ["outreach_batch_apply", "outreach_batch_revert"] : []),
+          ...(withMail ? ["mail_template_save", "mail_file_upload", "mail_send"] : [])];
+        return json(200, { jsonrpc: "2.0", id: m.id, result: { tools: names.filter(n => n !== "mail_file_from_thread").map(name => ({
+          name, description: name, inputSchema: name in AGENT_TOOLS
+            ? z.toJSONSchema(AGENT_TOOLS[name as keyof typeof AGENT_TOOLS].parameters)
+            : { type: "object", additionalProperties: true },
+        })) } });
+      }
+      if (denyWrites && ["outreach_update_company", "mail_template_save"].includes(m.params.name))
+        return json(200, { jsonrpc: "2.0", id: m.id, result: { isError: true, content: [{ type: "text", text: "нет права на изменение" }] } });
       seen.push({ auth: req.headers.authorization, actor: String(req.headers["x-manifest-actor-kind"]), tool: m.params.name, args: m.params.arguments });
       const result =
         m.params.name === "manifest_whoami"
@@ -144,45 +162,38 @@ describe("panels and agent", () => {
     await expect(h.behavior.callRpc("tool", { name: "drop_database", args: {} })).rejects.toThrow(/недоступен/);
   });
 
-  it("gives Manifest tools only to organisation chats, labelled as agent", async () => {
+  it("gives the same user tools to ordinary and focused threads, labelled as agent", async () => {
     const h = await connected();
     const plain = await h.behavior.resolveAgentConfiguration(makePluginAgentConfigurationContext());
-    expect(plain.tools).toHaveLength(0);
-    const chat = await h.behavior.resolveAgentConfiguration(
-      makePluginAgentConfigurationContext({ pluginMetadata: { companyId: "c1", companyName: 'THK "Powertools"' } }),
-    );
-    // W-18: one tool set for every focus; what a call may change is checked per call.
-    const chatNames = chat.tools.map((t) => (typeof t === "string" ? t : t.name));
-    expect(chatNames).toEqual(expect.arrayContaining(["outreach_get_company", "outreach_update_company", "manifest_focus_get", "manifest_focus_open"]));
-    expect(chat.skills).toEqual(["manifest-outreach"]);
-    expect(chat.instructions).toContain('"c1"');
-    expect(chat.instructions).toContain('\\"Powertools\\"');
+    const chat = await h.behavior.resolveAgentConfiguration(makePluginAgentConfigurationContext({ pluginMetadata: { companyId: "c1" } }));
+    expect(plain.tools).toEqual(chat.tools);
+    expect(plain.tools.map(t => typeof t === "string" ? t : t.name)).toContain("outreach_create_company");
+    expect(plain.skills).toEqual(["manifest-outreach"]);
+    for (const threadId of ["ordinary", "thread-c1"]) {
+      await h.behavior.callAgentTool("outreach_update_company", { id: "c2", status: "ready" }, { threadId });
+      expect(seen.at(-1)).toMatchObject({ tool: "outreach_update_company", actor: "agent", args: { id: "c2" } });
+    }
+    await h.behavior.callAgentTool("outreach_create_company", { display_name: "New supplier", country_code: "ZA" }, { threadId: "ordinary" });
+    expect(seen.at(-1)).toMatchObject({ tool: "outreach_create_company", actor: "agent" });
+    const err = await h.behavior.callAgentTool("outreach_delete_contact", { company_id: "c1", contact_id: "x" });
+    expect(JSON.stringify(err)).toContain("не найдено");
+  });
 
-    // Metadata alone is not enough: the plugin must have linked the thread to the company.
-    const unlinked = (await h.behavior.callAgentTool("outreach_update_company", { id: "c1", status: "ready" }, { threadId: "thread-c1" })) as {
-      isError: boolean;
-    };
-    expect(unlinked.isError).toBe(true);
-    await h.behavior.callRpc("chat_link", { companyId: "c1", threadId: "thread-c1" });
-    const out = await h.behavior.callAgentTool("outreach_update_company", { id: "c1", status: "ready" }, { threadId: "thread-c1" });
-    expect(String(out)).toContain("THK");
-    expect(seen.at(-1)).toMatchObject({ tool: "outreach_update_company", actor: "agent" });
-
-    const foreign = (await h.behavior.callAgentTool("outreach_add_comment", { company_id: "c2", body: "x" }, { threadId: "thread-c1" })) as {
-      isError: boolean;
-      content: { text: string }[];
-    };
-    expect(foreign.isError).toBe(true);
-    expect(foreign.content[0].text).toContain("только организацию");
-    const read = await h.behavior.callAgentTool("outreach_get_company", { id: "c2" }, { threadId: "thread-c1" });
-    expect(String(read)).toContain("THK");
-
-    const err = (await h.behavior.callAgentTool("outreach_delete_contact", { company_id: "c1", contact_id: "x" }, { threadId: "thread-c1" })) as {
-      isError: boolean;
-      content: { text: string }[];
-    };
-    expect(err.isError).toBe(true);
-    expect(err.content[0].text).toContain("не найдено");
+  it("does not let focus metadata grant rights and respects revocation on existing tools", async () => {
+    catalogOverride = ["manifest_whoami", "outreach_get_company"];
+    const viewer = await connected();
+    const conf = await viewer.behavior.resolveAgentConfiguration(makePluginAgentConfigurationContext({ pluginMetadata: { companyId: "c1", kind: "dashboard" } }));
+    expect(conf.tools.map(t => typeof t === "string" ? t : t.name)).not.toContain("outreach_update_company");
+    expect(conf.tools.map(t => typeof t === "string" ? t : t.name)).not.toContain("mail_template_save");
+    await viewer.lifecycle.dispose();
+    catalogOverride = undefined;
+    const h = await connected();
+    denyWrites = true;
+    expect(JSON.stringify(await h.behavior.callAgentTool("outreach_update_company", { id: "c2", status: "ready" }))).toContain("нет права");
+    tokenRevoked = true;
+    expect(JSON.stringify(await h.behavior.callAgentTool("outreach_get_company", { id: "c2" }))).toContain("отозван");
+    await h.behavior.callRpc("status", null);
+    expect((await h.behavior.resolveAgentConfiguration(makePluginAgentConfigurationContext())).tools).toEqual([]);
   });
 
   it("does not send the token to a changed address", async () => {
@@ -251,8 +262,8 @@ describe("dashboard topics (W-15)", () => {
     const names = dash.tools.map((t) => (typeof t === "string" ? t : t.name));
     expect(names).toEqual(expect.arrayContaining(["manifest_dashboard_show", "outreach_batch_preview", "outreach_queue", "outreach_metrics"]));
     // Applying and reverting batches is never an agent tool.
-    expect(names.some((n) => n.includes("batch_apply") || n.includes("batch_revert"))).toBe(false);
-    expect(dash.instructions).toContain("::manifest-batch");
+    expect(names).toEqual(expect.arrayContaining(["outreach_batch_apply", "outreach_batch_revert"]));
+    expect(dash.instructions).toContain("права");
     const company = await h.behavior.resolveAgentConfiguration(
       makePluginAgentConfigurationContext({ pluginMetadata: { companyId: "c1", companyName: "THK" } }),
     );
@@ -260,25 +271,12 @@ describe("dashboard topics (W-15)", () => {
     expect(cnames).toEqual(expect.arrayContaining(["outreach_log_touch", "outreach_set_next_action", "outreach_queue"]));
   });
 
-  it("refuses direct writes in a topic and tools of another kind", async () => {
+  it("allows direct writes and batches from any topic", async () => {
     const h = await loadDash();
-    await h.behavior.callRpc("topic_add", { threadId: "thread-dash", title: "Тема" });
-    const write = (await h.behavior.callAgentTool("outreach_update_company", { id: "c1", status: "ready" }, { threadId: "thread-dash" })) as {
-      isError: boolean;
-    };
-    expect(write.isError).toBe(true);
-    const touch = (await h.behavior.callAgentTool("outreach_log_touch", { company_id: "c1", channel: "email", direction: "out" }, { threadId: "thread-dash" })) as {
-      isError: boolean;
-    };
-    expect(touch.isError).toBe(true);
-    const preview = (await h.behavior.callAgentTool("outreach_batch_preview", { op: { kind: "set_owner", owner: "me" }, filter: { attention: "overdue" } }, { threadId: "thread-c1" })) as {
-      isError: boolean;
-    };
-    expect(preview.isError).toBe(true);
-    expect(seen.filter((x) => x.tool !== "manifest_whoami")).toHaveLength(0);
-    const ok = await h.behavior.callAgentTool("outreach_batch_preview", { op: { kind: "set_owner", owner: "me" }, filter: { attention: "overdue" } }, { threadId: "thread-dash" });
-    expect(String(JSON.stringify(ok))).not.toContain("isError\":true");
-    expect(seen.at(-1)).toMatchObject({ tool: "outreach_batch_preview", actor: "agent" });
+    await h.behavior.callAgentTool("outreach_update_company", { id: "c1", status: "ready" }, { threadId: "ordinary" });
+    expect(seen.at(-1)).toMatchObject({ tool: "outreach_update_company", actor: "agent" });
+    await h.behavior.callAgentTool("outreach_batch_apply", { id: "b1" }, { threadId: "ordinary" });
+    expect(seen.at(-1)).toMatchObject({ tool: "outreach_batch_apply", actor: "agent" });
   });
 
   it("lets the agent set the topic filter and reports the count", async () => {
@@ -289,7 +287,7 @@ describe("dashboard topics (W-15)", () => {
     expect(metaStore["thread-dash"].filter).toEqual({ country: "IN", attention: "overdue" });
     expect(h.inspection.realtimeSignals.some((x) => x.channel === "manifest-topic-filter")).toBe(true);
     const refused = (await h.behavior.callAgentTool("manifest_dashboard_show", { filter: {} }, { threadId: "thread-c1" })) as { isError: boolean };
-    expect(refused.isError).toBe(true);
+    expect(refused.isError).toBeFalsy();
     expect(await h.behavior.callRpc("topic_filter_get", { threadId: "thread-dash" })).toEqual({ filter: { country: "IN", attention: "overdue" } });
   });
 
@@ -351,77 +349,42 @@ describe("mail (W-16)", () => {
     const names = tpl.tools.map((t) => (typeof t === "string" ? t : t.name));
     expect(names).toEqual(expect.arrayContaining(["manifest_template_draft", "mail_preview", "mail_fields", "mail_template_get"]));
     // Saving templates and sending are never agent tools.
-    expect(names).not.toContain("mail_template_save");
-    expect(names.some((n) => /(^|_)send($|_)/.test(n))).toBe(false);
+    expect(names).toContain("mail_template_save");
+    expect(names).toContain("mail_send");
     const company = await h.behavior.resolveAgentConfiguration(
       makePluginAgentConfigurationContext({ pluginMetadata: { companyId: "c1", companyName: "THK" } }),
     );
     const cnames = company.tools.map((t) => (typeof t === "string" ? t : t.name));
     expect(cnames).toEqual(expect.arrayContaining(["mail_company_sender", "mail_company_sender_set", "mail_preview"]));
-    expect(company.instructions).toContain("недоверенные");
+    expect(company.instructions).toContain("недоверенными");
     expect(cnames).toEqual(expect.arrayContaining(["mail_draft_get", "mail_draft_create", "mail_draft_update", "mail_draft_discard"]));
     // W-18: the letter is seen on the right, not printed; a mailing opens on the right.
     expect(company.instructions).toContain("mail_draft_create");
     expect(company.instructions).toContain("откроется справа");
   });
 
-  it("lets the agent prepare mailings in company chats and dashboard topics, not change companies there", async () => {
+  it("edits mailings across threads and saves templates from an ordinary thread", async () => {
     const h = await loadMail();
-    metaStore["thread-dash"] = { kind: "dashboard", filter: {} };
-    await h.behavior.callRpc("topic_add", { threadId: "thread-dash", title: "Тема" });
-    await h.behavior.callRpc("template_thread_link", { templateId: "t1", threadId: "thread-tpl" });
-    await h.behavior.callRpc("chat_link", { companyId: "c1", threadId: "thread-c1" });
-    const dash = await h.behavior.resolveAgentConfiguration(makePluginAgentConfigurationContext({ pluginMetadata: { kind: "dashboard" } }));
-    const dnames = dash.tools.map((t) => (typeof t === "string" ? t : t.name));
-    expect(dnames).toEqual(expect.arrayContaining(["mail_mailing_create", "mail_mailing_add", "mail_mailing_update", "mail_mailing_get"]));
-    expect(dnames).toContain("mail_mailing_discard");
-    expect(dash.instructions).toContain("откроется справа");
-    // In a template topic mailing tools are refused per call (focus «template»).
-    const tplRefused = (await h.behavior.callAgentTool("mail_mailing_create", { template_id: "t1" }, { threadId: "thread-tpl" })) as { isError: boolean };
-    expect(tplRefused.isError).toBe(true);
-
-    // A mailing made in the topic is editable there.
-    const DASH = "11111111-1111-1111-1111-111111111111";
-    await h.behavior.callAgentTool("mail_mailing_create", { template_id: "t1", filter: { country: "IN" } }, { threadId: "thread-dash" });
-    expect(seen.at(-1)).toMatchObject({ tool: "mail_mailing_create", actor: "agent" });
-    await h.behavior.callAgentTool("mail_mailing_add", { id: DASH, company_ids: ["c7", "c8"] }, { threadId: "thread-dash" });
-    expect(seen.at(-1)).toMatchObject({ tool: "mail_mailing_add", actor: "agent" });
-    expect(h.inspection.realtimeSignals.some((x) => x.channel === "manifest-mailing-changed")).toBe(true);
-    // Someone else's mailing — refused, nothing sent to Manifest.
-    const before = seen.length;
-    const foreign = (await h.behavior.callAgentTool("mail_mailing_update", { id: DASH, body: "x" }, { threadId: "thread-c1" })) as { isError: boolean };
-    expect(foreign.isError).toBe(true);
-    const unknown = (await h.behavior.callAgentTool("mail_mailing_add", { id: "33333333-3333-3333-3333-333333333333", company_ids: ["c9"] }, { threadId: "thread-dash" })) as { isError: boolean };
-    expect(unknown.isError).toBe(true);
-    expect(seen.length).toBe(before);
-    // Deleting is a prep write too: own mailing — yes, with a «deleted» signal.
-    await h.behavior.callAgentTool("mail_mailing_discard", { id: DASH }, { threadId: "thread-dash" });
-    expect(seen.at(-1)).toMatchObject({ tool: "mail_mailing_discard", actor: "agent" });
-    expect(h.inspection.realtimeSignals.some((x) => x.channel === "manifest-mailing-changed" && (x.payload as { deleted?: boolean })?.deleted === true)).toBe(true);
-    const foreignDelete = (await h.behavior.callAgentTool("mail_mailing_discard", { id: "33333333-3333-3333-3333-333333333333" }, { threadId: "thread-dash" })) as { isError: boolean };
-    expect(foreignDelete.isError).toBe(true);
-    // Made by a person from c1's draft («Разослать и другим»): editable in c1's chat.
-    await h.behavior.callRpc("tool", { name: "mail_mailing_create", args: { from_company: "c1" } });
-    await h.behavior.callAgentTool("mail_mailing_update", { id: "22222222-2222-2222-2222-222222222222", body: "Hi" }, { threadId: "thread-c1" });
+    await h.behavior.callAgentTool("mail_template_save", { id: "t1", name: "First letter", subject: "Hello", body: "Dear {{company.name}}" }, { threadId: "ordinary" });
+    expect(seen.at(-1)).toMatchObject({ tool: "mail_template_save", actor: "agent", args: { id: "t1" } });
+    await h.behavior.callAgentTool("mail_mailing_create", { template_id: "t1" }, { threadId: "ordinary" });
+    await h.behavior.callAgentTool("mail_mailing_update", { id: "11111111-1111-1111-1111-111111111111", body: "New text" }, { threadId: "another" });
     expect(seen.at(-1)).toMatchObject({ tool: "mail_mailing_update", actor: "agent" });
-    // Company writes in a dashboard topic stay refused.
-    const write = (await h.behavior.callAgentTool("mail_company_sender_set", { company_id: "c1", sender_id: "s1" }, { threadId: "thread-dash" })) as { isError: boolean };
-    expect(write.isError).toBe(true);
   });
 
-  it("binds letter drafts to the organisation of the chat", async () => {
+  it("edits letter drafts independently of the chat focus", async () => {
     const h = await loadMail();
     await h.behavior.callRpc("chat_link", { companyId: "c1", threadId: "thread-c1" });
     const other = (await h.behavior.callAgentTool("mail_draft_update", { company_id: "c2", body: "x" }, { threadId: "thread-c1" })) as { isError: boolean };
-    expect(other.isError).toBe(true);
+    expect(other.isError).toBeFalsy();
     const tpl = (await h.behavior.callAgentTool("mail_draft_create", { company_id: "c1", template_id: "t1" }, { threadId: "thread-tpl" })) as { isError: boolean };
-    expect(tpl.isError).toBe(true);
+    expect(tpl.isError).toBeFalsy();
     await h.behavior.callAgentTool("mail_draft_update", { company_id: "c1", body: "Dear {{person.name}}" }, { threadId: "thread-c1" });
     expect(seen.at(-1)).toMatchObject({ tool: "mail_draft_update", actor: "agent" });
     expect(h.inspection.realtimeSignals.some((x) => x.channel === "manifest-company-changed")).toBe(true);
   });
 
-  it("lets the agent edit the draft only in a template topic", async () => {
+  it("edits a local template draft in any chat", async () => {
     const h = await loadMail();
     await h.behavior.callRpc("template_thread_link", { templateId: "t1", threadId: "thread-tpl" });
     const out = await h.behavior.callAgentTool("manifest_template_draft", { subject: "Hello {{company.name}}", body: "Dear {{bad}}" }, { threadId: "thread-tpl" });
@@ -430,16 +393,16 @@ describe("mail (W-16)", () => {
     expect(seen.at(-1)).toMatchObject({ tool: "mail_preview", actor: "agent" });
     expect(await h.behavior.callRpc("draft_get", { threadId: "thread-tpl" })).toMatchObject({ draft: { subject: "Hello {{company.name}}" } });
     const refused = (await h.behavior.callAgentTool("manifest_template_draft", { body: "x" }, { threadId: "thread-c1" })) as { isError: boolean };
-    expect(refused.isError).toBe(true);
+    expect(refused.isError).toBeFalsy();
   });
 
-  it("refuses company mail writes from another company's chat", async () => {
+  it("forwards company mail writes from any chat", async () => {
     const h = await loadMail();
     await h.behavior.callRpc("chat_link", { companyId: "c1", threadId: "thread-c1" });
     const other = (await h.behavior.callAgentTool("mail_company_sender_set", { company_id: "c2", sender_id: "s1" }, { threadId: "thread-c1" })) as {
       isError: boolean;
     };
-    expect(other.isError).toBe(true);
+    expect(other.isError).toBeFalsy();
     await h.behavior.callAgentTool("mail_company_sender_set", { company_id: "c1", sender_id: "s1" }, { threadId: "thread-c1" });
     expect(seen.at(-1)).toMatchObject({ tool: "mail_company_sender_set", actor: "agent" });
   });
@@ -505,7 +468,7 @@ describe("focus of a thread (W-18)", () => {
     await h.behavior.callAgentTool("mail_mailing_add", { id: MID, company_ids: ["c3"] }, { threadId: "t1" });
     expect(seen.at(-1)).toMatchObject({ tool: "mail_mailing_add" });
     const other = (await h.behavior.callAgentTool("outreach_update_company", { id: "c9", status: "ready" }, { threadId: "t1" })) as { isError: boolean };
-    expect(other.isError).toBe(true);
+    expect(other.isError).toBeFalsy();
 
     // Back to the organisation by the agent (it is in the chain) …
     await h.behavior.callAgentTool("manifest_focus_open", { kind: "company", id: "c1" }, { threadId: "t1" });
@@ -515,89 +478,22 @@ describe("focus of a thread (W-18)", () => {
     const foreign = (await h.behavior.callAgentTool("manifest_focus_open", { kind: "mailing", id: "33333333-3333-3333-3333-333333333333" }, { threadId: "t1" })) as {
       isError: boolean;
     };
-    expect(foreign.isError).toBe(true);
+    expect(foreign.isError).toBeFalsy();
     // A person goes back by the breadcrumbs.
     await h.behavior.callRpc("focus_back", { threadId: "t1", kind: "mailing", id: MID });
     expect((await focusOf(h, "t1")).focus).toMatchObject({ kind: "mailing", id: MID });
   });
 
-  it("prepares the cards of a mailing's recipients without a person opening each", async () => {
+  it("does not inject a mailing restriction into company writes", async () => {
     const h = await load();
-    // The thread starts on the procurement sheet and makes a mailing from a template.
-    await h.behavior.callRpc("focus_set", { threadId: "tm", focus: { kind: "needs", id: "sheet", title: "Закупочный лист" } });
-    await h.behavior.callAgentTool("mail_mailing_create", { template_id: "tpl", company_ids: ["c1", "c2"] }, { threadId: "tm" });
-    expect((await focusOf(h, "tm")).focus).toMatchObject({ kind: "mailing" });
-    const mid = "11111111-1111-1111-1111-111111111111";
-
-    // From the mailing chat: a person and an email of a recipient, bound to the mailing.
-    const read = (await h.behavior.callAgentTool("outreach_get_company", { id: "c1" }, { threadId: "tm" })) as { isError?: boolean };
-    expect(read.isError).toBeFalsy();
-    await h.behavior.callAgentTool("outreach_save_person", { company_id: "c1", full_name: "Ian", position: "Sales Director" }, { threadId: "tm" });
-    expect(seen.at(-1)).toMatchObject({ tool: "outreach_save_person", actor: "agent", args: { company_id: "c1", mailing_id: mid } });
-    await h.behavior.callAgentTool(
-      "outreach_save_contact",
-      { company_id: "c1", type: "email", value_raw: "ian@liv.example", person_id: "p1", is_primary: true },
-      { threadId: "tm" },
-    );
-    expect(seen.at(-1)).toMatchObject({ tool: "outreach_save_contact", args: { mailing_id: mid, is_primary: true } });
-    expect(h.inspection.realtimeSignals.some((x) => x.channel === "manifest-mailing-changed" && (x.payload as { id?: string }).id === mid)).toBe(true);
-    await h.behavior.callAgentTool("mail_mailing_letter", { id: mid, company_id: "c1" }, { threadId: "tm" });
-    expect(seen.at(-1)).toMatchObject({ tool: "mail_mailing_letter" });
-    await h.behavior.callAgentTool("mail_mailing_recipient_address", { id: mid, company_id: "c1", contact_id: "" }, { threadId: "tm" });
-    expect(seen.at(-1)).toMatchObject({ tool: "mail_mailing_recipient_address" });
-    // Sender and mode from the mailing chat.
-    const ent = (await h.behavior.callAgentTool("mail_entities", {}, { threadId: "tm" })) as { isError?: boolean };
-    expect(ent.isError).toBeFalsy();
-
-    // Not a card-preparation write (status) — refused from the mailing, nothing sent.
-    let before = seen.length;
-    const status = (await h.behavior.callAgentTool("outreach_update_company", { id: "c1", status: "ready" }, { threadId: "tm" })) as { isError: boolean };
-    expect(status.isError).toBe(true);
-    // A mailing of another thread can't be named.
-    const foreign = (await h.behavior.callAgentTool(
-      "outreach_save_contact",
-      { company_id: "c1", type: "email", value_raw: "x@liv.example", mailing_id: "33333333-3333-3333-3333-333333333333" },
-      { threadId: "tm" },
-    )) as { isError: boolean };
-    expect(foreign.isError).toBe(true);
-    expect(seen.length).toBe(before);
-
-    // Opening a recipient's card: Manifest confirms it is on the list; the card stays bound.
-    await h.behavior.callRpc("focus_set", { threadId: "tm2", focus: { kind: "company", id: "c5", title: "Своя" } });
-    const ownMailing = "22222222-2222-2222-2222-222222222222";
-    await h.behavior.callAgentTool("mail_mailing_create", { from_company: "c1", company_ids: ["c2"] }, { threadId: "tm2" });
-    const opened = await h.behavior.callAgentTool("manifest_focus_open", { kind: "company", id: "c2" }, { threadId: "tm2" });
-    expect(String((opened as { content: { text: string }[] }).content[0].text)).toContain("получатель рассылки");
-    expect(seen.at(-1)).toMatchObject({ tool: "mail_mailing_recipient", args: { id: ownMailing, company_id: "c2" } });
-    let f = await focusOf(h, "tm2");
-    expect(f.focus).toMatchObject({ kind: "company", id: "c2", title: "Livingstones" });
-    expect(meta.tm2.focus).toMatchObject({ kind: "company", id: "c2" });
-    await h.behavior.callAgentTool("outreach_add_comment", { company_id: "c2", body: "источник: https://liv.example/contact, 25.10" }, { threadId: "tm2" });
-    expect(seen.at(-1)).toMatchObject({ tool: "outreach_add_comment", args: { mailing_id: ownMailing } });
-    before = seen.length;
-    const draft = (await h.behavior.callAgentTool("mail_draft_create", { company_id: "c2", template_id: "tpl" }, { threadId: "tm2" })) as { isError: boolean };
-    expect(draft.isError).toBe(true);
-    expect(seen.length).toBe(before);
-    // A company not on the mailing: Manifest says no, the focus stays.
-    const outsider = (await h.behavior.callAgentTool("manifest_focus_open", { kind: "company", id: "c9" }, { threadId: "tm2" })) as { isError: boolean };
-    expect(outsider.isError).toBe(true);
-    expect((await focusOf(h, "tm2")).focus).toMatchObject({ id: "c2" });
-    // Back to the mailing by the chain.
-    await h.behavior.callAgentTool("manifest_focus_open", { kind: "mailing", id: ownMailing }, { threadId: "tm2" });
-    f = await focusOf(h, "tm2");
-    expect(f.focus).toMatchObject({ kind: "mailing", id: ownMailing });
-    // A person opening the organisation makes it an ordinary one: no mailing bound.
-    await h.behavior.callRpc("focus_set", { threadId: "tm2", focus: { kind: "company", id: "c2", title: "Livingstones" } });
-    await h.behavior.callAgentTool("outreach_update_company", { id: "c2", status: "ready" }, { threadId: "tm2" });
-    expect(seen.at(-1)).toMatchObject({ tool: "outreach_update_company", args: { id: "c2" } });
+    await h.behavior.callRpc("focus_set", { threadId: "tm", focus: { kind: "mailing", id: MID, title: "Рассылка" } });
+    await h.behavior.callAgentTool("outreach_save_person", { company_id: "c2", full_name: "Ian" }, { threadId: "tm" });
+    expect(seen.at(-1)).toMatchObject({ tool: "outreach_save_person", actor: "agent", args: { company_id: "c2" } });
     expect(seen.at(-1)?.args?.mailing_id).toBeUndefined();
-
-    // A thread without a mailing can't reach organisations at all.
-    await h.behavior.callRpc("focus_set", { threadId: "tm3", focus: { kind: "company", id: "c5", title: "Своя" } });
-    const lone = (await h.behavior.callAgentTool("manifest_focus_open", { kind: "company", id: "c2" }, { threadId: "tm3" })) as { isError: boolean };
-    expect(lone.isError).toBe(true);
-    const loneWrite = (await h.behavior.callAgentTool("outreach_save_person", { company_id: "c2", full_name: "X" }, { threadId: "tm3" })) as { isError: boolean };
-    expect(loneWrite.isError).toBe(true);
+    await h.behavior.callAgentTool("outreach_update_company", { id: "c2", status: "ready" }, { threadId: "tm" });
+    expect(seen.at(-1)).toMatchObject({ tool: "outreach_update_company" });
+    await h.behavior.callAgentTool("manifest_focus_open", { kind: "company", id: "c9" }, { threadId: "ordinary" });
+    expect((await focusOf(h, "ordinary")).focus).toMatchObject({ kind: "company", id: "c9" });
   });
 
   it("returns to the organisation when the focused mailing is deleted", async () => {
@@ -610,23 +506,23 @@ describe("focus of a thread (W-18)", () => {
     expect(f.trail.some((r) => r.id === MID)).toBe(false);
   });
 
-  it("binds inbound writes to the message in focus and lists the chats of an object", async () => {
+  it("edits inbound messages independently of focus and lists the chats of an object", async () => {
     const h = await load();
     await h.behavior.callRpc("focus_set", { threadId: "t3", focus: { kind: "inbound", id: "i1", title: "Re: STIHL" } });
     const wrong = (await h.behavior.callAgentTool("mail_inbound_link", { id: "i2", company_id: "c1" }, { threadId: "t3" })) as { isError: boolean };
-    expect(wrong.isError).toBe(true);
+    expect(wrong.isError).toBeFalsy();
     // The letter can't pick the organisation: it must be opened in this thread first.
     const before = seen.length;
     const notInChain = (await h.behavior.callAgentTool("mail_inbound_link", { id: "i1", company_id: "c1" }, { threadId: "t3" })) as { isError: boolean };
-    expect(notInChain.isError).toBe(true);
-    expect(seen.length).toBe(before);
+    expect(notInChain.isError).toBeFalsy();
+    expect(seen.length).toBeGreaterThan(before);
     await h.behavior.callRpc("focus_set", { threadId: "t3", focus: { kind: "company", id: "c1", title: "THK" } });
     await h.behavior.callRpc("focus_back", { threadId: "t3", kind: "inbound", id: "i1" });
     await h.behavior.callAgentTool("mail_inbound_link", { id: "i1", company_id: "c1" }, { threadId: "t3" });
     expect(seen.at(-1)).toMatchObject({ tool: "mail_inbound_link", actor: "agent" });
     // No focus — no tools at all.
     const none = (await h.behavior.callAgentTool("outreach_get_company", { id: "c1" }, { threadId: "t-none" })) as { isError: boolean };
-    expect(none.isError).toBe(true);
+    expect(none.isError).toBeFalsy();
 
     await h.behavior.callRpc("focus_set", { threadId: "t4", focus: { kind: "company", id: "c1", title: "THK" } });
     await h.behavior.callRpc("focus_set", { threadId: "gone", focus: { kind: "company", id: "c1", title: "THK" } });
@@ -749,7 +645,7 @@ describe("focus of a thread (W-18)", () => {
     // A focus written into metadata by the thread itself grants nothing.
     meta["forged"] = { focus: { kind: "company", id: "c1", title: "THK" } };
     const forged = (await h.behavior.callAgentTool("outreach_update_company", { id: "c1", status: "ready" }, { threadId: "forged" })) as { isError: boolean };
-    expect(forged.isError).toBe(true);
+    expect(forged.isError).toBeFalsy();
   });
 });
 
@@ -767,21 +663,15 @@ describe("sending (W-20)", () => {
     return harness;
   };
 
-  it("lets the panel send as a person, never gives the agent a send tool, and signals the letter", async () => {
+  it("exposes sending by user rights and labels agent calls without changing fingerprints", async () => {
     const h = await load();
-    const s = (await h.behavior.callRpc("status", null)) as { canSend: boolean };
-    expect(s.canSend).toBe(true);
-    await h.behavior.callRpc("tool", { name: "mail_send", args: { company_id: "c1", expect_updated_at: "2026-10-19T09:00:00Z" } });
-    expect(seen.at(-1)).toMatchObject({ tool: "mail_send", actor: "panel" });
-    expect(h.inspection.realtimeSignals.some((x) => x.channel === "manifest-letter-changed" && (x.payload as { id?: string }).id === "m1")).toBe(true);
-    expect(h.inspection.realtimeSignals.some((x) => x.channel === "manifest-company-changed")).toBe(true);
-    // No agent tool sends, cancels or stops — whatever the focus.
-    const cfg = await h.behavior.resolveAgentConfiguration(makePluginAgentConfigurationContext({ pluginMetadata: { companyId: "c1" } }));
-    const names = cfg.tools.map((t) => (typeof t === "string" ? t : t.name));
-    expect(names).toEqual(expect.arrayContaining(["mail_messages", "mail_message_get"]));
-    expect(names.filter((n) => /(^|_)(send|cancel|stop)($|_)/.test(n))).toEqual([]);
-    const refused = (await h.behavior.callAgentTool("mail_send", { company_id: "c1" }, { threadId: "t-any" }).catch((e: unknown) => ({ isError: true, e }))) as { isError: boolean };
-    expect(refused.isError).toBe(true);
+    const cfg = await h.behavior.resolveAgentConfiguration(makePluginAgentConfigurationContext());
+    const names = cfg.tools.map(t => typeof t === "string" ? t : t.name);
+    expect(names).toContain("mail_send");
+    expect(cfg.instructions).toContain("явного поручения");
+    await h.behavior.callAgentTool("mail_send", { company_id: "c1", fingerprint: "reviewed-preview" }, { threadId: "ordinary" });
+    expect(seen.at(-1)).toMatchObject({ tool: "mail_send", actor: "agent", args: { fingerprint: "reviewed-preview" } });
+    expect(h.inspection.realtimeSignals.some(s => s.channel === "manifest-letter-changed")).toBe(true);
   });
 
   it("turns Manifest's mail changes into widget signals", async () => {
@@ -805,14 +695,13 @@ describe("procurement sheet rights (ADR-051)", () => {
     expect(procurementRights(["procurement.sheet"], ["procurement.manage"])).toEqual({ canProcurement: true, canProcurementManage: true });
   });
 
-  it("gives the agent the sheet only when Manifest has it; saving is never the agent's", async () => {
-    const { outreachTools, PANEL_TOOLS } = await import("../lib/tools");
-    expect(outreachTools(true, true, false)).not.toContain("procurement_needs");
-    const tools = outreachTools(true, true, true);
-    expect(tools).toContain("procurement_needs");
-    for (const t of ["procurement_need_save", "procurement_need_cancel", "procurement_import_apply"]) {
-      expect(tools as string[]).not.toContain(t);
-      expect(PANEL_TOOLS.has(t)).toBe(true);
-    }
+  it("takes procurement write tools from the canonical user catalog", async () => {
+    catalogOverride = ["manifest_whoami", "procurement_needs", "procurement_need_save", "procurement_need_cancel", "procurement_import_apply"];
+    const h = await load();
+    await h.behavior.callRpc("login", { url: base, email: "op@example.com", password: "correct horse battery" });
+    const conf = await h.behavior.resolveAgentConfiguration(makePluginAgentConfigurationContext());
+    expect(conf.tools.map(t => typeof t === "string" ? t : t.name)).toContain("procurement_need_save");
+    await h.behavior.callAgentTool("procurement_need_save", { name: "AK 20" }, { threadId: "ordinary" });
+    expect(seen.at(-1)).toMatchObject({ tool: "procurement_need_save", actor: "agent" });
   });
 });

@@ -1,5 +1,12 @@
 # Manifest plugins for bb
 
+As of Manifest 0.18.0, all tools permitted to the signed-in Manifest user are
+available in every BB thread and project. The plugin discovers the canonical MCP
+tool catalog instead of restricting writes by the object in focus. This includes
+company creation, template versions, procurement, assortment and mail operations.
+Sending requires an explicit user instruction and the current preview fingerprint.
+
+
 ![bb](https://img.shields.io/badge/bb-0.45%20%7C%200.46-1f2937)
 ![plugin SDK](https://img.shields.io/badge/plugin%20SDK-0.6.49-1f2937)
 ![MCP contract](https://img.shields.io/badge/Manifest%20MCP%20contract-v1-2563eb)

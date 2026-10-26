@@ -119,3 +119,35 @@ test("names why Manifest is not reached", async () => {
   assert.match(netReason(dns), /DNS/);
   assert.equal(netReason(new Error("boom")), "boom");
 });
+
+
+test("canonical tool catalog follows pagination and preserves schemas", async () => {
+  const { listTools } = await import("../lib/mcp-client.ts");
+  const requests = [];
+  const srv = await serve((req, body, res) => {
+    requests.push({ method: body.method, params: body.params, actor: req.headers["x-manifest-actor-kind"] });
+    const name = body.params.cursor ? "mail_template_save" : "outreach_create_company";
+    json(res, 200, { jsonrpc: "2.0", id: body.id, result: { tools: [{ name, description: name,
+      inputSchema: { type: "object", properties: { id: { type: "string" } } } }],
+      ...(!body.params.cursor ? { nextCursor: "next" } : {}) } });
+  });
+  try {
+    const catalog = await listTools(url(srv), "token");
+    assert.deepEqual(catalog.map(t => t.name), ["outreach_create_company", "mail_template_save"]);
+    assert.equal(catalog[1].inputSchema.properties.id.type, "string");
+    assert.deepEqual(requests, [{ method: "tools/list", params: {}, actor: "agent" },
+      { method: "tools/list", params: { cursor: "next" }, actor: "agent" }]);
+  } finally { srv.close(); }
+});
+
+test("canonical catalog fails closed on revoked tokens and malformed schemas", async () => {
+  const { listTools } = await import("../lib/mcp-client.ts");
+  const srv = await serve((req, body, res) => {
+    if (req.headers.authorization === "Bearer revoked") return json(res, 401, {});
+    json(res, 200, { jsonrpc: "2.0", id: body.id, result: { tools: [{ name: "bad name", inputSchema: { type: "object" } }] } });
+  });
+  try {
+    await assert.rejects(listTools(url(srv), "revoked"), e => e.code === "unauthorized");
+    await assert.rejects(listTools(url(srv), "other"), e => e.code === "protocol");
+  } finally { srv.close(); }
+});
