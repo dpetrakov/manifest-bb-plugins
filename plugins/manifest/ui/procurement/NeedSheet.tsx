@@ -12,7 +12,7 @@ import { errorText, useStatus, useTool } from "../hooks";
 import { Note } from "../RegistryList";
 import { Badge, ConfirmCard, KindLabel } from "../manifest";
 import type { ImportPreview, Need } from "../types";
-import { useOpenObject, useRailReturn } from "../workspace/state";
+import { useOpenObject } from "../workspace/state";
 import { SectionTabs } from "../workspace/nav";
 import { NEEDS_HUB, OPEN_SOURCE, takeSource } from "./paths";
 import { Countries } from "./Countries";
@@ -36,16 +36,22 @@ function byCategory(items: Need[]): { category: string; items: Need[]; qty: numb
 /** The «Закупочный лист» rail: the last sheet chat or a new one, the sheet on the right. */
 export function NeedsPage(_: PluginNavPanelProps) {
   const openObject = useOpenObject();
-  const railReturn = useRailReturn();
-  const [stay, setStay] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    void railReturn("needs").then((r) => {
-      if (r === "stay") setStay(true);
-      else if (r === "none") void openObject(NEEDS_HUB);
-    });
-  }, [openObject, railReturn]);
-  if (!stay) return <Note>Открываем закупочный лист…</Note>;
-  return <NeedSheet />;
+    // Resolve the sheet's live chats and restore its focus, even if that chat now shows
+    // another object. The shared rail timer must never replace this entry with a page
+    // without a chat (including a quick switch from mail or a repeated rail click).
+    setError(null);
+    void openObject(NEEDS_HUB).catch((e: unknown) => setError(errorText(e)));
+  }, [attempt, openObject]);
+  if (!error) return <Note>Открываем закупочный лист…</Note>;
+  return (
+    <div className="p-3">
+      <p role="alert" className="text-xs text-destructive">{error}</p>
+      <Button size="sm" variant="outline" className="mt-2" onClick={() => setAttempt((n) => n + 1)}>Повторить открытие</Button>
+    </div>
+  );
 }
 
 

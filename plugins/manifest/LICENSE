@@ -1,0 +1,67 @@
+Manifest Plugins for bb — Proprietary License
+
+Copyright (c) 2026 Dmitry Petrakov. All rights reserved.
+
+This repository and all files in it (the "Software") are proprietary. The Software is
+not open source. Its source code is published only so that authorized users can
+install it in bb from a public URL.
+
+1. Permitted use
+
+   You may download, install and run the Software only if you are:
+
+   a) a user authorized by the copyright holder, or
+   b) an employee or contractor of an organization that has a valid agreement with
+      the copyright holder for the Manifest service,
+
+   and only to access a Manifest instance provided under such an agreement, for as
+   long as the agreement is in force.
+
+   You may view the source code on GitHub to the extent allowed by the GitHub Terms
+   of Service.
+
+2. Restrictions
+
+   Except as expressly permitted above, you may not, without prior written permission
+   of the copyright holder:
+
+   a) copy, modify, adapt, translate or create derivative works of the Software;
+   b) distribute, publish, sublicense, sell, rent, lend or otherwise transfer the
+      Software or any part of it to any third party;
+   c) use the Software, in whole or in part, with any system other than Manifest, or
+      to build a competing product or service;
+   d) remove or alter this notice or any copyright notice in the Software.
+
+3. Ownership
+
+   The Software is licensed, not sold. The copyright holder retains all rights,
+   title and interest in the Software. No rights are granted by implication or
+   estoppel beyond those stated in section 1.
+
+4. Third-party components
+
+   Third-party packages used by the Software are licensed under their own terms,
+   as stated in their respective packages. This license does not apply to them.
+
+5. Termination
+
+   This license ends automatically when your authorization or your organization's
+   agreement ends, or if you breach any of its terms. On termination you must stop
+   using the Software and delete all copies in your possession.
+
+6. No warranty
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+   FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT, EXCEPT AS EXPRESSLY AGREED IN A
+   SEPARATE WRITTEN AGREEMENT WITH THE COPYRIGHT HOLDER.
+
+7. Limitation of liability
+
+   TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL THE COPYRIGHT HOLDER BE
+   LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+   CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+   SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+For licensing questions, contact the copyright holder through
+https://github.com/dpetrakov.

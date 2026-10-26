@@ -1,7 +1,30 @@
 {
   "name": "bb-plugin-manifest",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "type": "module",
+  "files": [
+    "dist/",
+    "app.tsx",
+    "server.ts",
+    "focus.ts",
+    "lib/",
+    "ui/",
+    "components/",
+    "hooks/",
+    "icons/",
+    "skills/",
+    "PLUGIN_OVERVIEW.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dpetrakov/manifest-bb-plugins.git",
+    "directory": "plugins/manifest"
+  },
   "engines": {
     "bb": ">=0.46",
     "bbPluginSdk": ">=0.6.15"
@@ -64,6 +87,8 @@
   },
   "description": "BB-плагин Manifest: реестр потенциальных поставщиков, карточка и чат с агентом.",
   "scripts": {
+    "build": "bb plugin build .",
+    "prepack": "npm run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run && node --experimental-strip-types --test tests/*.test.mjs",
     "check": "npm run typecheck && npm test"

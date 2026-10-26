@@ -4,6 +4,17 @@ All notable changes to the plugins in this repository. Versions follow
 [Semantic Versioning](https://semver.org/). Releases of the `manifest` plugin are
 tagged `manifest/vX.Y.Z`.
 
+## manifest 0.17.1
+
+- The procurement rail restores the procurement sheet in its latest live chat, even
+  when that chat last displayed an organisation or another object. A quick switch
+  from outreach mail no longer opens a standalone sheet without a chat. With no
+  live sheet chat, bb opens a new chat with the sheet in its side panel.
+- Prebuilt releases are available as `bb-plugin-manifest` on npm (first release
+  0.17.0). Install with `bb plugin install npm:bb-plugin-manifest@latest`; Git and
+  Xcode Command Line Tools are not required. The bb CLI can run on an enrolled
+  agent machine: it asks the connected bb server to install the package.
+
 ## manifest 0.17.0
 
 Needs Manifest with `mail_mailing_recipient` and `mail_mailing_recipient_address` (core update,

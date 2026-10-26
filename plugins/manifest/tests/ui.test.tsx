@@ -25,6 +25,7 @@ import { NeedSheet, NeedsPage } from "../ui/procurement/NeedSheet";
 import { CompanyAssortment } from "../ui/procurement/CompanyAssortment";
 import { DraftAttachments } from "../ui/mail/attachments";
 import { takeMailTab } from "../ui/mail/hubTabs";
+import { ComposeBanner } from "../ui/workspace/compose";
 
 const status = (over: Record<string, unknown> = {}) => ({
   connected: true,
@@ -1411,7 +1412,55 @@ describe("attachments: files beside the RFQ", () => {
 });
 
 describe("rails and deleted chats", () => {
-  it("does not return to a remembered chat that was deleted: forgets it and opens the sheet anew", async () => {
+  it("restores the sheet in its live chat even when that chat now focuses on an organisation", async () => {
+    window.sessionStorage.clear();
+    window.sessionStorage.setItem("manifest:last-needs-thread", "th-sheet");
+    let focus = { kind: "company", id: "c1", title: "Enviro Chainsaws" };
+    const r = renderSlot({ component: NeedsPage }, { subPath: "" } as never, {
+      pluginId: "manifest",
+      rpc: {
+        thread_alive: () => ({ alive: true }),
+        chats_list: () => ({ chats: [{ threadId: "th-sheet", title: "Закупки" }] }),
+        focus_set: ({ focus: next }: { focus: typeof focus }) => ({ focus: (focus = next), trail: [] }),
+      } as never,
+    });
+    await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toThread", threadId: "th-sheet" }));
+    expect(focus).toEqual({ kind: "needs", id: "sheet", title: "Закупочный лист" });
+  });
+
+  it("opens the sheet chat immediately after another rail instead of showing a page without a chat", async () => {
+    window.sessionStorage.clear();
+    window.sessionStorage.setItem("manifest:rail-redirect-at", String(Date.now()));
+    const r = renderSlot({ component: NeedsPage }, { subPath: "" } as never, {
+      pluginId: "manifest",
+      rpc: {
+        status: () => status({ canProcurement: true }),
+        chats_list: () => ({ chats: [{ threadId: "th-sheet", title: "Закупки" }] }),
+        focus_set: () => ({ focus: { kind: "needs", id: "sheet", title: "Закупочный лист" }, trail: [] }),
+        tool: () => ({ result: { items: [] } }),
+      } as never,
+    });
+    await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toThread", threadId: "th-sheet" }));
+    expect(screen.queryByLabelText("Поиск по листу")).toBeNull();
+  });
+
+  it("opens a new chat with the sheet in its side panel when the sheet has no chats yet", async () => {
+    window.sessionStorage.clear();
+    window.sessionStorage.setItem("manifest:rail-redirect-at", String(Date.now()));
+    const r = renderSlot({ component: NeedsPage }, { subPath: "" } as never, {
+      pluginId: "manifest",
+      rpc: { chats_list: () => ({ chats: [] }), section_ensure: () => ({ sectionId: null }) } as never,
+    });
+    await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toCompose" }));
+    const compose = renderSlot({ component: ComposeBanner }, {} as never, { pluginId: "manifest", openThreadPanel: () => true });
+    expect(await screen.findByText("закупочный лист")).toBeTruthy();
+    await waitFor(() => expect(compose.inspection.navigateCalls).toContainEqual(expect.objectContaining({
+      method: "openThreadPanel", options: { actionId: "company-new", title: "Закупочный лист", params: { v: 1 } },
+    })));
+  });
+
+  it("ignores a deleted chat left in the window cache and opens the sheet anew", async () => {
+    window.sessionStorage.clear();
     window.sessionStorage.setItem("manifest:last-needs-thread", "th-deleted");
     window.sessionStorage.removeItem("manifest:rail-redirect-at");
     const calls: { method: string; input: unknown }[] = [];
@@ -1428,8 +1477,7 @@ describe("rails and deleted chats", () => {
         tool: () => ({ result: { items: [] } }),
       } as never,
     });
-    await waitFor(() => expect(calls).toEqual([{ method: "thread_alive", input: { threadId: "th-deleted" } }]));
-    await waitFor(() => expect(window.sessionStorage.getItem("manifest:last-needs-thread")).toBeNull());
+    await waitFor(() => expect(r.inspection.navigateCalls.at(-1)).toMatchObject({ method: "toCompose" }));
     expect(JSON.stringify(r.navigateCalls)).not.toContain("th-deleted");
   });
 });

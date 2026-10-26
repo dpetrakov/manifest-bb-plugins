@@ -227,6 +227,17 @@ flowchart LR
 
 ## Installation
 
+Install the prebuilt npm package without Git or Xcode Command Line Tools:
+
+```sh
+bb plugin install npm:bb-plugin-manifest@latest
+```
+
+An agent can run this on an enrolled machine: the CLI asks the connected bb
+server to download and install the plugin on the server's computer.
+
+The Git source remains available for existing installations:
+
 ```sh
 bb plugin install https://github.com/dpetrakov/manifest-bb-plugins --plugin manifest
 ```
