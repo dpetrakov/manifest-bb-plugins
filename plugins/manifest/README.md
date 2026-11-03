@@ -75,6 +75,14 @@ or by yourself (click your name at the bottom of the Manifest menu).
 | `PLUGIN_OVERVIEW.md` | Description shown inside bb (in Russian). |
 | `tests/` | vitest (backend on a fake plugin host, UI with `renderSlot`) and `node:test` (MCP client). |
 
+## Recovering from connection failures (0.18.1)
+
+A temporary network failure no longer leaves an open panel stuck offline. The
+plugin repeats read-only connection checks every 10 seconds while unavailable,
+and when the window regains focus or network connectivity. Invalid credentials
+require signing in again. The procurement sheet also provides explicit connection
+and loading retry buttons. Data changes, emails and mailings are never replayed.
+
 ## Development
 
 ```sh

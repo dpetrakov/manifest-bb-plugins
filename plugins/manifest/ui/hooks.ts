@@ -1,7 +1,7 @@
 // Shared frontend state of the plugin. All slots (sidebar view, page, card
 // tab, settings) run from one bundle in one window, so module-level stores
 // shared through useSyncExternalStore keep them in step.
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
 import type { Status, rpcContract } from "../server";
 import type { ListItem, ListResult } from "./types";
@@ -33,22 +33,37 @@ export function useTool() {
   );
 }
 
-/** Connection status, refreshed on sign-in/out anywhere in the window. */
+/** Read-only status checks recover after network failures without replaying tools/writes. */
 export function useStatus() {
   const rpc = useRpc<typeof rpcContract>();
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const pending = useRef(false);
   const load = useCallback(() => {
-    rpc.call("status", null).then(
+    if (pending.current) return;
+    pending.current = true;
+    void rpc.call("status", null).then(
       (s) => {
         setStatus(s);
         setError(null);
       },
       (e: unknown) => setError(errorText(e)),
-    );
+    ).finally(() => { pending.current = false; });
   }, [rpc]);
   useEffect(load, [load]);
   useRealtime(STATUS_CHANGED, load);
+  const retry = !!error || status?.problem === "unavailable";
+  useEffect(() => {
+    if (!retry) return;
+    const timer = window.setInterval(load, 10_000);
+    window.addEventListener("online", load);
+    window.addEventListener("focus", load);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("online", load);
+      window.removeEventListener("focus", load);
+    };
+  }, [retry, load]);
   return { status, error, reload: load, rpc: rpc as Rpc };
 }
 
