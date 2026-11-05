@@ -13,3 +13,12 @@ export function AttentionAccessory() {
     </span>
   );
 }
+
+/** Host-rendered navigation badge on BB 0.48; the same store powers the 0.46 accessory. */
+export function attentionBadge(count: number | null) {
+  return count && count > 0 ? { count, tone: "critical" as const, label: `Ждут нашего ответа и просрочено: ${count}` } : null;
+}
+
+export function useAttentionBadge() {
+  return attentionBadge(useAttentionCount());
+}

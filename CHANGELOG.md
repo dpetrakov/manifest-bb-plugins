@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.2 - 2026-11-05
+
+- Keep BB 0.46.0 and 0.46.1 support while adapting navigation to BB 0.48.1.
+- Restore the outreach attention count with the host-rendered navigation badge on newer BB; retain the old accessory on 0.46.
+- Register object panels through the modern tab API where available and preserve the same tab identities and persisted parameters.
+- Open panels on the caller's thread or New thread surface, without redirecting a rejected open to another pane.
+- Isolate the supported custom focus-header runtime adapter and guard null realtime payloads. No service API, authentication, permissions or stored data format changes.
+- This compatibility change was prepared from the exact published 0.18.1 source; synchronize it into the private release pipeline before its next export.
+
 ## 0.18.0 - 2026-10-26
 
 - Make Manifest tools available in every authorized BB thread and project.

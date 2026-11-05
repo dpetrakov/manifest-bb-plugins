@@ -5,7 +5,8 @@
 // событием BB «тред создан»). Вкладка панели одна и следует за объектом (одинаковые
 // params — BB не плодит вкладок); отдельная вкладка — «закреплённый» объект (params.pin).
 import { useEffect, useRef, useState } from "react";
-import { useBbNavigate, useComposer, useRpc, type PluginNewThreadPanelProps } from "@get-bb/plugin-sdk/app";
+import { useComposer, useRpc, type PluginNewThreadPanelProps } from "@get-bb/plugin-sdk/app";
+import { useOpenThreadPanel } from "../bb-compat";
 import type { rpcContract } from "../../server";
 import { ManifestMark } from "../manifest";
 import { INTENT_EVENT, clearComposeIntent, readComposeIntent, type ComposeIntent } from "./intent";
@@ -32,7 +33,7 @@ function intentTitle(i: ComposeIntent): string {
 /** Banner of the New thread composer: which object the chat will be about. */
 export function ComposeBanner() {
   const rpc = useRpc<typeof rpcContract>();
-  const navigate = useBbNavigate();
+  const openPanel = useOpenThreadPanel();
   const composer = useComposer();
   const [intent, setIntent] = useIntent();
   useBesideHost(null);
@@ -43,8 +44,8 @@ export function ComposeBanner() {
     if (shown.current === key) return;
     shown.current = key;
     // Same params every time: one tab that follows the object (title updates).
-    navigate.openThreadPanel({ actionId: NEW_COMPANY_PANEL, title: intentTitle(intent), params: { v: 1 } });
-  }, [intent, navigate]);
+    openPanel({ actionId: NEW_COMPANY_PANEL, title: intentTitle(intent), params: { v: 1 } });
+  }, [intent, openPanel]);
   useEffect(() => {
     if (!intent) return;
     return composer.onSubmitted(() => {

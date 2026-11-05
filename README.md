@@ -7,7 +7,7 @@ company creation, template versions, procurement, assortment and mail operations
 Sending requires an explicit user instruction and the current preview fingerprint.
 
 
-![bb](https://img.shields.io/badge/bb-0.45%20%7C%200.46-1f2937)
+![bb](https://img.shields.io/badge/bb-0.46%20%7C%200.48-1f2937)
 ![plugin SDK](https://img.shields.io/badge/plugin%20SDK-0.6.49-1f2937)
 ![MCP contract](https://img.shields.io/badge/Manifest%20MCP%20contract-v1-2563eb)
 ![UI language](https://img.shields.io/badge/UI-Russian-6b7280)
@@ -381,6 +381,12 @@ bb plugin update manifest
 ├── LICENSE                     # proprietary license
 └── SECURITY.md
 ```
+
+## BB compatibility
+
+Manifest 0.18.2 retains the declared BB `>=0.46` floor and SDK 0.6.49 development pin. It is checked against BB 0.46.0 (SDK 0.6.37), 0.46.1 (SDK 0.6.49) and 0.48.1 (SDK 0.6.104). Newer hosts use action tabs and the host-rendered attention badge; 0.46 keeps its original registrations. The custom focus-header control uses BB's retained runtime adapter because the new item/run header action API cannot render that live control. Revisit this adapter when BB removes support; do not raise the BB floor as a side effect of updating SDK types.
+
+These checks cover compilation, slot definitions and package tests. A new core BB version still requires live checks of login, realtime, card focus and thread/New thread navigation. No external Manifest data is migrated by this release.
 
 ## Development
 

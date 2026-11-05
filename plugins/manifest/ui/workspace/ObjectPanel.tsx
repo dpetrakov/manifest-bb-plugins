@@ -5,9 +5,8 @@ import {
   experimental_NewThreadComposer,
   useBbNavigate,
   useRpc,
-  type PluginThreadHeaderActionProps,
-  type PluginThreadPanelProps,
 } from "@get-bb/plugin-sdk/app";
+import type { ThreadHeaderProps, ThreadPanelProps } from "../bb-compat";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { rpcContract } from "../../server";
@@ -47,7 +46,7 @@ import { rememberThread } from "./intent";
 
 const NewThreadComposer = experimental_NewThreadComposer;
 
-export function ObjectPanel({ threadId, params }: PluginThreadPanelProps) {
+export function ObjectPanel({ threadId, params }: ThreadPanelProps) {
   const pin = pinOf(params);
   if (pin) return <PinnedObject pin={pin} threadId={threadId} />;
   return <FocusedObject threadId={threadId} />;
@@ -255,7 +254,7 @@ const OPENED = "manifest:panel-opened:";
  * показе треда в этой вкладке браузера и когда объект сменился (агент создал рассылку,
  * человек открыл другой объект).
  */
-export function FocusHeader({ threadId, isCompactViewport }: PluginThreadHeaderActionProps) {
+export function FocusHeader({ threadId, isCompactViewport }: ThreadHeaderProps) {
   const { focus } = useFocus(threadId);
   useBesideHost(threadId);
   const openPanel = useOpenObjectPanel();
@@ -285,7 +284,7 @@ export function FocusHeader({ threadId, isCompactViewport }: PluginThreadHeaderA
   }, [focus?.kind, focus?.id, threadId]);
   useRealtime(FOCUS_CHANGED, (payload) => {
     const p = payload as { threadId?: unknown; open?: unknown; focus?: FocusRef | null } | null;
-    if (p?.threadId !== threadId || p.open !== true || !p.focus || isCompactViewport) return;
+    if (!p || p.threadId !== threadId || p.open !== true || !p.focus || isCompactViewport) return;
     openPanel(p.focus.title || KIND_LABEL[p.focus.kind]);
   });
   if (!focus) return null;

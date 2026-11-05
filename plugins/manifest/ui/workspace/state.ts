@@ -2,6 +2,7 @@
 // клиенте — что открыто справа, цепочка, открытие панели и новый чат по объекту.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBbNavigate, useRealtime, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
+import { useOpenThreadPanel } from "../bb-compat";
 import type { rpcContract } from "../../server";
 import { DASHBOARD_PATH } from "../dashboard/state";
 import { PANEL_PATH, errorText, useTool } from "../hooks";
@@ -110,10 +111,10 @@ export function useFocus(threadId: string) {
  * component lives in. One tab per thread: its content follows the focus.
  */
 export function useOpenObjectPanel() {
-  const navigate = useBbNavigate();
+  const openPanel = useOpenThreadPanel();
   return useCallback(
-    (title?: string) => navigate.openThreadPanel({ actionId: OBJECT_PANEL, title: title ? title.slice(0, 60) : "Manifest", params: { v: 1 } }),
-    [navigate],
+    (title?: string) => openPanel({ actionId: OBJECT_PANEL, title: title ? title.slice(0, 60) : "Manifest", params: { v: 1 } }),
+    [openPanel],
   );
 }
 
@@ -215,13 +216,13 @@ export function useOpenCompany() {
  * A second object beside the chat: a separate tab of the side panel (Cmd/Ctrl-click or
  * dragging a row out of the list). The thread's own object stays as it is.
  */
-type Navigate = ReturnType<typeof useBbNavigate>;
+type OpenPanel = ReturnType<typeof useOpenThreadPanel>;
 const BESIDE_EVENT = "manifest:open-beside";
 
-function openBeside(navigate: Navigate, ref: FocusRef, order: string[]): boolean {
+function openBeside(openPanel: OpenPanel, ref: FocusRef, order: string[]): boolean {
   const params = { v: 1, pin: { kind: ref.kind, id: ref.id, title: ref.title.slice(0, 200) } };
   const title = (ref.title || KIND_LABEL[ref.kind]).slice(0, 60);
-  for (const actionId of order) if (navigate.openThreadPanel({ actionId, title, params })) return true;
+  for (const actionId of order) if (openPanel({ actionId, title, params })) return true;
   return false;
 }
 
@@ -231,20 +232,20 @@ function openBeside(navigate: Navigate, ref: FocusRef, order: string[]): boolean
  * New thread screen's banner (null) listen and open the tab in their own panel.
  */
 export function useBesideHost(threadId: string | null) {
-  const navigate = useBbNavigate();
+  const openPanel = useOpenThreadPanel();
   useEffect(() => {
     const on = (e: Event) => {
       const d = (e as CustomEvent<{ ref: FocusRef; threadId: string | null }>).detail;
       if (e.defaultPrevented || !d || d.threadId !== threadId) return;
-      if (openBeside(navigate, d.ref, threadId ? [BESIDE_PANEL] : [BESIDE_NEW_PANEL])) e.preventDefault();
+      if (openBeside(openPanel, d.ref, threadId ? [BESIDE_PANEL] : [BESIDE_NEW_PANEL])) e.preventDefault();
     };
     window.addEventListener(BESIDE_EVENT, on);
     return () => window.removeEventListener(BESIDE_EVENT, on);
-  }, [navigate, threadId]);
+  }, [openPanel, threadId]);
 }
 
 export function useOpenPinned() {
-  const navigate = useBbNavigate();
+  const openPanel = useOpenThreadPanel();
   return useCallback(
     /**
      * `threadId` — the window's open thread as the caller knows it (the sidebar list; null —
@@ -256,9 +257,9 @@ export function useOpenPinned() {
         window.dispatchEvent(e);
         if (e.defaultPrevented) return true;
       }
-      return openBeside(navigate, ref, threadId === null ? [BESIDE_NEW_PANEL, BESIDE_PANEL] : [BESIDE_PANEL, BESIDE_NEW_PANEL]);
+      return openBeside(openPanel, ref, threadId === null ? [BESIDE_NEW_PANEL, BESIDE_PANEL] : [BESIDE_PANEL, BESIDE_NEW_PANEL]);
     },
-    [navigate],
+    [openPanel],
   );
 }
 

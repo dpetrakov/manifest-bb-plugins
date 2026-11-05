@@ -8,6 +8,8 @@
 // are pults: lists, an object on the whole screen, its chats and «Новый чат».
 // «Дашборд аутрича» (W-15): metrics, queue and topic chats; directives render
 // live company lists and batch cards inside the agent's messages.
+import { registerDashboard, registerThreadPanel, registerFocusHeader } from "./ui/bb-compat";
+import { useAttentionBadge } from "./ui/dashboard/Accessory";
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import { ConnectSection } from "./ui/ConnectSection";
 import { PANEL_ID, PANEL_PATH } from "./ui/hooks";
@@ -37,14 +39,13 @@ export default definePluginApp((app) => {
     component: OutreachPage,
   });
   // W-15: дашборд аутрича с темами-чатами; карточка — по цели вкладки.
-  app.slots.navPanel({
+  registerDashboard(app, {
     id: DASHBOARD_ID,
     title: "Дашборд аутрича",
     icon: "manifest/dashboard",
     path: DASHBOARD_PATH,
     component: DashboardPage,
-    experimental_sidebarAccessory: AttentionAccessory,
-  });
+  }, AttentionAccessory, useAttentionBadge);
   // W-16: почта — шаблоны (с чатом по шаблону), юрлица и отправители, неразобранные входящие.
   app.slots.navPanel({ id: MAIL_ID, title: "Почта аутрича", icon: "Mail", path: MAIL_PATH, component: MailPage });
   // ADR-051 (W-19): what we need — the procurement sheet, as an object beside a chat.
@@ -72,13 +73,13 @@ export default definePluginApp((app) => {
   });
   // W-18 (ADR-049): объект треда — во вкладке боковой панели родного треда BB; кнопка в
   // шапке треда показывает, что открыто, и сама открывает панель.
-  app.slots.threadPanelAction({ id: OBJECT_PANEL, title: "Manifest", icon: "manifest/id-card", layout: "flush", component: ObjectPanel });
-  app.slots.experimental_threadHeaderAction({ id: "focus", title: "Объект Manifest", component: FocusHeader });
+  registerThreadPanel(app, { id: OBJECT_PANEL, title: "Manifest", icon: "manifest/id-card", layout: "flush", component: ObjectPanel });
+  registerFocusHeader(app, { id: "focus", title: "Объект Manifest", component: FocusHeader });
   // Организация без чата открывается экраном нового треда BB: карточка — в его боковой
   // панели, над полем — баннер; первое сообщение создаёт тред, привязанный к организации.
   app.slots.experimental_newThreadPanelAction({ id: NEW_COMPANY_PANEL, title: "Manifest", icon: "manifest/id-card", layout: "flush", component: NewCompanyPanel });
   // A second object beside the main one (Cmd/Ctrl-click, «Рядом» in the list): its own tab.
-  app.slots.threadPanelAction({ id: BESIDE_PANEL, title: "Manifest · рядом", icon: "manifest/id-card", layout: "flush", component: ObjectPanel });
+  registerThreadPanel(app, { id: BESIDE_PANEL, title: "Manifest · рядом", icon: "manifest/id-card", layout: "flush", component: ObjectPanel });
   app.slots.experimental_newThreadPanelAction({ id: BESIDE_NEW_PANEL, title: "Manifest · рядом", icon: "manifest/id-card", layout: "flush", component: NewCompanyPanel });
   app.composer.customize({ id: "company-intent", scopes: ["new-thread"], banners: [{ id: "company", chrome: "bare", component: ComposeBanner }] });
   app.slots.settingsSection({
