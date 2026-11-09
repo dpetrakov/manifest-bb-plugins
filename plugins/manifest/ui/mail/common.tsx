@@ -120,10 +120,18 @@ export interface Inbound {
   subject: string;
   reply_text: string;
   body_text: string;
-  attachments: { filename: string; size: number }[];
+  attachments: InboundAttachment[];
   company_id: string | null;
   company_name: string;
   triage: string;
+}
+
+export interface InboundAttachment {
+  id: string;
+  filename: string;
+  size: number;
+  content_type?: string;
+  sha256?: string;
 }
 
 /** Letter draft of an organisation and how it will go out (W-17). */

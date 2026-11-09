@@ -71,10 +71,16 @@ export function sizeText(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1).replace(".", ",")} МБ`;
 }
 
-function download(name: string, type: string, base64: string) {
+async function download(name: string, type: string, base64: string, size?: number, sha256?: string) {
   const bin = atob(base64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  if (size !== undefined && bytes.length !== size) throw new Error("Вложение получено не полностью. Повторите скачивание.");
+  if (sha256) {
+    const hash = await crypto.subtle.digest("SHA-256", bytes);
+    const actual = Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, "0")).join("");
+    if (actual !== sha256.toLowerCase()) throw new Error("Вложение повреждено: SHA-256 не совпадает. Повторите скачивание.");
+  }
   const url = URL.createObjectURL(new Blob([bytes], { type }));
   const a = document.createElement("a");
   a.href = url;
@@ -97,7 +103,7 @@ export function AttachmentList({ sheets, companyId, messageId }: { sheets: Attac
         ...(messageId ? { message_id: messageId } : { company_id: companyId }),
         position,
       });
-      download(f.filename, f.content_type, f.content_base64);
+      await download(f.filename, f.content_type, f.content_base64);
     } catch (e) {
       setError(errorText(e));
     }
@@ -115,6 +121,41 @@ export function AttachmentList({ sheets, companyId, messageId }: { sheets: Attac
         </li>
       ))}
       {error ? <li role="alert" className="text-[11px] text-destructive">{error}</li> : null}
+    </ul>
+  );
+}
+
+/** Incoming files are available to viewers; downloads never execute their contents. */
+export function InboundAttachmentList({ inboundId, attachments }: { inboundId: string; attachments: import("./common").InboundAttachment[] }) {
+  const tool = useTool();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  if (!attachments.length) return null;
+  const get = async (attachmentId: string) => {
+    setBusy(attachmentId);
+    setError(null);
+    try {
+      const f = await tool<{ filename: string; content_type: string; content_base64: string; size: number; sha256: string }>("mail_inbound_file", { id: inboundId, attachment_id: attachmentId });
+      await download(f.filename, f.content_type, f.content_base64, f.size, f.sha256);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <ul className="flex min-w-0 flex-col gap-1" aria-label="Входящие вложения">
+      {attachments.map((a) => (
+        <li key={a.id} className="flex min-w-0 flex-wrap items-center gap-2 rounded-md border border-[var(--mf-line-300)] bg-[var(--mf-surface)] px-2 py-1 text-xs">
+          <span className="min-w-0 flex-1 break-words font-medium [overflow-wrap:anywhere]">{a.filename}</span>
+          <span className="text-muted-foreground">{sizeText(a.size)}</span>
+          <Button type="button" size="sm" variant="outline" className="h-10 shrink-0" disabled={busy !== null || !a.id}
+            aria-label={`Скачать ${a.filename}`} aria-busy={busy === a.id} onClick={() => void get(a.id)}>
+            {busy === a.id ? "Скачиваем…" : "Скачать"}
+          </Button>
+        </li>
+      ))}
+      {error ? <li role="alert" className="text-xs text-destructive">{error}</li> : null}
     </ul>
   );
 }

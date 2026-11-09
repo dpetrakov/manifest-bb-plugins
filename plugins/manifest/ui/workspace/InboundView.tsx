@@ -6,6 +6,7 @@ import { errorText, useStatus, useTool } from "../hooks";
 import { formatDateTime } from "../labels";
 import { CompanyPicker, INBOUND_KIND_LABEL, type Inbound } from "../mail/common";
 import { Badge, Card, KindLabel, Status } from "../manifest";
+import { InboundAttachmentList } from "../mail/attachments";
 
 export function InboundView({ id, onLinked, embedded }: { id: string; onLinked?: (company: { id: string; name: string }) => void; embedded?: boolean }) {
   const tool = useTool();
@@ -68,7 +69,7 @@ export function InboundView({ id, onLinked, embedded }: { id: string; onLinked?:
       </dl>
       </Card>
       <pre title="Внешнее письмо: текст как есть, ссылки и вложения не открываются автоматически" className="mf-card max-h-[60vh] overflow-y-auto whitespace-pre-wrap p-3 font-sans">{x.reply_text || x.body_text}</pre>
-      {x.attachments.length ? <p className="text-muted-foreground">Вложения: {x.attachments.map((a) => a.filename).join(", ")}</p> : null}
+      <InboundAttachmentList key={x.id} inboundId={x.id} attachments={x.attachments} />
       {error ? <p className="text-destructive">{error}</p> : null}
       {x.company_id && (x.answers ?? []).length > 0 ? (
         <Status tone="ok">Ответ отправлен: {(x.answers ?? []).map((a) => a.status_text).join(", ")}</Status>

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.3 - 2026-11-09
+
+- Save complete mail attachments on the requesting agent host instead of truncating base64 in tool output. Validate payload and saved size and SHA-256.
+- Show incoming attachment downloads in company cards and individual messages, including read-only users, pagination, loading and retry feedback.
+- Retain the BB 0.46/0.48 navigation compatibility shipped in 0.18.2.
+
 ## 0.18.2 - 2026-11-05
 
 - Keep BB 0.46.0 and 0.46.1 support while adapting navigation to BB 0.48.1.

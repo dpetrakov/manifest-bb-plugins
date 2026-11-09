@@ -83,6 +83,19 @@ and when the window regains focus or network connectivity. Invalid credentials
 require signing in again. The procurement sheet also provides explicit connection
 and loading retry buttons. Data changes, emails and mailings are never replayed.
 
+## Downloading mail attachments (0.18.3)
+
+The company card shows incoming attachments with the sender's email, date,
+subject, filename, size and download button. Individual incoming messages also
+provide downloads. View permission is sufficient; expired files show an error.
+
+Agent calls to `mail_inbound_file` and `mail_file` save the complete file in
+the current thread's storage on its agent host. The result contains the local
+path, size and SHA-256 instead of base64, so files bypass the 60,000-character
+limit for ordinary tool output. The plugin validates the complete payload and
+the host write, confines filenames to thread storage and never overwrites an
+existing file. Requires the Manifest core tool `mail_inbound_file` (2026-11-09).
+
 ## Development
 
 ```sh

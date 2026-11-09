@@ -9,6 +9,7 @@ import { ModeBadge, Status } from "../manifest";
 import { MAIL_PATH, selectCls, type CompanySender, type LegalEntity, type Letter, type Mailing, type Template } from "./common";
 import { LetterView, useLetter } from "./LetterView";
 import { SendLetterButton, SentLetters } from "./send";
+import { CompanyInboundFiles } from "./CompanyInboundFiles";
 
 const SOURCE_LABEL: Record<string, string> = {
   company: "задан для организации",
@@ -93,6 +94,7 @@ export function CompanyMail({ companyId }: { companyId: string }) {
       </div>
       {cs.problem ? <Status tone="error">Отправка невозможна: {cs.problem}</Status> : null}
       {error ? <p className="text-destructive">{error}</p> : null}
+      <CompanyInboundFiles key={companyId} companyId={companyId} />
       <DraftBlock companyId={companyId} canEdit={canEdit} />
       <SentBlock companyId={companyId} canEdit={canEdit} />
     </div>

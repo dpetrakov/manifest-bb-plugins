@@ -6,6 +6,8 @@
 //   - the agent of an organisation's chat gets the same tools as native BB tools;
 //   - sign-in exchanges email + password for a token once; the password is not kept.
 import { hostname } from "node:os";
+import { randomUUID } from "node:crypto";
+import { decodeMailFile, MAIL_FILE_DESCRIPTION, MAIL_FILE_TOOLS } from "./lib/mail-file";
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import {
@@ -841,6 +843,23 @@ export default async function plugin(bb: BbPluginApi) {
     return `Файл загружен: ${f.filename} (${Math.round((f.size ?? 0) / 1024)} КБ), file_id ${f.id}. Чтобы приложить — добавь {kind: "file", file_id: "${f.id}"} во вложения: mail_draft_attachments (черновик), mail_mailing_update (вся рассылка) или mail_mailing_recipient_attachments (один получатель). Список вложений заменяется целиком — сохрани нужные прежние.`;
   }
 
+  async function mailFileToThread(value: unknown, threadId: string, inbound: boolean, signal?: AbortSignal) {
+    const file = decodeMailFile(value, inbound);
+    signal?.throwIfAborted();
+    const loc = await bb.sdk.threads.storageLocation({ threadId });
+    const root = loc.storageRootPath.replace(/\/+$/, "");
+    const relative = `Attachments/Manifest/${randomUUID()}/${file.filename}`;
+    signal?.throwIfAborted();
+    const saved = await bb.sdk.files.write({ hostId: loc.hostId, rootPath: root, path: relative,
+      content: file.content_base64, contentEncoding: "base64", createParents: true, expectedSha256: null, mode: 0o600 });
+    if (saved.outcome !== "written") throw new Error("Файл уже существует: повторите скачивание для сохранения новой копии.");
+    if (saved.sizeBytes !== file.size || saved.sha256.toLowerCase() !== file.sha256) {
+      throw new Error("Не удалось проверить сохранённое вложение: размер или SHA-256 не совпадает. Не используйте файл, повторите скачивание.");
+    }
+    return JSON.stringify({ path: `${root}/${relative}`, filename: file.filename, content_type: file.content_type,
+      size: file.size, sha256: file.sha256, untrusted: true });
+  }
+
   function registerManifestTools(catalog: ManifestTool[]) {
     const exposed = catalog;
     for (const def of exposed) {
@@ -848,7 +867,7 @@ export default async function plugin(bb: BbPluginApi) {
       if (registeredAgentTools.has(name)) continue;
       bb.agents.registerTool({
         name,
-        description: def.description ?? name,
+        description: MAIL_FILE_TOOLS.has(name) ? `${MAIL_FILE_DESCRIPTION} ${name === "mail_inbound_file" ? "id — входящее письмо Manifest; attachment_id — id из его attachments." : "company_id — черновик или message_id — отправленное письмо; position — номер вложения с 0."}` : def.description ?? name,
         parameters: def.inputSchema,
         presentation: { label: { pending: `Manifest: ${name}`, completed: `Manifest: ${name}` }, icon: { glyph: "Database" } },
         async execute(params, ctx) {
@@ -856,6 +875,7 @@ export default async function plugin(bb: BbPluginApi) {
             const args = z.record(z.string(), z.unknown()).parse(params);
             const tf = await loadFocus(ctx.threadId);
             const { structured, text } = await call(name, args, "agent", ctx.signal);
+            if (MAIL_FILE_TOOLS.has(name)) return await mailFileToThread(structured, ctx.threadId, name === "mail_inbound_file", ctx.signal);
             changed(name, args, structured);
             if (name === "mail_mailing_create") {
               // The new mailing opens on the right and the thread goes on with it.
