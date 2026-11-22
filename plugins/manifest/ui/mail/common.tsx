@@ -14,6 +14,7 @@ export const AUDIENCE_LABEL: Record<string, string> = {
   supplier: "Поставщики",
   potential_client: "Потенциальные клиенты",
   client: "Клиенты",
+  export_partner: "Закупочно-экспортные партнёры",
 };
 export const KIND_LABEL: Record<string, string> = {
   first: "Первое письмо",

@@ -255,6 +255,8 @@ describe("dashboard (W-15)", () => {
 
 describe("directives", () => {
   it("parses untrusted attributes into a filter", () => {
+    expect(filterFromAttributes({country: "ZA", company_class: "export_partner", role: "export_partner"}))
+      .toMatchObject({country: "ZA", company_class: "export_partner", role: "export_partner"});
     expect(filterFromAttributes({ attention: "overdue", statuses: "contacted, replied", priorities: "1,9", stale_days: "x", evil: "1", never_touched: "true" }))
       .toEqual({ attention: "overdue", statuses: ["contacted", "replied"], priorities: [1], never_touched: true });
   });

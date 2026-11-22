@@ -69,9 +69,9 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
   useEffect(() => {
     if (!ready) return;
     void reg.load();
-    tool<Facets>("outreach_facets").then(setFacets, () => setFacets(null));
+    tool<Facets>("outreach_facets", {company_class: reg.filters.company_class}).then(setFacets, () => setFacets(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready]);
+  }, [ready, reg.filters.company_class]);
   useEffect(() => {
     const t = setTimeout(() => {
       if (search.trim() !== reg.filters.q) reg.setFilter("q", search.trim());
@@ -98,7 +98,7 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
   );
   const priorityOptions: Option[] = [{ value: "", label: "Все приоритеты" }, ...[1, 2, 3, 4, 5].map((p) => ({ value: String(p), label: `P${p}` }))];
   const statusOptions: Option[] = [{ value: "", label: "Все статусы" }, ...STATUS_ORDER.map((s) => ({ value: s, label: STATUS_LABEL[s] }))];
-  const roleOptions: Option[] = [{ value: "", label: "Все роли" }, ...ROLE_ORDER.map((r) => ({ value: r, label: ROLE_LABEL[r] }))];
+  const roleOptions: Option[] = [{ value: "", label: "Все роли" }, ...ROLE_ORDER.filter((r) => reg.filters.company_class === "all" || (reg.filters.company_class === "export_partner" ? r === "export_partner" : r !== "export_partner")).map((r) => ({ value: r, label: ROLE_LABEL[r] }))];
   const sortOptions: Option[] = [
     { value: "", label: "По приоритету" },
     { value: "coverage", label: "По покрытию листа" },
@@ -156,6 +156,7 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
               className="h-7 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
             <div className="flex flex-wrap gap-1">
+              <FilterSelect label="Список" value={reg.filters.company_class} options={[{value: "supplier", label: "Поставщики продукции"}, {value: "export_partner", label: "Экспортные партнёры"}, {value: "all", label: "Все организации"}]} onChange={(v) => reg.setFilter("company_class", v)} />
               <FilterSelect label="Регион" value={reg.filters.region} options={regionOptions} onChange={(v) => reg.setFilter("region", v)} />
               <FilterSelect label="Страна" value={reg.filters.country} options={countryOptions} onChange={(v) => reg.setFilter("country", v)} />
               <FilterSelect label="Приоритет" value={reg.filters.priority} options={priorityOptions} onChange={(v) => reg.setFilter("priority", v)} />
@@ -199,6 +200,7 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
               <span className="flex items-center gap-1.5">
                 <PriorityBadge priority={it.priority} manual={it.priority_manual} />
                 <span className="truncate text-sm font-medium">{it.display_name}</span>
+                {it.roles?.includes("export_partner") ? <span className="text-[10px] text-muted-foreground">экспортный партнёр</span> : null}
                 {it.roles?.includes("supplier") ? (
                   <span className="flex-none rounded-full border border-emerald-500/40 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-300" title="Поставщик закупок">
                     поставщик
@@ -211,7 +213,7 @@ export function RegistryList({ onNavigate, activeThreadId = null }: { onNavigate
                   {it.countries.length > 1 ? ` +${it.countries.length - 1}` : ""} · {STATUS_LABEL[it.status] ?? it.status}
                 </span>
                 <span className="flex flex-none items-center gap-1.5">
-                  {it.coverage ? (
+                  {it.coverage && reg.filters.company_class !== "export_partner" ? (
                     <span
                       className={
                         it.coverage.draft

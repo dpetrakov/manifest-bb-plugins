@@ -17,7 +17,7 @@ const STANDARD = "thread-list/thread-list";
 const AUTOMATIC = "__automatic__";
 const SIDEBAR_TABS = "sidebar-tabs/tabs";
 /** Подпись кнопки в подвале — по ней же её находит стиль (suppliers.css). */
-export const FOOTER_LABEL = "Потенциальные поставщики";
+export const FOOTER_LABEL = "Поставщики и партнёры";
 const PREV_KEY = "manifest:sidebar-previous-list";
 const TOGGLE_EVENT = "manifest:suppliers-list";
 

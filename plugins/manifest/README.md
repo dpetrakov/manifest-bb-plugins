@@ -157,3 +157,13 @@ do not remove it just to switch sources, because removal deletes its settings.
 ## License
 
 Proprietary, not open source. See [LICENSE](https://github.com/dpetrakov/manifest-bb-plugins/blob/main/LICENSE).
+
+
+## Закупочно-экспортные партнёры
+
+В списке организаций выберите «Экспортные партнёры» и нужную страну.
+Роль `export_partner` отделена от товарных поставщиков; одна карточка может иметь
+обе роли. Профиль партнёра хранит возможности и доказательства, включая обе
+схемы финансирования. Товарное покрытие не является рейтингом партнёра.
+Шаблоны для RFI используют аудиторию `export_partner`; история и запреты контакта
+проверяются по организации, а не сбрасываются сменой роли.

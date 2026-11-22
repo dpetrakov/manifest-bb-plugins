@@ -248,7 +248,7 @@ export function CompanyPeek({
             <Row label="Шаг">
               <Step item={it} />
             </Row>
-            <Row label="Покрытие">
+            {(it.coverage || !it.roles?.includes("export_partner")) && <Row label="Покрытие">
               {it.coverage ? (
                 <span>
                   <b className="tabular-nums">{it.coverage.by_volume}%</b> по объёму · {it.coverage.by_positions}% позиций
@@ -262,7 +262,7 @@ export function CompanyPeek({
               ) : (
                 <span className="text-muted-foreground">нет данных по стране</span>
               )}
-            </Row>
+            </Row>}
             {it.owner ? <Row label="Ответств.">{it.owner}</Row> : null}
             {it.tags?.length ? <Row label="Метки">{it.tags.join(", ")}</Row> : null}
             <Row label="Касания">

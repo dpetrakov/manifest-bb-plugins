@@ -29,6 +29,7 @@ import {
 import { Note, PriorityBadge } from "./RegistryList";
 import type { Card } from "./types";
 import { CompanyMail } from "./mail/CompanyMail";
+import { PartnerProfileForm } from "./PartnerProfile";
 import { CompanyAssortment } from "./procurement/CompanyAssortment";
 import { Badge, COMPANY_STATUS_TONE, ConfirmCard, KindLabel, ModeBadge } from "./manifest";
 
@@ -171,12 +172,13 @@ export function CardView({ companyId, header, embedded }: { companyId: string; h
         </Section>
       ) : null}
 
-      {status?.canAssortment ? (
+      {status?.canAssortment && (c.roles?.includes("supplier") || c.roles?.includes("potential_supplier")) ? (
         <Section title="Ассортимент">
           <CompanyAssortment key={c.id} companyId={c.id} canEdit={canEdit} website={card.contacts.find((x) => x.type === "website")?.value_raw} />
         </Section>
       ) : null}
 
+      {c.roles?.includes("export_partner") ? <Section title="Профиль экспортного партнёра"><PartnerProfileForm key={c.id} profile={c.partner_profile} version={c.updated_at} canEdit={canEdit} busy={busy} onSave={(partner_profile, expected_updated_at) => run("outreach_update_company", {id:c.id, partner_profile, expected_updated_at})}/></Section> : null}
       <Section title="Реквизиты">
         <Requisites card={card} canEdit={canEdit} busy={busy} run={run} />
       </Section>

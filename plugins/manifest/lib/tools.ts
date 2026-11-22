@@ -28,7 +28,8 @@ export const filterSchema = z.object({
   brand_only: opt(z.boolean(), "true — только email бренда, false — без них (как в ответах Manifest)"),
   segment_id: opt(z.string(), "сохранённый сегмент"),
   ids: opt(z.array(z.string()), "конкретные организации"),
-  role: opt(z.string(), "роль: potential_supplier — потенциальный поставщик, supplier — поставщик закупок"),
+  company_class: opt(z.enum(["supplier", "export_partner", "all"]), "класс организаций: supplier по умолчанию, export_partner, all для проверки дублей"),
+  role: opt(z.string(), "роль: potential_supplier — потенциальный поставщик, supplier — поставщик закупок, export_partner — закупочно-экспортный партнёр"),
 });
 // Coverage of the procurement sheet: sort=coverage_positions (share of positions) or
 // coverage_volume (= coverage, by volume), with desc=true — the best first.
@@ -120,7 +121,8 @@ export const AGENT_TOOLS = {
       owner: opt(z.string(), "ответственный: email, me или пусто — снять"),
       priority_manual: opt(z.number().int().min(1).max(5), "ручной приоритет"),
       clear_priority_manual: opt(z.boolean(), "вернуть автоматический приоритет"),
-      roles: opt(z.array(z.string()), "роли целиком: potential_supplier, supplier (поставщик закупок)"),
+      roles: opt(z.array(z.string()), "роли целиком: potential_supplier, supplier (поставщик закупок), export_partner (закупочно-экспортный партнёр)"),
+      partner_profile: opt(z.object({mode: z.enum(["unknown", "principal", "agent", "contractor"]), notes: z.string(), capabilities: z.record(z.string(), z.object({status: z.enum(["unknown", "claimed", "verified", "unavailable"]), notes: z.string(), source_url: z.string()}))}), "профиль целиком; сведения сайта claimed, неизвестное unknown"),
       supplier_currency: opt(z.string(), "валюта поставщика: INR, USD…"),
       supplier_active: opt(z.boolean(), "поставщик активен"),
       expected_updated_at: opt(z.string(), "updated_at из карточки — защита от затирания чужой правки"),
@@ -710,6 +712,7 @@ export const READ_TOOLS = new Set([
   "mail_company_sender", "mail_inbound_list", "mail_inbound_get", "mail_inbound_file", "mail_file", "mail_entity_health", "mail_draft_get",
   "mail_mailings", "mail_mailing_get", "mail_mailing_letter", "mail_mailing_recipient",
   "mail_message_get", "mail_messages", "mail_changes", "mail_blocked_countries",
+  "mail_inbound_forward_preview",
   "procurement_needs", "procurement_import_preview",
   "assortment_sources", "assortment_items",
   "assortment_coverage", "assortment_choices", "assortment_queue", "assortment_decisions",
@@ -761,6 +764,8 @@ export const PANEL_TOOLS = new Set([
   "mail_inbound_list",
   "mail_inbound_get",
   "mail_inbound_file",
+  "mail_inbound_forward_preview",
+  "mail_inbound_forward_send",
   "mail_inbound_link",
   "mail_inbound_mark",
   "mail_template_save",

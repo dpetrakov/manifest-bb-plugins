@@ -65,12 +65,16 @@ export interface Company {
   manual_fields: string[];
   /** ADR-051: roles and supplier fields. */
   roles?: string[];
+  partner_profile?: PartnerProfile;
   supplier_currency?: string;
   supplier_active?: boolean;
   updated_at: string;
 }
 
 // ---- ADR-051: the procurement sheet ----
+
+export interface PartnerCapability { status: 'unknown' | 'claimed' | 'verified' | 'unavailable'; notes: string; source_url: string }
+export interface PartnerProfile { mode: 'unknown' | 'principal' | 'agent' | 'contractor'; capabilities: Record<string, PartnerCapability>; notes: string }
 
 export interface Need {
   id: string;

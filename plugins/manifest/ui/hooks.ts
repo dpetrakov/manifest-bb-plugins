@@ -70,6 +70,7 @@ export function useStatus() {
 // ---- registry list: one store for the sidebar view and the page ----
 
 export interface Filters {
+  company_class: string;
   q: string;
   region: string;
   country: string;
@@ -108,7 +109,7 @@ interface ListState {
 
 const PAGE = 50;
 let state: ListState = {
-  filters: { q: "", region: "", country: "", priority: "", status: "", role: "", sort: "" },
+  filters: { company_class: "supplier", q: "", region: "", country: "", priority: "", status: "", role: "", sort: "" },
   scope: "",
   selections: {},
   dismissed: {},
@@ -163,6 +164,7 @@ export function useRegistryLoad() {
           sel
             ? { ...sel.filter, ...page }
             : {
+                company_class: f.company_class,
                 q: f.q || undefined,
                 region: f.region || undefined,
                 country: f.country || undefined,
@@ -191,7 +193,11 @@ export function useRegistry() {
 
   const setFilter = useCallback(
     (key: keyof Filters, value: string) => {
-      emit({ filters: { ...state.filters, [key]: value } });
+      if (key === "company_class") {
+        const sel = activeSelection();
+        emit({ filters: { ...state.filters, company_class: value, role: "", sort: "" }, selectedId: null,
+          ...(sel ? { dismissed: { ...state.dismissed, [state.scope]: sel.key } } : {}) });
+      } else emit({ filters: { ...state.filters, [key]: value } });
       void load();
     },
     [load],

@@ -59,7 +59,7 @@ export default definePluginApp((app) => {
   // Список поставщиков в сайдбаре и кнопка-переключатель в подвале (цвет — suppliers.css).
   app.slots.experimental_threadList({
     id: "suppliers",
-    title: "Потенциальные поставщики",
+    title: "Поставщики и партнёры",
     description: "Реестр Manifest вместо списка тредов; кнопка в подвале возвращает прежний список.",
     component: SuppliersList,
   });

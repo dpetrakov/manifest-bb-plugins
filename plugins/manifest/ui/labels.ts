@@ -17,6 +17,7 @@ export const STATUS_ORDER = Object.keys(STATUS_LABEL);
 export const ROLE_LABEL: Record<string, string> = {
   potential_supplier: "Потенциальный поставщик",
   supplier: "Поставщик",
+  export_partner: "Закупочно-экспортный партнёр",
 };
 export const ROLE_ORDER = Object.keys(ROLE_LABEL);
 export const STATUS_NEEDS_REASON = ["rejected", "do_not_contact"];

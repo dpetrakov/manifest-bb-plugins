@@ -38,7 +38,7 @@ function useDebouncedRealtime(channel: string, handler: () => void) {
 const LIST_KEYS = new Set(["priorities", "statuses", "tags", "ids"]);
 const NUM_KEYS = new Set(["stale_days"]);
 const BOOL_KEYS = new Set(["never_touched", "has_phone", "has_email", "has_person"]);
-const STR_KEYS = new Set(["q", "region", "country", "owner", "attention", "brand", "segment_id"]);
+const STR_KEYS = new Set(["q", "region", "country", "owner", "attention", "brand", "segment_id", "role", "company_class"]);
 
 /** Directive attributes → registry filter (unknown attributes are ignored). */
 export function filterFromAttributes(attrs: Readonly<Record<string, string>>): Filter {
