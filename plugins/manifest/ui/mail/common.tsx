@@ -254,7 +254,7 @@ export function CompanyPicker({ value, onChange, placeholder }: { value: { id: s
       return;
     }
     const t = setTimeout(() => {
-      tool<ListResult>("outreach_list_companies", { q: q.trim(), limit: 8 }).then(
+      tool<ListResult>("outreach_list_companies", { company_class: "all", q: q.trim(), limit: 8 }).then(
         (r) => setItems(r.items),
         (e: unknown) => setError(errorText(e)),
       );
